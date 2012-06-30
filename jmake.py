@@ -87,6 +87,8 @@ _built_something = False
 _build_success = True
 _called_something = False
 _overrides = ""
+
+_library_mtimes = []
 #</editor-fold>
 
 #<editor-fold desc="Private Functions">
@@ -254,20 +256,31 @@ def _should_recompile(file):
 
 def _check_libraries():
    libraries_ok = True
+   mtime = 0
    LOG_INFO("Checking required libraries...")
    for library in _libraries:
       this_lib_found = False
       LOG_INFO("Looking for lib{0}...".format(library))
       static = "lib{0}.a".format(library)
       shared = "lib{0}.so".format(library)
+      staticpath = ""
+      sharedpath = ""
       for dir in _library_dirs:
-         if os.path.exists("{0}/{1}".format(dir, static)) \
-         or os.path.exists("{0}/{1}".format(dir, shared)):
+         staticpath = "{0}/{1}".format(dir, static)
+         sharedpath = "{0}/{1}".format(dir, shared)
+         if os.path.exists(staticpath) \
+         or os.path.exists(sharedpath):
             this_lib_found = True
-            continue
+            break
       if not this_lib_found:
          LOG_ERROR("Could not locate library: {0}".format(library))
          libraries_ok = False
+      else:
+         if os.path.exists(sharedpath):
+            mtime = os.path.getmtime(sharedpath)
+         else:
+            mtime = os.path.getmtime(staticpath)
+         _library_mtimes.append(mtime)
    if not libraries_ok:
       LOG_ERROR("Check that all required libraries are installed.")
       LOG_ERROR("If they are installed, ensure that the path is included in the makefile (use jmake.LibDirs() to set them)")
@@ -509,21 +522,43 @@ def build():
       if _max_threads != 1 and not _semaphore.acquire(False):
          LOG_THREAD("Waiting on {0} more build thread{1} to finish...".format(_max_threads - i, "s" if _max_threads - i != 1 else ""))
          _semaphore.acquire(True)
+
+   if not _built_something:
+      LOG_BUILD("Nothing to build.")
+
    return _build_success
    
-def link(objs=None):
-   if not _built_something:
-      if not _called_something:
-         LOG_LINKER("Nothing to link.")
-      return
+def link(*objs):
+   output = "{0}/{1}".format(_output_dir, _output_name)
 
-   if objs is None:
+   objs = list(objs)
+   if not objs:
       objs = _objs
 
    if not objs:
       return
 
-   output = "{0}/{1}".format(_output_dir, _output_name)
+   global _built_something
+   if not _built_something:
+      if os.path.exists(output):
+         mtime = os.path.getmtime(output)
+         for obj in _objs:
+            if os.path.getmtime(obj) > mtime:
+               #Something got built but never got linked...
+               #Maybe the linker failed last time.
+               #We should count that as having built something, because we do need to link.
+               _built_something = True
+
+         for i in range(len(_library_mtimes)):
+            if _library_mtimes[i] > mtime:
+               LOG_LINKER("Library {0} has been modified since the last successful build. Relinking to new library.".format(_libraries[i]))
+               _built_something = True
+
+         if not _built_something:
+            if not _called_something:
+               LOG_LINKER("Nothing to link.")
+            return
+
    LOG_LINKER("Linking {0}...".format(output))
 
    if len(objs) == 1:
