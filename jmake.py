@@ -12,13 +12,17 @@ import shutil
 #<editor-fold desc="Logging">
 
 def LOG_MSG(level, msg):
-   print level, msg
+   print " ", level, msg
 
 def LOG_ERROR(msg):
+   global _errors
    LOG_MSG("\033[31;1mERROR:\033[0m", msg)
+   _errors.append(msg)
 
 def LOG_WARN(msg):
+   global _warnings
    LOG_MSG("\033[33;1mWARN:\033[0m", msg)
+   _warnings.append(msg)
 
 def LOG_INFO(msg):
    LOG_MSG("\033[36;1mINFO:\033[0m", msg)
@@ -61,6 +65,7 @@ _undefines = []
 _compiler = "g++"
 _obj_dir = "."
 _output_dir = "."
+_jmake_dir = "./.jmake"
 _output_name = "JMade"
 _output_install_dir = ""
 _header_install_dir = ""
@@ -89,6 +94,16 @@ _called_something = False
 _overrides = ""
 
 _library_mtimes = []
+
+_output_dir_set = False
+_obj_dir_set = False
+_debug_set = False
+_opt_set = False
+
+_errors = []
+_warnings = []
+
+_allheaders = {}
 #</editor-fold>
 
 #<editor-fold desc="Private Functions">
@@ -156,6 +171,8 @@ def _get_files(sources=None, headers=None):
             if path not in _exclude_files:
                sources.append(path)
 
+         sources.sort(key=str.lower)
+
       if headers is not None:
          for filename in fnmatch.filter(filenames, '*.hpp'):
             path = os.path.join(root, filename)
@@ -165,6 +182,8 @@ def _get_files(sources=None, headers=None):
             path = os.path.join(root, filename)
             if path not in _exclude_files:
                headers.append(path)
+
+         headers.sort(key=str.lower)
 
 def _uniq(seq, idfun=None):
 # order preserving
@@ -183,6 +202,49 @@ def _uniq(seq, idfun=None):
    return result
 
 def _follow_headers(file, allheaders):
+   headers = []
+   global _allheaders
+   if not file:
+      return
+   with open(file) as f:
+      for line in f:
+         if line[0] != '#':
+            continue
+
+         RMatch = re.search("#include [<\"](.*?)[\">]", line)
+         if RMatch is None:
+            continue
+
+         if "." not in RMatch.group(1):
+            continue
+
+         headers.append(RMatch.group(1))
+
+   path = ""
+   for header in headers:
+      if header in allheaders:
+         continue
+      allheaders.append(header)
+
+      try:
+         allheaders += _allheaders[header]
+      except KeyError:
+         pass
+      else:
+         continue
+
+      path = "{0}/{1}".format(os.path.dirname(file), header)
+      if not os.path.exists(path):
+         for dir in _include_dirs:
+            path = "{0}/{1}".format(dir, header)
+            if os.path.exists(path):
+               break
+      if not os.path.exists(path):
+         continue
+      _follow_headers2(path, allheaders)
+      _allheaders.update({header : allheaders})
+
+def _follow_headers2(file, allheaders):
    headers = []
    if not file:
       return
@@ -205,6 +267,8 @@ def _follow_headers(file, allheaders):
       if header in allheaders:
          continue
       allheaders.append(header)
+      if header in _allheaders:
+         continue
       path = "{0}/{1}".format(os.path.dirname(file), header)
       if not os.path.exists(path):
          for dir in _include_dirs:
@@ -213,9 +277,21 @@ def _follow_headers(file, allheaders):
                break
       if not os.path.exists(path):
          continue
-      _follow_headers(path, allheaders)
+      _follow_headers2(path, allheaders)
 
 def _should_recompile(file):
+   dbg = -1
+   opt = -1
+   f = "{0}/{1}.jmake".format(_jmake_dir, file)
+   if os.path.exists(f):
+      with open(f) as f:
+         dbg = f.readline()[0:-1]
+         opt = f.readline()[0:-1]
+
+      if dbg != str(_debug_level) or opt != str(_opt_level):
+         LOG_INFO("Going to recompile {0} because it was compiled with different optimization settings.".format(file))
+         return True
+
    mtime = os.path.getmtime(file)
 
    basename = os.path.basename(file).split('.')[0]
@@ -259,29 +335,25 @@ def _check_libraries():
    mtime = 0
    LOG_INFO("Checking required libraries...")
    for library in _libraries:
-      this_lib_found = False
       LOG_INFO("Looking for lib{0}...".format(library))
-      static = "lib{0}.a".format(library)
-      shared = "lib{0}.so".format(library)
-      staticpath = ""
-      sharedpath = ""
-      for dir in _library_dirs:
-         staticpath = "{0}/{1}".format(dir, static)
-         sharedpath = "{0}/{1}".format(dir, shared)
-         if os.path.exists(staticpath) \
-         or os.path.exists(sharedpath):
-            this_lib_found = True
-            break
-      if not this_lib_found:
-         LOG_ERROR("Could not locate library: {0}".format(library))
-         libraries_ok = False
-      else:
-         if os.path.exists(sharedpath):
-            mtime = os.path.getmtime(sharedpath)
-         else:
-            mtime = os.path.getmtime(staticpath)
+      success = True
+      try:
+         out = subprocess.check_output(["ld", "-t", "-l{0}".format(library)], stderr=subprocess.STDOUT)
+      except subprocess.CalledProcessError as e:
+         out = e.output
+         success = False
+      finally:
+         mtime = 0
+         RMatch = re.search("-l{0} \\((.*)\\)".format(library), out)
+         if RMatch != None:
+               lib = RMatch.group(1)
+               mtime = os.path.getmtime(lib)
+         elif not success:
+            LOG_ERROR("Could not locate library: {0}".format(library))
+            libraries_ok = False
          _library_mtimes.append(mtime)
    if not libraries_ok:
+      LOG_ERROR("Some dependencies are not met on your system.")
       LOG_ERROR("Check that all required libraries are installed.")
       LOG_ERROR("If they are installed, ensure that the path is included in the makefile (use jmake.LibDirs() to set them)")
       return False
@@ -310,10 +382,21 @@ class _threaded_build(threading.Thread):
          threading.Thread._Thread__block = _dummy_block()
 
    def run(self):
-      global _build_success
-      cmd = "{0} -c {1}{2}{3}-g{4} -O{5} {6}{7}{8} -o\"{9}\" \"{10}\"".format(_compiler, _get_warnings(), _get_defines(), _get_include_dirs(), _debug_level, _opt_level, "-fPIC " if _shared else "", "-pg " if _profile else "", "--std={0}".format(_standard) if _standard != "" else "", self.obj, self.file)
-      _build_success &= not os.system(cmd)
-      _semaphore.release()
+      try:
+         global _build_success
+         cmd = "{0} -c {1}{2}{3}-g{4} -O{5} {6}{7}{8} -o\"{9}\" \"{10}\"".format(_compiler, _get_warnings(), _get_defines(), _get_include_dirs(), _debug_level, _opt_level, "-fPIC " if _shared else "", "-pg " if _profile else "", "--std={0}".format(_standard) if _standard != "" else "", self.obj, self.file)
+         if os.system(cmd):
+            LOG_ERROR("Compile of {0} failed!".format(self.file))
+            _build_success = False
+         else:
+            with open("{0}/{1}.jmake".format(_jmake_dir, self.file), "w") as f:
+               f.write("{0}\n".format(_debug_level))
+               f.write("{0}\n".format(_opt_level))
+      except Exception as e:
+         _semaphore.release()
+         raise e
+      else:
+         _semaphore.release()
 
 #</editor-fold>
 #</editor-fold>
@@ -383,11 +466,15 @@ def ClearLibDirs( *args ):
 
 def Opt(i):
    global _opt_level
+   global _opt_set
    _opt_level = i
+   _opt_set = True
 
 def Debug(i):
    global _debug_level
+   global _debug_set
    _debug_level = i
+   _debug_set = True
    
 def Define( *args ):
    global _defines
@@ -415,11 +502,15 @@ def Output(s):
    
 def OutDir(s):
    global _output_dir
+   global _output_dir_set
    _output_dir = s
+   _output_dir_set = True
    
 def ObjDir(s):
    global _obj_dir
+   global _obj_dir_set
    _obj_dir = s
+   _obj_dir_set = True
    
 def WarnFlags( *args ):
    global _warn_flags
@@ -481,7 +572,7 @@ def build():
 
    sources = []
    headers = []
-   
+
    _get_files(sources, headers)
 
    if not sources:
@@ -490,13 +581,18 @@ def build():
    global _build_success
 
    LOG_BUILD("Building {0} ({1})".format(_output_name, target))
-   
+
    if not os.path.exists(_obj_dir):
       os.makedirs(_obj_dir)
-   
+
+   global _jmake_dir
+   _jmake_dir = "{0}/.jmake".format(_obj_dir)
+   if not os.path.exists(_jmake_dir):
+      os.makedirs(_jmake_dir)
+
    #modified_sources = _check_sources(sources)
    #modified_sources += _check_headers(headers, sources)
-   
+
    #os.remove("{0}/{1}".format(_output_dir, _output_name))
    global _objs
    global _max_threads
@@ -566,13 +662,17 @@ def link(*objs):
       return
 
    objstr = ""
-   
+
    for obj in objs:
       objstr += obj + " "
-      
+
    if not os.path.exists(_output_dir):
       os.makedirs(_output_dir)
-   subprocess.call("{0} -o{1} {2}{3}-g{4} -O{5} {6}".format(_compiler, output, _get_libraries(), _get_library_dirs(), _debug_level, _opt_level, "-shared " if _shared else "", objstr), shell=True)
+
+   if os.path.exists(output):
+      os.remove(output)
+
+   subprocess.call("{0} -o{1} {7} {2}{3}-g{4} -O{5} {6}".format(_compiler, output, _get_libraries(), _get_library_dirs(), _debug_level, _opt_level, "-shared " if _shared else "", objstr), shell=True)
    for i in range(_max_threads):
       _semaphore.release()
 
@@ -692,15 +792,23 @@ _overrides = subargs.overrides
 args = subargs.remainder
 
 def debug():
-   Opt(0)
-   Debug(3)
-   OutDir("Debug")
-   ObjDir("Debug/obj")
+   if not _opt_set:
+      Opt(0)
+   if not _debug_set:
+      Debug(3)
+   if not _output_dir_set:
+      OutDir("Debug")
+   if not _obj_dir_set:
+      ObjDir("Debug/obj")
 def release():
-   Opt(3)
-   Debug(0)
-   OutDir("Release")
-   ObjDir("Release/obj")
+   if not _opt_set:
+      Opt(3)
+   if not _debug_set:
+      Debug(0)
+   if not _output_dir_set:
+      OutDir("Release")
+   if not _obj_dir_set:
+      ObjDir("Release/obj")
 
 if mainfile != "<makefile>":
    exec("from {0} import *".format(mainfile.split(".")[0]))
@@ -722,6 +830,14 @@ else:
          install()
       else:
          make()
+   if _warnings:
+      LOG_WARN("Warnings encountered during build:")
+      for warn in _warnings[0:-1]:
+         LOG_WARN(warn)
+   if _errors:
+      LOG_ERROR("Errors encountered during build:")
+      for error in _errors[0:-1]:
+         LOG_ERROR(error)
 #</editor-fold>
 
 #<editor-fold desc="System Hooks">
