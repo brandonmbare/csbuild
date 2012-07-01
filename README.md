@@ -67,43 +67,75 @@ The options
 To control the build, use the following options:
 
 jmake.InstallOutput( s = "/usr/local/lib" ) #Enables installation of the compiled output file. Default target is /usr/local/lib.
+
 jmake.InstallHeaders( s = "/usr/local/include" ) #Enables installation of the project's headers. Default target is /usr/local/include.
+
 jmake.ExcludeDirs( *args ) #Excludes the given subdirectories from the build. Accepts multiple string arguments.
+
 jmake.ExcludeFiles( *args ) #Excludes the given files from the build. Accepts multiple string arguments.
+
 jmake.Libraries( *args ) #List of libraries to link against. Multiple string arguments. gcc/g++ -l.
+
 jmake.IncludeDirs( *args ) #List of directories to search for included headers. Multiple string arguments. gcc/g++ -I
-                           #By default, this list contains /usr/include and /usr/local/include.
-                           #Using this function will add to the existing list, not replace it.
+\#By default, this list contains /usr/include and /usr/local/include.
+\#Using this function will add to the existing list, not replace it.
+
 jmake.LibDirs( *args ) #List of directories to search for libraries. Multiple string arguments. gcc/g++ -L 
-                       #By default, this list contains /usr/lib and /usr/local/lib
-                       #Using this function will add to the existing list, not replace it
+\#By default, this list contains /usr/lib and /usr/local/lib
+\#Using this function will add to the existing list, not replace it
+
 jmake.ClearLibraries( ) #Clears the list of libraries
+
 jmake.ClearIncludeDirs( ) #Clears the include directories, including the defaults.
+
 jmake.ClearLibDirs( ) #Clears the library directories, including the defaults
+
 jmake.Opt(i) #Sets the optimization level. gcc/g++ -O
+
 jmake.Debug(i) #Sets the debug level. gcc/g++ -g
+
 jmake.Define( *args ) #Sets defines for the project. Accepts multiple arguments. gcc/g++ -D
+
 jmake.ClearDefines( *args ) #clears the list of defines
+
 jmake.Undefine( *args ) #Sets undefines for the project. Multiple arguments. gcc/g++ -U
+
 jmake.ClearUndefines( ) #clears the list of undefines
+
 jmake.Compiler(s) #Sets the compiler to use for the project. Default is g++.
+
 jmake.Output(s) #Sets the output file for the project. If unset, the project will be compiled as "JMade"
+
 jmake.OutDir(s) #Sets the directory to place the compiled result
+
 jmake.ObjDir(s) #Sets the directory to place pre-link objects
+
 jmake.WarnFlags( *args ) #Sets warn flags for the project. Multiple arguments. gcc/g++ -W
+
 jmake.ClearWarnFlags( ) #Clears the list of warning flags
+
 jmake.Flags( *args ) #Sets miscellaneous flags for the project. Multiple arguments. gcc/g++ -f
+
 jmake.ClearFlags( ) #Clears the list of misc flags
+
 jmake.DisableAutoMake() #Disables the automatic build of the project at conclusion of the script
-                        #If you turn this off, you will need to explicitly call either make() to build and link,
-                        #or build() and link() to take each step individually
+\#If you turn this off, you will need to explicitly call either make() to build and link,
+\#or build() and link() to take each step individually
+
 jmake.EnableAutoMake() #Turns the automatic build back on after disabling it
+
 jmake.Shared() #Builds the project as a shared library. Enables -shared in the linker and -fPIC in the compiler.
+
 jmake.NotShared() #Turns shared object mode back off after it was enabled.
+
 jmake.Profile() #Enables profiling optimizations. gcc/g++ -pg
+
 jmake.Unprofile() #Turns profiling back off.
+
 jmake.ExtraFlags(s) #Literal string of extra flags to be passed directly to the compiler
+
 jmake.ClearExtraFlags() #Clears the extra flags string
+
 jmake.Standard(s) #The C/C++ standard to be used when compiling. gcc/g++ --std
 
 Note that options that correlate to gcc/g++ flags do NOT need the flag passed with them. For example, if you're linking (i.e.) to the boost_thread library, you would simply call:
