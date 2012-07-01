@@ -100,11 +100,11 @@ Example script
 
 This script is used to compile the htt++ project, for which JMake was initially developed:
 
-#!/usr/bin/python
+ #!/usr/bin/python
 
 import jmake
 
-#Project's required libraries
+ #Project's required libraries
 jmake.Libraries(
    "jnet",
    "jformat",
@@ -112,21 +112,21 @@ jmake.Libraries(
    "boost_thread"
 )
 
-#Output file
+ #Output file
 jmake.Output("libhttpp.so")
 
-#htt++ uses c++11, so we need to specify the standard
+ #htt++ uses c++11, so we need to specify the standard
 jmake.Standard("gnu++0x")
 
-#htt++'s use of c++11 necessitates g++-4.7 or higher, so we need to specify that as well
+ #htt++'s use of c++11 necessitates g++-4.7 or higher, so we need to specify that as well
 jmake.Compiler("g++-4.7")
 
-#Compile as a shared library
+ #Compile as a shared library
 jmake.Shared()
 
-#Let's be extra strict on the warning flags.
+ #Let's be extra strict on the warning flags.
 jmake.WarnFlags("all", "extra", "ctor-dtor-privacy", "old-style-cast", "overloaded-virtual", "init-self", "missing-include-dirs", "switch-default", "switch-enum", "undef")
 
-#And set our project to install both the output file and the headers
+ #And set our project to install both the output file and the headers
 jmake.InstallHeaders()
 jmake.InstallOutput()
