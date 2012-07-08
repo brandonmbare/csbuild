@@ -381,9 +381,9 @@ def _should_recompile(file):
    mtime = os.path.getmtime(file)
    omtime = os.path.getmtime(ofile)
 
-
    with open(file, "r") as f:
       newmd5 = hashlib.md5(f.read()).digest()
+
    md5file = "{0}/{1}.md5".format(_jmake_dir, file)
    md5dir = os.path.dirname(md5file)
    if not os.path.exists(md5dir):
@@ -425,9 +425,37 @@ def _should_recompile(file):
          continue
 
       header_mtime = os.path.getmtime(path)
+
+      #newmd5 is 1, oldmd5 is 0, so that they won't report equal if we ignore them.
+      newmd5 = 1
+
+      #Only check header md5s if they're part of this project. Otherwise we could have hundreds of md5 files stored here.
+      #Benefit is not worth the cost in this case.
+      if path.startswith("./"):
+         with open(file, "r") as f:
+            newmd5 = hashlib.md5(f.read()).digest()
+
+         md5file = "{0}/{1}.md5".format(_jmake_dir, file)
+         md5dir = os.path.dirname(md5file)
+         if not os.path.exists(md5dir):
+            os.makedirs(md5dir)
+
       if header_mtime > omtime:
-         LOG_INFO("Going to recompile {0} because included header {1} has been modified since the last successful build.".format(file, header))
-         return True
+         oldmd5 = 0
+
+         #Only check header md5s if they're part of this project. Otherwise we could have hundreds of md5 files stored here.
+         #Benefit is not worth the cost in this case.
+         if path.startswith("./"):
+            if os.path.exists(md5file):
+               with open(md5file, "r") as f:
+                  oldmd5 = f.read()
+
+         if oldmd5 != newmd5:
+            LOG_INFO("Going to recompile {0} because included header {1} has been modified since the last successful build.".format(file, header))
+            return True
+
+      with open(md5file, "w") as f:
+         f.write(newmd5)
 
    #If we got here, we assume the object file's already up to date.
    LOG_INFO("Skipping {0}: Already up to date".format(file))
@@ -570,8 +598,17 @@ def _chunked_build(sources):
       if chunk not in chunks_to_build and os.path.exists(file):
          chunks_to_build.append(chunk)
 
+   #Ignore chunked building on projects with less than 10 files. There's no point.
+   #They build relatively quickly even when not chunked, and if we chunk them, the one chunk would most likely just get
+   #broken back up in the next build.
+   if len(_chunks) <= 1:
+      return _chunks[0]
+
    dont_split = False
-   if len(chunks_to_build) > max(len(chunks)/4, 2):
+   #If we have to build more than four chunks, or more than a quarter of the total number if that's less than four,
+   #then we're not dealing with a "small build" that we can piggyback on to split the chunks back up.
+   #Just build them as chunks for now; we'll split them up in another, smaller build.
+   if len(chunks_to_build) > min(len(_chunks)/4, 4):
       LOG_INFO("Not splitting any existing chunks because we would have to build too many.")
       dont_split = True
 

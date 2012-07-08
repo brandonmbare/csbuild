@@ -1,6 +1,6 @@
 from distutils.core import setup
 setup(name='JMake',
-      version='0.9.01',
+      version='0.9.02',
       py_modules=['jmake'],
       author="Jaedyn K. Draper",
       author_email="jaedyn.pypi@jaedyn.co",
