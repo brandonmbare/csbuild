@@ -432,10 +432,10 @@ def _should_recompile(file):
       #Only check header md5s if they're part of this project. Otherwise we could have hundreds of md5 files stored here.
       #Benefit is not worth the cost in this case.
       if path.startswith("./"):
-         with open(file, "r") as f:
+         with open(path, "r") as f:
             newmd5 = hashlib.md5(f.read()).digest()
 
-         md5file = "{0}/{1}.md5".format(_jmake_dir, file)
+         md5file = "{0}/{1}.md5".format(_jmake_dir, path)
          md5dir = os.path.dirname(md5file)
          if not os.path.exists(md5dir):
             os.makedirs(md5dir)
@@ -452,6 +452,8 @@ def _should_recompile(file):
 
          if oldmd5 != newmd5:
             LOG_INFO("Going to recompile {0} because included header {1} has been modified since the last successful build.".format(file, header))
+            with open(md5file, "w") as f:
+               f.write(newmd5)
             return True
 
       with open(md5file, "w") as f:

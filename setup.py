@@ -1,6 +1,6 @@
 from distutils.core import setup
 setup(name='JMake',
-      version='0.9.02',
+      version='0.9.02.2',
       py_modules=['jmake'],
       author="Jaedyn K. Draper",
       author_email="jaedyn.pypi@jaedyn.co",
@@ -14,7 +14,7 @@ JMake is also intelligently multi-threaded and will use threads for compilation 
         
 Finally, JMake combines \"./configure\" and \"make\" into one call, checking dependencies as part of its build process and alerting at the very start of the build if it can't find a required library.""",
       classifiers=[
-         "Development Status :: 3 - Alpha",
+         "Development Status :: 4 - Beta",
          "Environment :: Console",
          "Intended Audience :: Developers",
          "License :: OSI Approved :: GNU General Public License (GPL)",
