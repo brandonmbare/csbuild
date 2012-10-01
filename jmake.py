@@ -20,6 +20,18 @@ import multiprocessing
 import shutil
 import itertools
 import hashlib
+import time
+import math
+import signal
+
+signal.signal(signal.SIGINT, signal.SIG_DFL)
+
+try:
+   subprocess.check_output(["tput", "cols"], stderr=subprocess.STDOUT)
+except subprocess.CalledProcessError as e:   
+   _columns = 0
+else:
+   _columns = int(os.popen('stty size', 'r').read().split()[1])
 
 #NOTE: All this <editor-fold desc="Whatever"> stuff is specific to the PyCharm editor, which allows custom folding blocks.
 
@@ -54,8 +66,14 @@ def LOG_WARN(msg):
    if _quiet >= 3:
       return
    global _warnings
-   LOG_MSG(33, "WARN", msg)
+   LOG_WARN_NOPUSH(msg)
    _warnings.append(msg)
+
+def LOG_WARN_NOPUSH(msg):
+   """Log a warning"""
+   if _quiet >= 3:
+      return
+   LOG_MSG(33, "WARN", msg)
 
 def LOG_INFO(msg):
    """Log general info"""
@@ -126,7 +144,7 @@ _headers = []
 _shared = False
 _profile = False
 
-_max_threads = multiprocessing.cpu_count()
+_max_threads = multiprocessing.cpu_count() - 1
 
 _semaphore = threading.BoundedSemaphore(value=_max_threads)
 _lock = threading.Lock()
@@ -159,7 +177,9 @@ _quiet = 1
 
 _use_chunks = True
 _chunk_tolerance = 3
-_chunk_size = 10
+_chunk_size = 0
+_chunk_filesize = 500000
+_chunk_size_tolerance = 150000
 _interrupted = False
 
 _header_recursion = 0
@@ -167,7 +187,31 @@ _ignore_external_headers = False
 
 _no_warnings = False
 
-_default_target = "debug"
+_default_target = "release"
+
+_chunk_precompile = True
+_precompile = []
+_precompile_exclude = []
+_headerfile = ""
+
+_cmd = ""
+_recompile_all = False
+_show_commands = False
+
+_oldmd5s = {}
+_newmd5s = {}
+
+_unity = False
+
+_times = []
+_sources = []
+
+_starttime = 0
+_esttime = 0
+_lastupdate = -1
+_precompile_done = False
+
+_buildtime = -1
 #</editor-fold>
 
 #<editor-fold desc="Private Functions">
@@ -358,11 +402,17 @@ def _follow_headers2(file, allheaders, n):
       if _header_recursion == 0 or n < _header_recursion:
          _follow_headers2(path, allheaders, n+1)
 
-def _should_recompile(file):
+def _should_recompile(file, ofile=None):
    """Checks various properties of a file to determine whether or not it needs to be recompiled."""
 
+   global _recompile_all
+   if _recompile_all:
+      LOG_INFO("Going to recompile {0} because settings have changed in the makefile that will impact output.".format(file))
+      return True
+
    basename = os.path.basename(file).split('.')[0]
-   ofile = "{0}/{1}_{2}.o".format(_obj_dir, basename, target)
+   if not ofile:
+      ofile = "{0}/{1}_{2}.o".format(_obj_dir, basename, target)
 
    if _use_chunks:
       chunk = _get_chunk(file)
@@ -381,8 +431,12 @@ def _should_recompile(file):
    mtime = os.path.getmtime(file)
    omtime = os.path.getmtime(ofile)
 
-   with open(file, "r") as f:
-      newmd5 = hashlib.md5(f.read()).digest()
+   try:
+      newmd5 = _newmd5s[file]
+   except KeyError:
+      with open(file, "r") as f:
+         newmd5 = hashlib.md5(f.read()).digest()
+      _newmd5s.update({file : newmd5})
 
    md5file = "{0}/{1}.md5".format(_jmake_dir, file)
    md5dir = os.path.dirname(md5file)
@@ -390,20 +444,18 @@ def _should_recompile(file):
       os.makedirs(md5dir)
 
    if mtime > omtime:
-      oldmd5 = None
+      oldmd5 = 1
       if os.path.exists(md5file):
-         with open(md5file, "r") as f:
-            oldmd5 = f.read()
+         try:
+            oldmd5 = _oldmd5s[md5file]
+         except KeyError:
+            with open(md5file, "r") as f:
+               oldmd5 = f.read()
+            _oldmd5s.update({md5file : oldmd5})
 
       if oldmd5 != newmd5:
          LOG_INFO("Going to recompile {0} because it has been modified since the last successful build.".format(file))
-
-         with open(md5file, "w") as f:
-            f.write(newmd5)
          return True
-
-   with open(md5file, "w") as f:
-      f.write(newmd5)
 
    #Fourth check: Header files
    #If any included header file (recursive, to include headers included by headers) has been changed,
@@ -426,14 +478,18 @@ def _should_recompile(file):
 
       header_mtime = os.path.getmtime(path)
 
-      #newmd5 is 1, oldmd5 is 0, so that they won't report equal if we ignore them.
-      newmd5 = 1
+      #newmd5 is 0, oldmd5 is 1, so that they won't report equal if we ignore them.
+      newmd5 = 0
 
       #Only check header md5s if they're part of this project. Otherwise we could have hundreds of md5 files stored here.
       #Benefit is not worth the cost in this case.
       if path.startswith("./"):
-         with open(path, "r") as f:
-            newmd5 = hashlib.md5(f.read()).digest()
+         try:
+            newmd5 = _newmd5s[path]
+         except KeyError:
+            with open(path, "r") as f:
+               newmd5 = hashlib.md5(f.read()).digest()
+            _newmd5s.update({path : newmd5})
 
          md5file = "{0}/{1}.md5".format(_jmake_dir, path)
          md5dir = os.path.dirname(md5file)
@@ -441,23 +497,22 @@ def _should_recompile(file):
             os.makedirs(md5dir)
 
       if header_mtime > omtime:
-         oldmd5 = 0
+         oldmd5 = 1
 
          #Only check header md5s if they're part of this project. Otherwise we could have hundreds of md5 files stored here.
          #Benefit is not worth the cost in this case.
          if path.startswith("./"):
             if os.path.exists(md5file):
-               with open(md5file, "r") as f:
-                  oldmd5 = f.read()
+               try:
+                  oldmd5 = _oldmd5s[md5file]
+               except KeyError:
+                  with open(md5file, "r") as f:
+                     oldmd5 = f.read()
+                  _oldmd5s.update({md5file : oldmd5})
 
          if oldmd5 != newmd5:
             LOG_INFO("Going to recompile {0} because included header {1} has been modified since the last successful build.".format(file, header))
-            with open(md5file, "w") as f:
-               f.write(newmd5)
             return True
-
-      with open(md5file, "w") as f:
-         f.write(newmd5)
 
    #If we got here, we assume the object file's already up to date.
    LOG_INFO("Skipping {0}: Already up to date".format(file))
@@ -483,7 +538,7 @@ def _check_libraries():
          success = False
       finally:
          mtime = 0
-         RMatch = re.search("-l{0} \\((.*)\\)".format(library), out)
+         RMatch = re.search("-l{0} \\((.*)\\)".format(re.escape(library)), out)
          #Some libraries (such as -liberty) will return successful but don't have a file (internal to ld maybe?)
          #In those cases we can probably assume they haven't been modified.
          #Set the mtime to 0 and return success as long as ld didn't return an error code.
@@ -523,6 +578,82 @@ class _dummy_block(object):
       """Dummy notify_all method"""
       return
 
+class _bar_writer(threading.Thread):
+   def __init__(self):
+      """Initialize the object. Also handles above-mentioned bug with dummy threads."""
+      threading.Thread.__init__(self)
+      #Prevent certain versions of python from choking on dummy threads.
+      if not hasattr(threading.Thread, "_Thread__block"):
+         threading.Thread._Thread__block = _dummy_block()
+
+   def run(self):
+      global _times
+      global _sources
+      global _esttime
+      global _starttime
+      global _precompile_done
+      global _buildtime
+      global _interrupted
+      global _lastupdate
+      global _columns
+      
+      highperc = 0
+      highnum = 0
+      
+      if _columns <= 0:
+         return
+
+      while _buildtime == -1 and not _interrupted:
+         curtime = time.time() - _starttime
+         cur = 0
+         top = len(_sources)
+         if _precompile or _chunk_precompile:
+            if _precompile_done:
+               cur += 1
+            top += 1
+         
+         _columns = int(os.popen('stty size', 'r').read().split()[1])
+
+         if _columns > 0 and top > 0:
+            minutes = math.floor(curtime / 60)
+            seconds = round(curtime % 60)
+            estmin = 0
+            estsec = 0
+            if _times and _lastupdate >= 0:
+               cur = curtime
+               avgtime = sum(_times)/(len(_times))
+               top = _lastupdate + ((avgtime * (len(_sources) - len(_times)))/_max_threads)
+               if top < cur:
+                  top = cur
+               estmin = math.floor(top / 60)
+               estsec = round(top % 60)
+
+            frac = float(cur)/float(top)
+            num = int(math.floor(frac * (_columns-21)))
+            if num >= _columns - 20:
+               num = _columns - 21
+            perc = int(frac * 100)
+            if perc >= 100:
+               perc = 99
+               
+            if perc < highperc:
+               perc = highperc
+            else:
+               highperc = perc
+            
+            if num < highnum:
+               num = highnum
+            else:
+               highnum = num
+
+            if _times:
+               sys.stdout.write("[" + "="*num + " " * ((_columns-20)-num) + "]{0: 2}:{1:02}/{2: 2}:{3:02} ({4: 3}%)".format(int(minutes), int(seconds), int(estmin), int(estsec), perc))
+            else:
+               sys.stdout.write("[" + "="*num + " " * ((_columns-20)-num) + "]{0: 2}:{1:02}/?:?? (~{2: 3}%)".format(int(minutes), int(seconds), perc))
+            sys.stdout.flush()
+            sys.stdout.write("\r" + " " * _columns + "\r");
+         time.sleep(0.05)
+
 class _threaded_build(threading.Thread):
    """Multithreaded build system, launches a new thread to run the compiler in.
    Uses a threading.BoundedSemaphore object to keep the number of threads equal to the number of processors on the machine.
@@ -538,11 +669,30 @@ class _threaded_build(threading.Thread):
 
    def run(self):
       """Actually run the build process."""
+      global _times
+      starttime = time.time()
       try:
          global _build_success
-         cmd = "{0} -pass-exit-codes -c {1}{2}{3}-g{4} -O{5} {6}{7}{8}{11}{12} -o\"{9}\" \"{10}\"".format(_compiler, _get_warnings(), _get_defines(), _get_include_dirs(), _debug_level, _opt_level, "-fPIC " if _shared else "", "-pg " if _profile else "", "--std={0}".format(_standard) if _standard != "" else "", self.obj, self.file, _get_flags(), _extra_flags)
+         global _cmd
+         global _headerfile
+         inc = ""
+         if (_precompile or _chunk_precompile) and self.file != _headerfile:
+            inc += "-include {0}".format(_headerfile.rsplit(".", 1)[0])
+         cmd = "{0} {1}{2}{3} -o\"{4}\" \"{5}\" 2>&1".format(_cmd, _get_warnings(), _get_include_dirs(), inc, self.obj, self.file)
+         if _show_commands:
+            print cmd
          #We have to use os.system here, not subprocess.call. For some reason, subprocess.call likes to freeze here, but os.system works fine.
-         ret = os.system(cmd)
+         if os.path.exists(self.obj):
+            os.remove(self.obj)
+         fd = os.popen(cmd)
+         output = fd.read()
+         ret = fd.close()
+         sys.stdout.flush()
+         sys.stdout.write(output)
+         if inc:
+            _write_bar(len(_times), len(_sources))
+         else:
+            _write_bar(-1, len(_sources))
          if ret:
             if str(ret) == "2":
                _lock.acquire()
@@ -550,7 +700,11 @@ class _threaded_build(threading.Thread):
                if not _interrupted:
                   LOG_ERROR("Keyboard interrupt received. Aborting build.")
                _interrupted = True
+               LOG_BUILD("Releasing lock...")
                _lock.release()
+               LOG_BUILD("Releasing semaphore...")
+               _semaphore.release()
+               LOG_BUILD("Closing thread...")
             if not _interrupted:
                LOG_ERROR("Compile of {0} failed!".format(self.file, ret))
             _build_success = False
@@ -558,31 +712,77 @@ class _threaded_build(threading.Thread):
          #If we don't do this with ALL exceptions, any unhandled exception here will cause the semaphore to never release...
          #Meaning the build will hang. And for whatever reason ctrl+c won't fix it.
          #ABSOLUTELY HAVE TO release the semaphore on ANY exception.
-         if os.path.dirname(self.file) == _jmake_dir:
-            os.remove(self.file)
+         #if os.path.dirname(self.file) == _jmake_dir:
+         #   os.remove(self.file)
          _semaphore.release()
          raise e
       else:
-         if os.path.dirname(self.file) == _jmake_dir:
-            os.remove(self.file)
+         #if os.path.dirname(self.file) == _jmake_dir:
+         #   os.remove(self.file)
+         if inc or (not _precompile and not _chunk_precompile):
+            endtime = time.time()
+            _times.append(endtime-starttime)
          _semaphore.release()
 
 def _make_chunks(l):
    """ Converts the list into a list of lists - i.e., "chunks"
    Each chunk represents one compilation unit in the chunked build system.
    """
-   if not _use_chunks:
+   sorted_list = sorted(l, key=os.path.getsize, reverse=True)
+   if _unity or not _use_chunks:
       return [l]
    chunks = []
-   for i in xrange(0, len(l), _chunk_size):
-      chunks.append(l[i:i+_chunk_size])
+   if _chunk_filesize > 0:
+      chunksize = 0
+      chunk = []
+      while sorted_list:
+         chunksize = 0
+         chunk = []
+         chunk.append(sorted_list[0])
+         chunksize += os.path.getsize(sorted_list[0])
+         sorted_list.pop(0)
+         for file in reversed(sorted_list):
+            filesize = os.path.getsize(file)
+            if chunksize + filesize > _chunk_filesize:
+               chunks.append(chunk)
+               LOG_INFO("Made chunk: {0}".format(chunk))
+               LOG_INFO("Chunk size: {0}".format(chunksize))
+               break
+            else:
+               chunk.append(file)
+               chunksize += filesize
+               sorted_list.pop()
+      chunks.append(chunk)
+      LOG_INFO("Made chunk: {0}".format(chunk))
+      LOG_INFO("Chunk size: {0}".format(chunksize))
+   elif _chunk_size > 0:
+      for i in xrange(0, len(l), _chunk_size):
+         chunks.append(l[i:i+_chunk_size])
+   else:
+      return [l]
    return chunks
+
+def _base_names(l):
+   ret = []
+   for file in l:
+      ret.append(os.path.basename(file).split(".")[0])
+   return ret
 
 def _get_chunk(file):
    """Retrieves the chunk that a given file belongs to."""
    for chunk in _chunks:
       if file in chunk:
-         return "{0}_chunk_{1}_to_{2}".format(_output_name, os.path.basename(chunk[0]).split(".")[0], os.path.basename(chunk[-1]).split(".")[0])
+         return "{0}_chunk_{1}".format(_output_name, "__".join(_base_names(chunk)))
+
+def _get_size(chunk):
+   size = 0
+   if type(chunk) == list:
+      for source in chunk:
+         size += os.path.getsize(source)
+      return size
+   else:
+      return os.path.getsize(chunk)
+
 
 def _chunked_build(sources):
    """Prepares the files for a chunked build.
@@ -596,15 +796,18 @@ def _chunked_build(sources):
    chunks_to_build = []
    for source in sources:
       chunk = _get_chunk(source)
-      file = "{0}/{1}_chunk_{2}_to_{3}.cpp".format(_jmake_dir, _output_name, os.path.basename(chunk[0]).split(".")[0], os.path.basename(chunk[-1]).split(".")[0])
+      if _unity:
+         file = "{0}/{1}_unity.cpp".format(_jmake_dir, _output_name)
+      else:
+         file = "{0}/{1}.cpp".format(_jmake_dir, chunk)
       if chunk not in chunks_to_build and os.path.exists(file):
          chunks_to_build.append(chunk)
 
    #Ignore chunked building on projects with less than 10 files. There's no point.
    #They build relatively quickly even when not chunked, and if we chunk them, the one chunk would most likely just get
    #broken back up in the next build.
-   if len(_chunks) <= 1:
-      return _chunks[0]
+   if len(_chunks) <= 1 and not _unity:
+      return sources
 
    dont_split = False
    #If we have to build more than four chunks, or more than a quarter of the total number if that's less than four,
@@ -614,30 +817,37 @@ def _chunked_build(sources):
       LOG_INFO("Not splitting any existing chunks because we would have to build too many.")
       dont_split = True
 
+   if _unity:
+      dont_split = True
+
    for chunk in _chunks:
       sources_in_this_chunk = []
       for source in sources:
          if source in chunk:
             sources_in_this_chunk.append(source)
 
-      file = "{0}/{1}_chunk_{2}_to_{3}.cpp".format(_jmake_dir, _output_name, os.path.basename(chunk[0]).split(".")[0], os.path.basename(chunk[-1]).split(".")[0])
+      chunksize = _get_size(sources_in_this_chunk)
+
+      if _unity:
+         file = "{0}/{1}_unity.cpp".format(_jmake_dir, _output_name)
+      else:
+         file = "{0}/{1}_chunk_{2}.cpp".format(_jmake_dir, _output_name, "__".join(_base_names(chunk)))
 
       #If only one or two sources in this chunk need to be built, we get no benefit from building it as a unit. Split unless we're told not to.
-      if len(sources_in_this_chunk) > _chunk_tolerance or (dont_split and os.path.exists(file) and len(sources_in_this_chunk) > 0):
+      if len(chunk) > 1 and ((_chunk_size > 0 and len(sources_in_this_chunk) > _chunk_tolerance) or (_chunk_filesize > 0 and chunksize > _chunk_size_tolerance) or (dont_split and (_unity or os.path.exists(file)) and len(sources_in_this_chunk) > 0)):
          LOG_INFO("Going to build chunk {0} as {1}".format(chunk, file))
-         if not os.path.exists(_jmake_dir):
-            os.makedirs(_jmake_dir)
          with open(file, "w") as f:
             f.write("//Automatically generated file, do not edit.\n")
             for source in chunk:
-               f.write('#include "{0}"\n'.format(os.path.abspath(source)))
+               f.write('#include "{0}" // {1} bytes\n'.format(os.path.abspath(source), os.path.getsize(source)))
                obj = "{0}/{1}_{2}.o".format(_obj_dir, os.path.basename(source).split('.')[0], target)
                if os.path.exists(obj):
                   os.remove(obj)
+            f.write("//Total size: {0} bytes".format(chunksize))
 
          chunks.append(file)
       elif len(sources_in_this_chunk) > 0:
-         chunkname = "{0}_chunk_{1}_to_{2}".format(_output_name, os.path.basename(chunk[0]).split(".")[0], os.path.basename(chunk[-1]).split(".")[0])
+         chunkname = "{0}_chunk_{1}".format(_output_name, "__".join(_base_names(chunk)))
          obj = "{0}/{1}_{2}.o".format(_obj_dir, chunkname, target)
          if os.path.exists(obj):
             #If the chunk object exists, the last build of these files was the full chunk.
@@ -648,16 +858,160 @@ def _chunked_build(sources):
             #incremental builds (except on the first build after the chunk)
             os.remove(obj)
             add_chunk = chunk
-            LOG_WARN("Breaking chunk ({0}) into individual files to improve future iteration turnaround.".format(chunk))
+            LOG_WARN_NOPUSH("Breaking chunk ({0}) into individual files to improve future iteration turnaround.".format(chunk))
          else:
             add_chunk = sources_in_this_chunk
          if len(add_chunk) == 1:
-            LOG_INFO("Going to build {0} as an individual file.".format(add_chunk))
+            if len(chunk) == 1:
+               LOG_INFO("Going to build {0} as an individual file because it's the only file in its chunk.")
+            else:
+               LOG_INFO("Going to build {0} as an individual file.".format(add_chunk))
          else:
             LOG_INFO("Going to build chunk {0} as individual files.".format(add_chunk))
          chunks += add_chunk
 
    return chunks
+
+def _save_md5(file):
+   md5file = "{0}/{1}.md5".format(_jmake_dir, file)
+   md5dir = os.path.dirname(md5file)
+   if not os.path.exists(md5dir):
+      os.makedirs(md5dir)
+   try:
+      newmd5 = _newmd5s[file]
+   except KeyError:
+      with open(file, "r") as f:
+         newmd5 = hashlib.md5(f.read()).digest()
+   finally:
+      with open(md5file, "w") as f:
+         f.write(newmd5)
+
+def _save_md5s(sources, headers):
+   for source in sources:
+      _save_md5(source)
+   for header in headers:
+      _save_md5(header)
+
+def _precompile_headers():
+
+   starttime = time.time()
+   allheaders = []
+
+   if _chunk_precompile:
+      _get_files(headers=allheaders)
+   else:
+      allheaders = _precompile
+
+   if not allheaders:
+      return True
+
+   global _headers
+   _headers = allheaders
+
+   if not _precompile and not _chunk_precompile:
+      return True
+
+   global _headerfile
+
+   _headerfile = "{0}/{1}_precompiled_headers.hpp".format(_jmake_dir, _output_name.split('.')[0])
+   obj = "{0}/{1}_{2}.hpp.gch".format(os.path.dirname(_headerfile), os.path.basename(_headerfile).split('.')[0], target)
+
+   precompile = False
+   for header in allheaders:
+      if _should_recompile(header, obj):
+         precompile = True
+
+   if not precompile:
+      _headerfile = obj
+      return True
+
+   LOG_BUILD("Precompiling headers...")
+
+   with open(_headerfile, "w") as f:
+      for header in allheaders:
+         if header in _precompile_exclude:
+            continue
+         f.write('#include "../{0}"\n'.format(header))
+
+   global _built_something
+   _built_something = True
+   global _build_success
+
+   if not os.path.exists(_obj_dir):
+      os.makedirs(_obj_dir)
+
+   global _max_threads
+
+   if not _semaphore.acquire(False):
+      if _max_threads != 1:
+         LOG_THREAD("Waiting for a build thread to become available...")
+      _semaphore.acquire(True)
+   if _interrupted:
+      sys.exit(2)
+   LOG_BUILD("Precompiling {0} (1/{1})...".format(allheaders if not _chunk_precompile else _headerfile, len(_sources)+1))
+   _write_bar(-1, len(_sources))
+   
+   _threaded_build(_headerfile, obj).start()
+
+   #Wait until all threads are finished. Simple way to do this is acquire the semaphore until it's out of resources.
+   for i in range(_max_threads):
+      if not _semaphore.acquire(False):
+         _semaphore.acquire(True)
+         if _interrupted:
+            sys.exit(2)
+
+   #Then immediately release all the semaphores once we've reclaimed them.
+   #We're not using any more threads so we don't need them now.
+   for i in range(_max_threads):
+      _semaphore.release()
+
+   _headerfile = obj
+
+   totaltime = time.time() - starttime
+   totalmin = math.floor(totaltime/60)
+   totalsec = round(totaltime%60)
+   LOG_BUILD("Precompile took {0}:{1:02}".format(int(totalmin), int(totalsec)))
+
+   global _precompile_done
+   _precompile_done = True
+
+   return _build_success
+
+def _get_base_name(name):
+   """This converts an output name into a directory name. It removes extensions, and also removes the prefix 'lib'"""
+   ret = name.split(".")[0]
+   if ret.startswith("lib"):
+      ret = ret[3:]
+   return ret
+
+def _check_version():
+   """Checks the currently installed version against the latest version, and logs a warning if the current version is out of date."""
+   with open(os.path.dirname(__file__)+"/jmake/version", "r") as f:
+      jmake_version = f.read()
+
+   try:
+      out = subprocess.check_output(["pip", "search", "jmake"])
+   except:
+      return
+   else:
+      RMatch = re.search("LATEST:\s*(\S*)$", out)
+      if not RMatch:
+         return
+      latest_version = RMatch.group(1)
+      if latest_version != jmake_version:
+         LOG_WARN("A new version of jmake is available. Current version: {0}, latest: {1}".format(jmake_version, latest_version))
+         LOG_WARN("Use 'sudo pip install jmake --upgrade' to get the latest version.")
+
+def _write_bar(cur, top):
+   return
+   if _precompile or _chunk_precompile:
+      cur += 1
+      top += 1
+   if _columns > 0 and top > 0:
+      num = int(math.floor(float(cur)/float(top) * (_columns-7)))
+      sys.stdout.write("[" + "="*num + " " * ((_columns-7)-num) + "] {0: 3}%".format(int((float(cur)/float(top))*100)))
+      sys.stdout.flush()
+      sys.stdout.write("\r" + " " * _columns + "\r");
 
 #</editor-fold>
 #</editor-fold>
@@ -665,7 +1019,7 @@ def _chunked_build(sources):
 #<editor-fold desc="Public">
 #<editor-fold desc="Public Variables">
 #Public Variables
-target = "release"
+target = ""
 CleanBuild = False
 do_install = False
 #</editor-fold>
@@ -677,7 +1031,7 @@ def InstallOutput( s = "/usr/local/lib" ):
    global _output_install_dir
    _output_install_dir = s
 
-def InstallHeaders( s = "/usr/local/include" ):
+def InstallHeaders( s = "-" ):
    """Enables installation of the project's headers. Default target is /usr/local/include."""
    global _header_install_dir
    _header_install_dir = s
@@ -886,11 +1240,23 @@ def EnableChunkedBuild():
    global _use_chunks
    _use_chunks = True
 
-def ChunkSize(i):
+def ChunkNumFiles(i):
    """Set the size of the chunks used in the chunked build. This indicates the number of files per compilation unit.
    The default is 10.
    This value is ignored if SetChunks is called.
+   Mutually exclusive with ChunkFilesize().
    """
+   global _chunk_size
+   _chunk_size = i
+   global _chunk_filesize
+   _chunk_filesize = 0
+
+def ChunkFilesize(i):
+   """Sets the maximum filesize for a chunk. The default is 500000. This value is ignored if SetChunks is called.
+   Mutually exclusive with ChunkNumFiles()
+   """
+   global _chunk_filesize
+   _chunk_filesize = i
    global _chunk_size
    _chunk_size = i
 
@@ -900,8 +1266,14 @@ def ChunkTolerance(i):
    if more than three of its files need to be built; if three or less need to be built, they will
    be built individually to save build time.
    """
-   global _chunk_tolerance
-   _chunk_tolerance = i
+   if _chunk_filesize > 0:
+      global _chunk_size_tolerance
+      _chunk_size_tolerance = i
+   elif _chunk_size > 0:
+      global _chunk_tolerance
+      _chunk_tolerance = i
+   else:
+      LOG_WARN("Chunk size and chunk filesize are both zero or negative, cannot set a tolerance.")
 
 def SetChunks(*chunks):
    """Explicitly set the chunks used as compilation units.
@@ -948,6 +1320,39 @@ def DefaultTarget(s):
    global _default_target
    _default_target = s.lower()
 
+def Precompile(*args):
+   """Explicit list of header files to precompile. Disables chunk precompile when called."""
+   args = list(args)
+   global _precompile
+   _precompile = args
+   global _chunk_precompile
+   _chunk_precompile = False
+
+def ChunkPrecompile():
+   """When this is enabled, all header files will be precompiled into a single "superheader" and included in all files."""
+   global _chunk_precompile
+   _chunk_precompile = True
+
+def NoPrecompile(*args):
+   """Disables precompilation and handles headers as usual."""
+   args = list(args)
+   if args:
+      newargs = []
+      for arg in args:
+         if arg[0] != '/' and not arg.startswith("./"):
+            arg = "./" + arg
+         newargs.append(arg)
+      global _precompile_exclude
+      _precompile_exclude += newargs
+   else:
+      global _chunk_precompile
+      _chunk_precompile = False
+
+def EnableUnity():
+   """Turns on true unity builds, combining all files into only one compilation unit."""
+   global _unity
+   _unity = True
+
 #</editor-fold>
 
 #<editor-fold desc="Workers">
@@ -958,8 +1363,40 @@ def build():
    Checking which files need to be built.
    And spawning a build thread for each one that does.
    """
+
+   global _cmd
+   global _recompile_all
+   global _jmake_dir
+
+   starttime = time.time()
+
+   LOG_BUILD("Preparing build tasks...")
+
+   if not os.path.exists(_jmake_dir):
+      os.makedirs(_jmake_dir)
+
+   _cmd = "{0} -pass-exit-codes -Winvalid-pch -c {1}-g{2} -O{3} {4}{5}{6} {7}{8}".format(_compiler, _get_defines(), _debug_level, _opt_level, "-fPIC " if _shared else "", "-pg " if _profile else "", "--std={0}".format(_standard) if _standard != "" else "",  _get_flags(), _extra_flags)
+   cmdfile = "{0}/{1}.jmake".format(_jmake_dir, target)
+   cmd = ""
+   if os.path.exists(cmdfile):
+      with open(cmdfile, "r") as f:
+         cmd = f.read()
+
+   if _cmd != cmd:
+      _recompile_all = True
+      clean(True)
+      with open(cmdfile, "w") as f:
+         f.write(_cmd)
+
+
    if not _check_libraries():
       return False
+
+   global _called_something
+   if _called_something:
+      print "\n"
+
+   LOG_BUILD("Preparing to build {0} ({1})".format(_output_name, target))
 
    sources = []
 
@@ -984,37 +1421,94 @@ def build():
    if _use_chunks:
       sources = _chunked_build(sources)
 
+   global _sources
+   _sources = sources
+   
    if sources:
       global _built_something
       _built_something = True
       global _build_success
-      LOG_BUILD("Building {0} ({1})".format(_output_name, target))
 
       if not os.path.exists(_obj_dir):
          os.makedirs(_obj_dir)
 
-      global _jmake_dir
-      _jmake_dir = "{0}/.jmake".format(_obj_dir)
-      if not os.path.exists(_jmake_dir):
-         os.makedirs(_jmake_dir)
-
       global _max_threads
 
+      i = 1
+
+      startuptime = time.time() - starttime
+      global _starttime
+      _starttime = time.time()
+      global _lastupdate
+
+      totalmin = math.floor(startuptime/60)
+      totalsec = round(startuptime%60)
+      LOG_BUILD("Build preparation took {0}:{1:02}".format(int(totalmin), int(totalsec)))
+      starttime = time.time()
+      LOG_BUILD("Building {0} ({1})".format(_output_name, target))
+
+      _bar_writer().start()
+
+      if not _precompile_headers():
+         return False
+         
+      total = len(sources)
+      if _precompile or _chunk_precompile:
+         total += 1
+         i += 1
+      global _esttime
       for source in sources:
+         global _times
          obj = "{0}/{1}_{2}.o".format(_obj_dir, os.path.basename(source).split('.')[0], target)
          if not _semaphore.acquire(False):
             if _max_threads != 1:
                LOG_THREAD("Waiting for a build thread to become available...")
+               _write_bar(len(_times), len(sources))
             _semaphore.acquire(True)
          if _interrupted:
             sys.exit(2)
-         LOG_BUILD("Building {0}...".format(obj))
+         if _times:
+            totaltime = (time.time() - starttime)
+            _lastupdate = totaltime
+            minutes = math.floor(totaltime / 60)
+            seconds = round(totaltime % 60)
+            avgtime = sum(_times)/(len(_times))
+            esttime = totaltime + ((avgtime * (len(sources) - len(_times)))/_max_threads)
+            if esttime < totaltime:
+               esttime = totaltime
+            _esttime = esttime
+            estmin = math.floor(esttime / 60)
+            estsec = round(esttime % 60)
+            LOG_BUILD("Building {0}... ({1}/{2}) - {3}:{4:02}/{5}:{6:02}".format(obj, i, total, int(minutes), int(seconds), int(estmin), int(estsec)))
+         else:
+            totaltime = (time.time() - starttime)
+            minutes = math.floor(totaltime / 60)
+            seconds = round(totaltime % 60)
+            LOG_BUILD("Building {0}... ({1}/{2}) - {3}:{4:02}".format(obj, i, total, int(minutes), int(seconds)))
+         _write_bar(len(_times), len(sources))
          _threaded_build(source, obj).start()
+         i += 1
 
       #Wait until all threads are finished. Simple way to do this is acquire the semaphore until it's out of resources.
       for i in range(_max_threads):
-         if _max_threads != 1 and not _semaphore.acquire(False):
-            LOG_THREAD("Waiting on {0} more build thread{1} to finish...".format(_max_threads - i, "s" if _max_threads - i != 1 else ""))
+         if not _semaphore.acquire(False):
+            if _max_threads != 1:
+               if _times:
+                  totaltime = (time.time() - starttime)
+                  _lastupdate = totaltime
+                  minutes = math.floor(totaltime / 60)
+                  seconds = round(totaltime % 60)
+                  avgtime = sum(_times)/(len(_times))
+                  esttime = totaltime + ((avgtime * (len(sources) - len(_times)))/_max_threads)
+                  if esttime < totaltime:
+                     esttime = totaltime
+                  estmin = math.floor(esttime / 60)
+                  estsec = round(esttime % 60)
+                  _esttime = esttime
+                  LOG_THREAD("Waiting on {0} more build thread{1} to finish... ({2}:{3:02}/{4}:{5:02})".format(_max_threads - i, "s" if _max_threads - i != 1 else "", int(minutes), int(seconds), int(estmin), int(estsec)))
+               else:
+                  LOG_THREAD("Waiting on {0} more build thread{1} to finish...".format(_max_threads - i, "s" if _max_threads - i != 1 else ""))
+               _write_bar(len(_times), len(sources))
             _semaphore.acquire(True)
             if _interrupted:
                sys.exit(2)
@@ -1024,6 +1518,15 @@ def build():
       for i in range(_max_threads):
          _semaphore.release()
 
+      compiletime = time.time() - starttime
+      totalmin = math.floor(compiletime/60)
+      totalsec = round(compiletime%60)
+      LOG_BUILD("Compilation took {0}:{1:02}".format(int(totalmin), int(totalsec)))
+
+      _save_md5s(allsources, _headers)
+
+      global _buildtime
+      _buildtime = compiletime + startuptime
       return _build_success
 
    else:
@@ -1037,17 +1540,31 @@ def link(*objs):
    This function also checks (if nothing was built) the modified times of all the required libraries, to see if we need
    to relink anyway, even though nothing was compiled.
    """
+
+   starttime = time.time()
+
    output = "{0}/{1}".format(_output_dir, _output_name)
 
    objs = list(objs)
    if not objs:
       for chunk in _chunks:
-         obj = "{0}/{1}_chunk_{2}_to_{3}_{4}.o".format(_obj_dir, _output_name, os.path.basename(chunk[0]).split(".")[0], os.path.basename(chunk[-1]).split(".")[0], target)
+         if not _unity:
+            obj = "{0}/{1}_chunk_{2}_{3}.o".format(_obj_dir, _output_name, "__".join(_base_names(chunk)), target)
+         else:
+            obj = "{0}/{1}_unity_{2}.o".format(_obj_dir, _output_name, target)
          if _use_chunks and os.path.exists(obj):
             objs.append(obj)
          else:
-            for source in chunk:
-               obj = "{0}/{1}_{2}.o".format(_obj_dir, os.path.basename(source).split('.')[0], target)
+            if type(chunk) == list:
+               for source in chunk:
+                  obj = "{0}/{1}_{2}.o".format(_obj_dir, os.path.basename(source).split('.')[0], target)
+                  if os.path.exists(obj):
+                     objs.append(obj)
+                  else:
+                     LOG_ERROR("Some object files are missing. Either the build failed, or you haven't built yet.")
+                     return
+            else:
+               obj = "{0}/{1}_{2}.o".format(_obj_dir, os.path.basename(chunk).split('.')[0], target)
                if os.path.exists(obj):
                   objs.append(obj)
                else:
@@ -1062,7 +1579,7 @@ def link(*objs):
       if os.path.exists(output):
          mtime = os.path.getmtime(output)
          for obj in objs:
-            if os.path.getmtime(obj) != mtime:
+            if os.path.getmtime(obj) > mtime:
                #If the obj time is later, something got built in another run but never got linked...
                #Maybe the linker failed last time.
                #We should count that as having built something, because we do need to link.
@@ -1100,7 +1617,20 @@ def link(*objs):
    if os.path.exists(output):
       os.remove(output)
 
-   subprocess.call("{0} -o{1} {7} {2}{3}-g{4} -O{5} {6} {8}".format(_compiler, output, _get_libraries(), _get_library_dirs(), _debug_level, _opt_level, "-shared " if _shared else "", objstr, _linker_flags), shell=True)
+   cmd = "{0} -o{1} {7} {2}{3}-g{4} -O{5} {6} {8}".format(_compiler, output, _get_libraries(), _get_library_dirs(), _debug_level, _opt_level, "-shared " if _shared else "", objstr, _linker_flags)
+   if _show_commands:
+      print cmd
+   subprocess.call(cmd, shell=True)
+   totaltime = time.time() - starttime
+   totalmin = math.floor(totaltime/60)
+   totalsec = round(totaltime%60)
+   LOG_LINKER("Link time: {0}:{1:02}".format(int(totalmin), int(totalsec)))
+   global _buildtime
+   if _buildtime >= 0:
+      totaltime = totaltime + _buildtime
+      totalmin = math.floor(totaltime/60)
+      totalsec = round(totaltime%60)
+      LOG_BUILD("Total build time: {0}:{1:02}".format(int(totalmin), int(totalsec)))
 
 
 def make():
@@ -1113,7 +1643,7 @@ def make():
       link()
       LOG_BUILD("Build complete.")
 
-def clean():
+def clean(silent=False):
    """Cleans the project.
    Invoked with --clean.
    Deletes all of the object files to make sure they're rebuilt cleanly next run.
@@ -1124,22 +1654,36 @@ def clean():
    if not sources:
       return
 
+   global _chunks
+   chunks = _chunks
+
    if _use_chunks:
-      global _chunks
       _chunks = _make_chunks(sources)
 
-   LOG_INFO("Cleaning {0} ({1})...".format(_output_name, target))
+   if not silent:
+      LOG_INFO("Cleaning {0} ({1})...".format(_output_name, target))
    for source in sources:
       obj = "{0}/{1}_{2}.o".format(_obj_dir, os.path.basename(source).split('.')[0], target)
       if os.path.exists(obj):
-         LOG_INFO("Deleting {0}".format(obj))
+         if not silent:
+            LOG_INFO("Deleting {0}".format(obj))
          os.remove(obj)
       if _use_chunks:
          obj = "{0}/{1}_{2}.o".format(_obj_dir, _get_chunk(source), target)
          if os.path.exists(obj):
-            LOG_INFO("Deleting {0}".format(obj))
+            if not silent:
+               LOG_INFO("Deleting {0}".format(obj))
             os.remove(obj)
-   LOG_INFO("Done.")
+   headerfile = "{0}/{1}_precompiled_headers.hpp".format(_jmake_dir, _output_name.split('.')[0])
+   obj = "{0}/{1}_{2}.hpp.gch".format(os.path.dirname(headerfile), os.path.basename(headerfile).split('.')[0], target)
+   if os.path.exists(obj):
+      if not silent:
+         LOG_INFO("Deleting {0}".format(obj))
+      os.remove(obj)
+   if not silent:
+      LOG_INFO("Done.")
+
+   _chunks = chunks
 
 def install():
    """Installer.
@@ -1150,21 +1694,41 @@ def install():
    output = "{0}/{1}".format(_output_dir, _output_name)
    install_something = False
 
-   if os.path.exists(output):
+   global _output_install_dir
+   if not _output_install_dir or os.path.exists(output):
       #install output file
       if _output_install_dir:
          if not os.path.exists(_output_install_dir):
-            LOG_ERROR("Install directory {0} does not exist!".format(_output_install_dir))
-         else:
+            LOG_WARN_NOPUSH("Install path '{0}' does not exist. Shall I create it? [Y/n]".format(_output_install_dir))
+            input = raw_input()
+            while input.lower() != "y" and input.lower() != "n":
+               print "Invalid response. Y or N?"
+               input = raw_input()
+               if not input:
+                  input = "y"
+            if input.lower() == "y":
+               os.makedirs(_output_install_dir)
+         if os.path.exists(_output_install_dir):
             LOG_INSTALL("Installing {0} to {1}...".format(output, _output_install_dir))
             shutil.copy(output, _output_install_dir)
             install_something = True
 
       #install headers
+      global _header_install_dir
       if _header_install_dir:
+         if _header_install_dir == "-":
+            _header_install_dir = "/usr/local/include/{0}".format(_get_base_name(_output_name))
          if not os.path.exists(_header_install_dir):
-            LOG_ERROR("Install directory {0} does not exist!".format(_header_install_dir))
-         else:
+            LOG_WARN_NOPUSH("Install path '{0}' does not exist. Shall I create it? [Y/n]".format(_header_install_dir))
+            input = raw_input()
+            while input.lower() != "y" and input.lower() != "n":
+               print "Invalid response. Y or N?"
+               input = raw_input()
+               if not input:
+                  input = "y"
+            if input.lower() == "y":
+               os.makedirs(_header_install_dir)
+         if os.path.exists(_header_install_dir):
             headers = []
             _get_files(headers=headers)
             for header in headers:
@@ -1182,7 +1746,7 @@ def install():
 #</editor-fold>
 
 #<editor-fold desc="Misc. Public Functions">
-def call(s):
+def call(s, *argsex):
    """Calls another makefile script.
    This can be used for multi-tiered projects where each subproject needs its own build script.
    The top-level script will then jmake.call() the other scripts.
@@ -1193,7 +1757,7 @@ def call(s):
    isMakefile = False
    with open(file) as f:
       for line in f:
-         if "import jbuild" in line or "from jbuild import" in line:
+         if "import jmake" in line or "from jmake import" in line:
             isMakefile = True
    if not isMakefile:
       LOG_ERROR("Called script is not a makefile script!")
@@ -1205,16 +1769,22 @@ def call(s):
       args.append("--clean")
    if do_install:
       args.append("--install")
-   if _quiet:
-      qarg = "-"
-      for i in range(_quiet):
-         qarg += "q"
-      args.append(qarg)
+   if _quiet == 0:
+      args.append("-v")
+   elif _quiet == 2:
+      args.append("-q")
+   elif _quiet == 3:
+      args.append("-qq")
    args.append(target)
+   args += list(argsex)
+   if _show_commands:
+      print " ".join(args)
+   global _called_something
+   if _called_something:
+      print "\n"
    subprocess.call(args)
    os.chdir(cwd)
    LOG_INFO("Left directory: {0}".format(path))
-   global _called_something
    _called_something = True
 
 #</editor-fold>
@@ -1232,7 +1802,7 @@ else:
    mainfile = "<makefile>"
 
 parser = argparse.ArgumentParser(description='JMake: Build files in local directories and subdirectories.')
-parser.add_argument('target', nargs="?", help='Target for build', default=_default_target)
+parser.add_argument('target', nargs="?", help='Target for build')
 group = parser.add_mutually_exclusive_group()
 group.add_argument('--clean', action="store_true", help='Clean the target build')
 group.add_argument('--install', action="store_true", help='Install the target build')
@@ -1241,14 +1811,17 @@ group2.add_argument('-v', action="store_const", const=0, dest="quiet", help="Ver
 group2.add_argument('-q', action="store_const", const=2, dest="quiet", help="Quiet. Disables all logging except for WARN and ERROR.", default=1)
 group2.add_argument('-qq', action="store_const", const=3, dest="quiet", help="Very quiet. Disables all jmake-specific logging.", default=1)
 parser.add_argument('--overrides', help="Makefile overrides, semicolon-separated. The contents of the string passed to this will be executed as additional script after the makefile is processed.")
+parser.add_argument('--show-commands', help="Show all commands sent to the system.", action="store_true")
 parser.add_argument("-H", "--makefile_help", action="store_true", help="Displays specific help for your makefile (if any)")
 args, remainder = parser.parse_known_args()
 
-target = args.target.lower()
+if args.target is not None:
+   target = args.target.lower()
 CleanBuild = args.clean
 do_install = args.install
 _overrides = args.overrides
 _quiet = args.quiet
+_show_commands = args.show_commands
 
 makefile_help = args.makefile_help
 
@@ -1257,7 +1830,9 @@ if makefile_help:
 
 args = remainder
 
-if target[0] == "_":
+_check_version()
+
+if target and target[0] == "_":
    LOG_ERROR("Invalid target: {0}.".format(target))
    sys.exit(1)
 
@@ -1281,6 +1856,7 @@ def release():
       OutDir("Release")
    if not _obj_dir_set:
       ObjDir("Release/obj")
+   Flags("lto")
 
 ExcludeDirs(_jmake_dir)
 
@@ -1292,6 +1868,11 @@ if mainfile != "<makefile>":
 else:
    LOG_ERROR("JMake cannot be run from the interactive console.")
    sys.exit(1)
+
+os.chdir(os.path.dirname(__mainfile__.__file__))
+
+if not target:
+   target = _default_target
 
 #Check if the default debug, release, and none targets have been defined in the makefile script
 #If not, set them to the defaults defined above.
@@ -1333,16 +1914,21 @@ else:
          make()
    #Print out any errors or warnings incurred so the user doesn't have to scroll to see what went wrong
    if _warnings:
+      print "\n"
       LOG_WARN("Warnings encountered during build:")
       for warn in _warnings[0:-1]:
          LOG_WARN(warn)
    if _errors:
+      print "\n"
       LOG_ERROR("Errors encountered during build:")
       for error in _errors[0:-1]:
          LOG_ERROR(error)
 
 #And finally, explicitly exit! If we don't do this, the makefile script runs again after this.
 #That looks sloppy if it does anything visible, and besides that, it takes up needless cycles
-sys.exit(0)
+if not _build_success:
+   sys.exit(1)
+else:
+   sys.exit(0)
 #</editor-fold>
 #</editor-fold>
