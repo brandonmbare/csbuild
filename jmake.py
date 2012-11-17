@@ -23,6 +23,8 @@ import hashlib
 import time
 import math
 import signal
+import shlex
+import datetime
 
 signal.signal(signal.SIGINT, signal.SIG_DFL)
 
@@ -144,7 +146,7 @@ _headers = []
 _shared = False
 _profile = False
 
-_max_threads = multiprocessing.cpu_count() - 1
+_max_threads = multiprocessing.cpu_count()
 
 _semaphore = threading.BoundedSemaphore(value=_max_threads)
 _lock = threading.Lock()
@@ -267,8 +269,18 @@ def _get_files(sources=None, headers=None):
    Accepts two lists as arguments, which it populates. If sources or headers are excluded from the parameters, it will
    ignore files of the relevant types.
    """
+   bFound = False
    for root, dirnames, filenames in os.walk('.'):
       if root in _exclude_dirs:
+         LOG_INFO("Skipping dir {0}".format(root))
+         continue
+      bFound = False
+      for dir in _exclude_dirs:
+         if root.startswith(dir):
+            bFound = True
+            break
+      if bFound:
+         LOG_INFO("Skipping dir {0}".format(root))
          continue
       if sources is not None:
          for filename in fnmatch.filter(filenames, '*.cpp'):
@@ -288,6 +300,10 @@ def _get_files(sources=None, headers=None):
             if path not in _exclude_files:
                headers.append(path)
          for filename in fnmatch.filter(filenames, '*.h'):
+            path = os.path.join(root, filename)
+            if path not in _exclude_files:
+               headers.append(path)
+         for filename in fnmatch.filter(filenames, '*.inl'):
             path = os.path.join(root, filename)
             if path not in _exclude_files:
                headers.append(path)
@@ -532,7 +548,11 @@ def _check_libraries():
       success = True
       out = ""
       try:
-         out = subprocess.check_output(["ld", "-t", "-l{0}".format(library)], stderr=subprocess.STDOUT)
+         if _show_commands:
+             print "ld -t {0} -l{1}".format(_get_library_dirs(), library)
+         cmd = ["ld", "-t", "-l{0}".format(library)]
+         cmd += shlex.split(_get_library_dirs())
+         out = subprocess.check_output(cmd, stderr=subprocess.STDOUT)
       except subprocess.CalledProcessError as e:
          out = e.output
          success = False
@@ -676,7 +696,7 @@ class _threaded_build(threading.Thread):
          global _cmd
          global _headerfile
          inc = ""
-         if (_precompile or _chunk_precompile) and self.file != _headerfile:
+         if (_precompile or _chunk_precompile) and _headerfile and self.file != _headerfile:
             inc += "-include {0}".format(_headerfile.rsplit(".", 1)[0])
          cmd = "{0} {1}{2}{3} -o\"{4}\" \"{5}\" 2>&1".format(_cmd, _get_warnings(), _get_include_dirs(), inc, self.obj, self.file)
          if _show_commands:
@@ -988,6 +1008,23 @@ def _check_version():
    """Checks the currently installed version against the latest version, and logs a warning if the current version is out of date."""
    with open(os.path.dirname(__file__)+"/jmake/version", "r") as f:
       jmake_version = f.read()
+   if not os.path.exists(os.path.expanduser("~/.jmake/check")):
+      jmake_date = ""
+   else:
+      with open(os.path.expanduser("~/.jmake/check"), "r") as f:
+         jmake_date = f.read()
+
+   date = datetime.date.today().isoformat()
+
+
+   if date == jmake_date:
+      return
+
+   if not os.path.exists(os.path.expanduser("~/.jmake")):
+      os.makedirs(os.path.expanduser("~/.jmake"))
+
+   with open(os.path.expanduser("~/.jmake/check"), "w") as f:
+      f.write(date)
 
    try:
       out = subprocess.check_output(["pip", "search", "jmake"])
@@ -1375,7 +1412,11 @@ def build():
    if not os.path.exists(_jmake_dir):
       os.makedirs(_jmake_dir)
 
-   _cmd = "{0} -pass-exit-codes -Winvalid-pch -c {1}-g{2} -O{3} {4}{5}{6} {7}{8}".format(_compiler, _get_defines(), _debug_level, _opt_level, "-fPIC " if _shared else "", "-pg " if _profile else "", "--std={0}".format(_standard) if _standard != "" else "",  _get_flags(), _extra_flags)
+   exitcodes = ""
+   if "clang" not in _compiler:
+      exitcodes = "-pass-exit-codes"
+
+   _cmd = "{0} {9} -Winvalid-pch -c {1}-g{2} -O{3} {4}{5}{6} {7}{8}".format(_compiler, _get_defines(), _debug_level, _opt_level, "-fPIC " if _shared else "", "-pg " if _profile else "", "--std={0}".format(_standard) if _standard != "" else "",  _get_flags(), _extra_flags, exitcodes)
    cmdfile = "{0}/{1}.jmake".format(_jmake_dir, target)
    cmd = ""
    if os.path.exists(cmdfile):
@@ -1396,8 +1437,6 @@ def build():
    if _called_something:
       print "\n"
 
-   LOG_BUILD("Preparing to build {0} ({1})".format(_output_name, target))
-
    sources = []
 
    global _chunks
@@ -1413,6 +1452,8 @@ def build():
       _chunks = _make_chunks(allsources)
    else:
       allsources = list(itertools.chain(*_chunks))
+
+   LOG_BUILD("Preparing to build {0} ({1})".format(_output_name, target))
 
    for source in allsources:
       if _should_recompile(source):
@@ -1562,17 +1603,17 @@ def link(*objs):
                      objs.append(obj)
                   else:
                      LOG_ERROR("Some object files are missing. Either the build failed, or you haven't built yet.")
-                     return
+                     return False
             else:
                obj = "{0}/{1}_{2}.o".format(_obj_dir, os.path.basename(chunk).split('.')[0], target)
                if os.path.exists(obj):
                   objs.append(obj)
                else:
                   LOG_ERROR("Some object files are missing. Either the build failed, or you haven't built yet.")
-                  return
+                  return False
 
    if not objs:
-      return
+      return True
 
    global _built_something
    if not _built_something:
@@ -1599,7 +1640,7 @@ def link(*objs):
          if not _built_something:
             if not _called_something:
                LOG_LINKER("Nothing to link.")
-            return
+            return True
 
    LOG_LINKER("Linking {0}...".format(output))
 
@@ -1620,7 +1661,10 @@ def link(*objs):
    cmd = "{0} -o{1} {7} {2}{3}-g{4} -O{5} {6} {8}".format(_compiler, output, _get_libraries(), _get_library_dirs(), _debug_level, _opt_level, "-shared " if _shared else "", objstr, _linker_flags)
    if _show_commands:
       print cmd
-   subprocess.call(cmd, shell=True)
+   ret = subprocess.call(cmd, shell=True)
+   if ret != 0:
+      LOG_ERROR("Linking failed.")
+      return False
    totaltime = time.time() - starttime
    totalmin = math.floor(totaltime/60)
    totalsec = round(totaltime%60)
@@ -1631,16 +1675,18 @@ def link(*objs):
       totalmin = math.floor(totaltime/60)
       totalsec = round(totaltime%60)
       LOG_BUILD("Total build time: {0}:{1:02}".format(int(totalmin), int(totalsec)))
+   return True
 
 
 def make():
    """Performs both the build and link steps of the process.
    Aborts if the build fails.
    """
-   if not build():
+   if not build() or not link():
+      global _build_success
+      _build_success = False
       LOG_ERROR("Build failed. Aborting.")
    else:
-      link()
       LOG_BUILD("Build complete.")
 
 def clean(silent=False):
@@ -1661,7 +1707,7 @@ def clean(silent=False):
       _chunks = _make_chunks(sources)
 
    if not silent:
-      LOG_INFO("Cleaning {0} ({1})...".format(_output_name, target))
+      LOG_BUILD("Cleaning {0} ({1})...".format(_output_name, target))
    for source in sources:
       obj = "{0}/{1}_{2}.o".format(_obj_dir, os.path.basename(source).split('.')[0], target)
       if os.path.exists(obj):
@@ -1681,7 +1727,7 @@ def clean(silent=False):
          LOG_INFO("Deleting {0}".format(obj))
       os.remove(obj)
    if not silent:
-      LOG_INFO("Done.")
+      LOG_BUILD("Done.")
 
    _chunks = chunks
 
@@ -1856,7 +1902,8 @@ def release():
       OutDir("Release")
    if not _obj_dir_set:
       ObjDir("Release/obj")
-   Flags("lto")
+   if not "clang" in _compiler:
+      Flags("lto")
 
 ExcludeDirs(_jmake_dir)
 
