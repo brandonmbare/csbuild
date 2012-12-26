@@ -937,9 +937,13 @@ def _precompile_headers():
    obj = "{0}/{1}_{2}.hpp.gch".format(os.path.dirname(_headerfile), os.path.basename(_headerfile).split('.')[0], target)
 
    precompile = False
-   for header in allheaders:
-      if _should_recompile(header, obj):
-         precompile = True
+   if _should_recompile(_headerfile, obj):
+      precompile = True
+   else:
+      for header in allheaders:
+         if _should_recompile(header, obj):
+            precompile = True
+            break
 
    if not precompile:
       _headerfile = obj
@@ -1824,11 +1828,13 @@ def call(s, *argsex):
    args.append(target)
    args += list(argsex)
    if _show_commands:
+      args.append("--show-commands")
       print " ".join(args)
    global _called_something
    if _called_something:
       print "\n"
-   subprocess.call(args)
+   if subprocess.call(args) != 0:
+      LOG_ERROR("Failed build from {0}!".format(s))
    os.chdir(cwd)
    LOG_INFO("Left directory: {0}".format(path))
    _called_something = True
