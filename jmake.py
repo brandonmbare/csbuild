@@ -25,15 +25,7 @@ import math
 import signal
 import shlex
 import datetime
-
-signal.signal(signal.SIGINT, signal.SIG_DFL)
-
-try:
-   subprocess.check_output(["tput", "cols"], stderr=subprocess.STDOUT)
-except subprocess.CalledProcessError as e:   
-   _columns = 0
-else:
-   _columns = int(os.popen('stty size', 'r').read().split()[1])
+import curses
 
 #NOTE: All this <editor-fold desc="Whatever"> stuff is specific to the PyCharm editor, which allows custom folding blocks.
 
@@ -41,19 +33,13 @@ else:
 
 #Initialize logging...
 
-try:
-   subprocess.check_output(["tput", "colors"], stderr=subprocess.STDOUT)
-except subprocess.CalledProcessError as e:
-   _color_supported = False
-else:
-   _color_supported = True
-
 def LOG_MSG(color, level, msg):
    """Print a message to stdout"""
-   if _color_supported:
-      print " ", "\033[{0};1m{1}:\033[0m".format(color, level), msg
-   else:
-      print " ", level+":", msg
+   with _printmutex:
+      if _color_supported:
+         print " ", "\033[{0};1m{1}:\033[0m".format(color, level), msg
+      else:
+         print " ", level+":", msg
 
 def LOG_ERROR(msg):
    """Log an error message"""
@@ -112,6 +98,22 @@ def LOG_INSTALL(msg):
 #<editor-fold desc="Private">
 #<editor-fold desc="Private Variables">
 #Private Variables
+
+
+
+signal.signal(signal.SIGINT, signal.SIG_DFL)
+
+try:
+   curses.setupterm()
+except:
+   _columns = 0
+   _color_supported = False
+else:
+   _columns = curses.tigetnum('cols')
+   _color_supported = (curses.tigetnum("colors") >= 8)
+
+_printmutex = threading.Lock()
+
 _libraries = []
 
 _include_dirs = [
@@ -143,6 +145,9 @@ _standard = ""
 _c_files = []
 _headers = []
 
+_sources = []
+_allsources = []
+
 _shared = False
 _profile = False
 
@@ -173,6 +178,7 @@ _errors = []
 _warnings = []
 
 _allheaders = {}
+_allpaths = []
 _chunks = []
 
 _quiet = 1
@@ -206,7 +212,6 @@ _newmd5s = {}
 _unity = False
 
 _times = []
-_sources = []
 
 _starttime = 0
 _esttime = 0
@@ -272,7 +277,8 @@ def _get_files(sources=None, headers=None):
    bFound = False
    for root, dirnames, filenames in os.walk('.'):
       if root in _exclude_dirs:
-         LOG_INFO("Skipping dir {0}".format(root))
+         if root != _jmake_dir:
+            LOG_INFO("Skipping dir {0}".format(root))
          continue
       bFound = False
       for dir in _exclude_dirs:
@@ -280,7 +286,8 @@ def _get_files(sources=None, headers=None):
             bFound = True
             break
       if bFound:
-         LOG_INFO("Skipping dir {0}".format(root))
+         if not root.startswith(_jmake_dir):
+            LOG_INFO("Skipping dir {0}".format(root))
          continue
       if sources is not None:
          for filename in fnmatch.filter(filenames, '*.cpp'):
@@ -326,7 +333,7 @@ def _follow_headers(file, allheaders):
          if line[0] != '#':
             continue
 
-         RMatch = re.search("#include [<\"](.*?)[\">]", line)
+         RMatch = re.search("#include\s*[<\"](.*?)[\">]", line)
          if RMatch is None:
             continue
 
@@ -334,7 +341,7 @@ def _follow_headers(file, allheaders):
             continue
 
          headers.append(RMatch.group(1))
-
+   
    for header in headers:
       #If we've already looked at this header (i.e., it was included twice) just ignore it
       if header in allheaders:
@@ -357,6 +364,8 @@ def _follow_headers(file, allheaders):
 
       allheaders.append(header)
 
+      theseheaders = []
+      
       if _header_recursion != 1:
          #Check to see if we've already followed this header.
          #If we have, the list we created from it is already stored in _allheaders under this header's key.
@@ -367,9 +376,10 @@ def _follow_headers(file, allheaders):
          else:
             continue
 
-         _follow_headers2(path, allheaders, 1)
-
-      _allheaders.update({header : allheaders})
+         _follow_headers2(path, theseheaders, 1)
+         
+      _allheaders.update({header : theseheaders})
+      allheaders += theseheaders
 
 def _follow_headers2(file, allheaders, n):
    """More intensive, recursive, and cpu-hogging function to follow a header.
@@ -382,7 +392,7 @@ def _follow_headers2(file, allheaders, n):
          if line[0] != '#':
             continue
 
-         RMatch = re.search("#include [<\"](.*?)[\">]", line)
+         RMatch = re.search("#include\s*[<\"](.*?)[\">]", line)
          if RMatch is None:
             continue
 
@@ -390,7 +400,7 @@ def _follow_headers2(file, allheaders, n):
             continue
 
          headers.append(RMatch.group(1))
-
+   
    for header in headers:
       #Check to see if we've already followed this header.
       #If we have, the list we created from it is already stored in _allheaders under this header's key.
@@ -417,10 +427,39 @@ def _follow_headers2(file, allheaders, n):
       allheaders.append(header)
       if _header_recursion == 0 or n < _header_recursion:
          _follow_headers2(path, allheaders, n+1)
+         
+def _remove_comments(text):
+   def replacer(match):
+      s = match.group(0)
+      if s.startswith('/'):
+         return ""
+      else:
+         return s
+   pattern = re.compile(
+      r'//.*?$|/\*.*?\*/|\'(?:\\.|[^\\\'])*\'|"(?:\\.|[^\\"])*"',
+      re.DOTALL | re.MULTILINE
+   )
+   return re.sub(pattern, replacer, text)
+   
+def _remove_whitespace(text):
+   shlexer = shlex.shlex(text)
+   out = []
+   token = ""
+   while True:
+      token = shlexer.get_token()
+      if token == "":
+         break
+      out.append(token)
+   return "".join(out)
+   
+def _get_md5(file):
+   return hashlib.md5(_remove_whitespace(_remove_comments(file.read()))).digest()
 
 def _should_recompile(file, ofile=None):
    """Checks various properties of a file to determine whether or not it needs to be recompiled."""
 
+   LOG_INFO("Checking whether to recompile {0}...".format(file))
+   
    global _recompile_all
    if _recompile_all:
       LOG_INFO("Going to recompile {0} because settings have changed in the makefile that will impact output.".format(file))
@@ -447,20 +486,18 @@ def _should_recompile(file, ofile=None):
    mtime = os.path.getmtime(file)
    omtime = os.path.getmtime(ofile)
 
-   try:
-      newmd5 = _newmd5s[file]
-   except KeyError:
-      with open(file, "r") as f:
-         newmd5 = hashlib.md5(f.read()).digest()
-      _newmd5s.update({file : newmd5})
-
-   md5file = "{0}/{1}.md5".format(_jmake_dir, file)
-   md5dir = os.path.dirname(md5file)
-   if not os.path.exists(md5dir):
-      os.makedirs(md5dir)
-
    if mtime > omtime:
       oldmd5 = 1
+      
+      try:
+         newmd5 = _newmd5s[file]
+      except KeyError:
+         with open(file, "r") as f:
+            newmd5 = _get_md5(f)
+         _newmd5s.update({file : newmd5})
+
+      md5file = "{0}/md5s/{1}.md5".format(_jmake_dir, os.path.abspath(file))
+      
       if os.path.exists(md5file):
          try:
             oldmd5 = _oldmd5s[md5file]
@@ -480,6 +517,10 @@ def _should_recompile(file, ofile=None):
    headers = []
    _follow_headers(file, headers)
 
+   global _allpaths
+   
+   updatedheaders = []
+   
    for header in headers:
       path = "{0}/{1}".format(os.path.dirname(file), header)
       if not os.path.exists(path):
@@ -494,30 +535,20 @@ def _should_recompile(file, ofile=None):
 
       header_mtime = os.path.getmtime(path)
 
-      #newmd5 is 0, oldmd5 is 1, so that they won't report equal if we ignore them.
-      newmd5 = 0
-
-      #Only check header md5s if they're part of this project. Otherwise we could have hundreds of md5 files stored here.
-      #Benefit is not worth the cost in this case.
-      if path.startswith("./"):
-         try:
-            newmd5 = _newmd5s[path]
-         except KeyError:
-            with open(path, "r") as f:
-               newmd5 = hashlib.md5(f.read()).digest()
-            _newmd5s.update({path : newmd5})
-
-         md5file = "{0}/{1}.md5".format(_jmake_dir, path)
-         md5dir = os.path.dirname(md5file)
-         if not os.path.exists(md5dir):
-            os.makedirs(md5dir)
-
       if header_mtime > omtime:
+         #newmd5 is 0, oldmd5 is 1, so that they won't report equal if we ignore them.
+         newmd5 = 0
          oldmd5 = 1
 
-         #Only check header md5s if they're part of this project. Otherwise we could have hundreds of md5 files stored here.
-         #Benefit is not worth the cost in this case.
-         if path.startswith("./"):
+         md5file = "{0}/md5s/{1}.md5".format(_jmake_dir, os.path.abspath(path))
+            
+         if os.path.exists(md5file):
+            try:
+               newmd5 = _newmd5s[path]
+            except KeyError:
+               with open(path, "r") as f:
+                  newmd5 = _get_md5(f)
+               _newmd5s.update({path : newmd5})
             if os.path.exists(md5file):
                try:
                   oldmd5 = _oldmd5s[md5file]
@@ -525,10 +556,19 @@ def _should_recompile(file, ofile=None):
                   with open(md5file, "r") as f:
                      oldmd5 = f.read()
                   _oldmd5s.update({md5file : oldmd5})
-
+                  
          if oldmd5 != newmd5:
-            LOG_INFO("Going to recompile {0} because included header {1} has been modified since the last successful build.".format(file, header))
-            return True
+            updatedheaders.append([header, path])
+            
+   if updatedheaders:
+      files = []
+      for pair in updatedheaders:
+         files.append(pair[0])
+         path = pair[1]
+         if path not in _allpaths:
+            _allpaths.append(path)
+      LOG_INFO("Going to recompile {0} because included headers {1} have been modified since the last successful build.".format(file, files))
+      return True
 
    #If we got here, we assume the object file's already up to date.
    LOG_INFO("Skipping {0}: Already up to date".format(file))
@@ -632,7 +672,7 @@ class _bar_writer(threading.Thread):
                cur += 1
             top += 1
          
-         _columns = int(os.popen('stty size', 'r').read().split()[1])
+         _columns = curses.tigetnum('cols')
 
          if _columns > 0 and top > 0:
             minutes = math.floor(curtime / 60)
@@ -666,12 +706,13 @@ class _bar_writer(threading.Thread):
             else:
                highnum = num
 
-            if _times:
-               sys.stdout.write("[" + "="*num + " " * ((_columns-20)-num) + "]{0: 2}:{1:02}/{2: 2}:{3:02} ({4: 3}%)".format(int(minutes), int(seconds), int(estmin), int(estsec), perc))
-            else:
-               sys.stdout.write("[" + "="*num + " " * ((_columns-20)-num) + "]{0: 2}:{1:02}/?:?? (~{2: 3}%)".format(int(minutes), int(seconds), perc))
-            sys.stdout.flush()
-            sys.stdout.write("\r" + " " * _columns + "\r");
+            with _printmutex:
+               if _times:
+                  sys.stdout.write("[" + "="*num + " " * ((_columns-20)-num) + "]{0: 2}:{1:02}/{2: 2}:{3:02} ({4: 3}%)".format(int(minutes), int(seconds), int(estmin), int(estsec), perc))
+               else:
+                  sys.stdout.write("[" + "="*num + " " * ((_columns-20)-num) + "]{0: 2}:{1:02}/?:?? (~{2: 3}%)".format(int(minutes), int(seconds), perc))
+               sys.stdout.flush()
+               sys.stdout.write("\r" + " " * _columns + "\r");
          time.sleep(0.05)
 
 class _threaded_build(threading.Thread):
@@ -701,9 +742,9 @@ class _threaded_build(threading.Thread):
          cmd = "{0} {1}{2}{3} -o\"{4}\" \"{5}\" 2>&1".format(_cmd, _get_warnings(), _get_include_dirs(), inc, self.obj, self.file)
          if _show_commands:
             print cmd
-         #We have to use os.system here, not subprocess.call. For some reason, subprocess.call likes to freeze here, but os.system works fine.
          if os.path.exists(self.obj):
             os.remove(self.obj)
+         #We have to use os.popen here, not subprocess.call. For some reason, subprocess.call likes to freeze here, but os.popen works fine.
          fd = os.popen(cmd)
          output = fd.read()
          ret = fd.close()
@@ -893,7 +934,7 @@ def _chunked_build(sources):
    return chunks
 
 def _save_md5(file):
-   md5file = "{0}/{1}.md5".format(_jmake_dir, file)
+   md5file = "{0}/md5s/{1}.md5".format(_jmake_dir, os.path.abspath(file))
    md5dir = os.path.dirname(md5file)
    if not os.path.exists(md5dir):
       os.makedirs(md5dir)
@@ -901,7 +942,7 @@ def _save_md5(file):
       newmd5 = _newmd5s[file]
    except KeyError:
       with open(file, "r") as f:
-         newmd5 = hashlib.md5(f.read()).digest()
+         newmd5 = _get_md5(f)
    finally:
       with open(md5file, "w") as f:
          f.write(newmd5)
@@ -909,8 +950,14 @@ def _save_md5(file):
 def _save_md5s(sources, headers):
    for source in sources:
       _save_md5(source)
+         
    for header in headers:
       _save_md5(header)
+      
+   global _allpaths
+   for path in _allpaths:
+      print "saving {0}".format(path)
+      _save_md5(os.path.abspath(path))
 
 def _precompile_headers():
 
@@ -948,7 +995,7 @@ def _precompile_headers():
    if not precompile:
       _headerfile = obj
       return True
-
+         
    LOG_BUILD("Precompiling headers...")
 
    with open(_headerfile, "w") as f:
@@ -972,6 +1019,7 @@ def _precompile_headers():
       _semaphore.acquire(True)
    if _interrupted:
       sys.exit(2)
+   
    LOG_BUILD("Precompiling {0} (1/{1})...".format(allheaders if not _chunk_precompile else _headerfile, len(_sources)+1))
    _write_bar(-1, len(_sources))
    
@@ -1441,142 +1489,137 @@ def build():
    if _called_something:
       print "\n"
 
-   sources = []
+   global _sources
+   global _allsources
 
    global _chunks
    if not _chunks:
-      allsources = []
+      _get_files(_allsources)
 
-      _get_files(allsources)
-
-      if not allsources:
+      if not _allsources:
          return True
 
       #We'll do this even if _use_chunks is false, because it simplifies the linker logic.
-      _chunks = _make_chunks(allsources)
+      _chunks = _make_chunks(_allsources)
    else:
-      allsources = list(itertools.chain(*_chunks))
+      _allsources = list(itertools.chain(*_chunks))
 
    LOG_BUILD("Preparing to build {0} ({1})".format(_output_name, target))
 
-   for source in allsources:
+   for source in _allsources:
       if _should_recompile(source):
-         sources.append(source)
+         _sources.append(source)
 
    if _use_chunks:
-      sources = _chunked_build(sources)
+      _sources = _chunked_build(_sources)
+      
+   startuptime = time.time() - starttime
+   global _starttime
+   _starttime = time.time()
+   global _lastupdate
 
-   global _sources
-   _sources = sources
-   
-   if sources:
-      global _built_something
-      _built_something = True
-      global _build_success
+   totalmin = math.floor(startuptime/60)
+   totalsec = round(startuptime%60)
+   LOG_BUILD("Build preparation took {0}:{1:02}".format(int(totalmin), int(totalsec)))
+   i = 1
 
-      if not os.path.exists(_obj_dir):
-         os.makedirs(_obj_dir)
+   starttime = time.time()
+   LOG_BUILD("Building {0} ({1})".format(_output_name, target))
+      
+   _bar_writer().start()
+   if _precompile_headers():
+      if _sources:
+         global _built_something
+         _built_something = True
+         global _build_success
 
-      global _max_threads
+         if not os.path.exists(_obj_dir):
+            os.makedirs(_obj_dir)
 
-      i = 1
+         global _max_threads
 
-      startuptime = time.time() - starttime
-      global _starttime
-      _starttime = time.time()
-      global _lastupdate
 
-      totalmin = math.floor(startuptime/60)
-      totalsec = round(startuptime%60)
-      LOG_BUILD("Build preparation took {0}:{1:02}".format(int(totalmin), int(totalsec)))
-      starttime = time.time()
-      LOG_BUILD("Building {0} ({1})".format(_output_name, target))
-
-      _bar_writer().start()
-
-      if not _precompile_headers():
-         return False
-         
-      total = len(sources)
-      if _precompile or _chunk_precompile:
-         total += 1
-         i += 1
-      global _esttime
-      for source in sources:
-         global _times
-         obj = "{0}/{1}_{2}.o".format(_obj_dir, os.path.basename(source).split('.')[0], target)
-         if not _semaphore.acquire(False):
-            if _max_threads != 1:
-               LOG_THREAD("Waiting for a build thread to become available...")
-               _write_bar(len(_times), len(sources))
-            _semaphore.acquire(True)
-         if _interrupted:
-            sys.exit(2)
-         if _times:
-            totaltime = (time.time() - starttime)
-            _lastupdate = totaltime
-            minutes = math.floor(totaltime / 60)
-            seconds = round(totaltime % 60)
-            avgtime = sum(_times)/(len(_times))
-            esttime = totaltime + ((avgtime * (len(sources) - len(_times)))/_max_threads)
-            if esttime < totaltime:
-               esttime = totaltime
-            _esttime = esttime
-            estmin = math.floor(esttime / 60)
-            estsec = round(esttime % 60)
-            LOG_BUILD("Building {0}... ({1}/{2}) - {3}:{4:02}/{5}:{6:02}".format(obj, i, total, int(minutes), int(seconds), int(estmin), int(estsec)))
-         else:
-            totaltime = (time.time() - starttime)
-            minutes = math.floor(totaltime / 60)
-            seconds = round(totaltime % 60)
-            LOG_BUILD("Building {0}... ({1}/{2}) - {3}:{4:02}".format(obj, i, total, int(minutes), int(seconds)))
-         _write_bar(len(_times), len(sources))
-         _threaded_build(source, obj).start()
-         i += 1
-
-      #Wait until all threads are finished. Simple way to do this is acquire the semaphore until it's out of resources.
-      for i in range(_max_threads):
-         if not _semaphore.acquire(False):
-            if _max_threads != 1:
-               if _times:
-                  totaltime = (time.time() - starttime)
-                  _lastupdate = totaltime
-                  minutes = math.floor(totaltime / 60)
-                  seconds = round(totaltime % 60)
-                  avgtime = sum(_times)/(len(_times))
-                  esttime = totaltime + ((avgtime * (len(sources) - len(_times)))/_max_threads)
-                  if esttime < totaltime:
-                     esttime = totaltime
-                  estmin = math.floor(esttime / 60)
-                  estsec = round(esttime % 60)
-                  _esttime = esttime
-                  LOG_THREAD("Waiting on {0} more build thread{1} to finish... ({2}:{3:02}/{4}:{5:02})".format(_max_threads - i, "s" if _max_threads - i != 1 else "", int(minutes), int(seconds), int(estmin), int(estsec)))
-               else:
-                  LOG_THREAD("Waiting on {0} more build thread{1} to finish...".format(_max_threads - i, "s" if _max_threads - i != 1 else ""))
-               _write_bar(len(_times), len(sources))
-            _semaphore.acquire(True)
+         total = len(_sources)
+         if _precompile_done:
+            total += 1
+            i += 1
+         global _esttime
+         for source in _sources:
+            global _times
+            obj = "{0}/{1}_{2}.o".format(_obj_dir, os.path.basename(source).split('.')[0], target)
+            if not _semaphore.acquire(False):
+               if _max_threads != 1:
+                  LOG_THREAD("Waiting for a build thread to become available...")
+                  _write_bar(len(_times), len(_sources))
+               _semaphore.acquire(True)
             if _interrupted:
                sys.exit(2)
+            if _times:
+               totaltime = (time.time() - starttime)
+               _lastupdate = totaltime
+               minutes = math.floor(totaltime / 60)
+               seconds = round(totaltime % 60)
+               avgtime = sum(_times)/(len(_times))
+               esttime = totaltime + ((avgtime * (len(_sources) - len(_times)))/_max_threads)
+               if esttime < totaltime:
+                  esttime = totaltime
+               _esttime = esttime
+               estmin = math.floor(esttime / 60)
+               estsec = round(esttime % 60)
+               LOG_BUILD("Building {0}... ({1}/{2}) - {3}:{4:02}/{5}:{6:02}".format(obj, i, total, int(minutes), int(seconds), int(estmin), int(estsec)))
+            else:
+               totaltime = (time.time() - starttime)
+               minutes = math.floor(totaltime / 60)
+               seconds = round(totaltime % 60)
+               LOG_BUILD("Building {0}... ({1}/{2}) - {3}:{4:02}".format(obj, i, total, int(minutes), int(seconds)))
+            _write_bar(len(_times), len(_sources))
+            _threaded_build(source, obj).start()
+            i += 1
 
-      #Then immediately release all the semaphores once we've reclaimed them.
-      #We're not using any more threads so we don't need them now.
-      for i in range(_max_threads):
-         _semaphore.release()
+         #Wait until all threads are finished. Simple way to do this is acquire the semaphore until it's out of resources.
+         for i in range(_max_threads):
+            if not _semaphore.acquire(False):
+               if _max_threads != 1:
+                  if _times:
+                     totaltime = (time.time() - starttime)
+                     _lastupdate = totaltime
+                     minutes = math.floor(totaltime / 60)
+                     seconds = round(totaltime % 60)
+                     avgtime = sum(_times)/(len(_times))
+                     esttime = totaltime + ((avgtime * (len(_sources) - len(_times)))/_max_threads)
+                     if esttime < totaltime:
+                        esttime = totaltime
+                     estmin = math.floor(esttime / 60)
+                     estsec = round(esttime % 60)
+                     _esttime = esttime
+                     LOG_THREAD("Waiting on {0} more build thread{1} to finish... ({2}:{3:02}/{4}:{5:02})".format(_max_threads - i, "s" if _max_threads - i != 1 else "", int(minutes), int(seconds), int(estmin), int(estsec)))
+                  else:
+                     LOG_THREAD("Waiting on {0} more build thread{1} to finish...".format(_max_threads - i, "s" if _max_threads - i != 1 else ""))
+                  _write_bar(len(_times), len(_sources))
+               _semaphore.acquire(True)
+               if _interrupted:
+                  sys.exit(2)
+
+         #Then immediately release all the semaphores once we've reclaimed them.
+         #We're not using any more threads so we don't need them now.
+         for i in range(_max_threads):
+            _semaphore.release()
+            
+      else:
+         LOG_BUILD("Nothing to build.")
+         return True
 
       compiletime = time.time() - starttime
       totalmin = math.floor(compiletime/60)
       totalsec = round(compiletime%60)
       LOG_BUILD("Compilation took {0}:{1:02}".format(int(totalmin), int(totalsec)))
 
-      _save_md5s(allsources, _headers)
+      _save_md5s(_allsources, _headers)
 
       global _buildtime
       _buildtime = compiletime + startuptime
       return _build_success
 
-   else:
-      LOG_BUILD("Nothing to build.")
-      return True
    
 def link(*objs):
    """Linker:
