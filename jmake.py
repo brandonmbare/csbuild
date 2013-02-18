@@ -455,7 +455,7 @@ def _remove_whitespace(text):
 def _get_md5(file):
    return hashlib.md5(_remove_whitespace(_remove_comments(file.read()))).digest()
 
-def _should_recompile(file, ofile=None):
+def _should_recompile(file, ofile=None, for_precompiled_header=False):
    """Checks various properties of a file to determine whether or not it needs to be recompiled."""
 
    LOG_INFO("Checking whether to recompile {0}...".format(file))
@@ -488,23 +488,25 @@ def _should_recompile(file, ofile=None):
 
    if mtime > omtime:
       oldmd5 = 1
+      newmd5 = 9
       
-      try:
-         newmd5 = _newmd5s[file]
-      except KeyError:
-         with open(file, "r") as f:
-            newmd5 = _get_md5(f)
-         _newmd5s.update({file : newmd5})
-
-      md5file = "{0}/md5s/{1}.md5".format(_jmake_dir, os.path.abspath(file))
-      
-      if os.path.exists(md5file):
+      if not for_precompiled_header:
          try:
-            oldmd5 = _oldmd5s[md5file]
+            newmd5 = _newmd5s[file]
          except KeyError:
-            with open(md5file, "r") as f:
-               oldmd5 = f.read()
-            _oldmd5s.update({md5file : oldmd5})
+            with open(file, "r") as f:
+               newmd5 = _get_md5(f)
+            _newmd5s.update({file : newmd5})
+
+         md5file = "{0}/md5s/{1}.md5".format(_jmake_dir, os.path.abspath(file))
+         
+         if os.path.exists(md5file):
+            try:
+               oldmd5 = _oldmd5s[md5file]
+            except KeyError:
+               with open(md5file, "r") as f:
+                  oldmd5 = f.read()
+               _oldmd5s.update({md5file : oldmd5})
 
       if oldmd5 != newmd5:
          LOG_INFO("Going to recompile {0} because it has been modified since the last successful build.".format(file))
@@ -540,22 +542,23 @@ def _should_recompile(file, ofile=None):
          newmd5 = 0
          oldmd5 = 1
 
-         md5file = "{0}/md5s/{1}.md5".format(_jmake_dir, os.path.abspath(path))
-            
-         if os.path.exists(md5file):
-            try:
-               newmd5 = _newmd5s[path]
-            except KeyError:
-               with open(path, "r") as f:
-                  newmd5 = _get_md5(f)
-               _newmd5s.update({path : newmd5})
+         if not for_precompiled_header:
+            md5file = "{0}/md5s/{1}.md5".format(_jmake_dir, os.path.abspath(path))
+               
             if os.path.exists(md5file):
                try:
-                  oldmd5 = _oldmd5s[md5file]
+                  newmd5 = _newmd5s[path]
                except KeyError:
-                  with open(md5file, "r") as f:
-                     oldmd5 = f.read()
-                  _oldmd5s.update({md5file : oldmd5})
+                  with open(path, "r") as f:
+                     newmd5 = _get_md5(f)
+                  _newmd5s.update({path : newmd5})
+               if os.path.exists(md5file):
+                  try:
+                     oldmd5 = _oldmd5s[md5file]
+                  except KeyError:
+                     with open(md5file, "r") as f:
+                        oldmd5 = f.read()
+                     _oldmd5s.update({md5file : oldmd5})
                   
          if oldmd5 != newmd5:
             updatedheaders.append([header, path])
@@ -983,11 +986,11 @@ def _precompile_headers():
    obj = "{0}/{1}_{2}.hpp.gch".format(os.path.dirname(_headerfile), os.path.basename(_headerfile).split('.')[0], target)
 
    precompile = False
-   if _should_recompile(_headerfile, obj):
+   if _should_recompile(_headerfile, obj, True):
       precompile = True
    else:
       for header in allheaders:
-         if _should_recompile(header, obj):
+         if _should_recompile(header, obj, True):
             precompile = True
             break
 
@@ -1455,6 +1458,7 @@ def build():
    global _cmd
    global _recompile_all
    global _jmake_dir
+   global _build_success
 
    starttime = time.time()
 
@@ -1530,7 +1534,6 @@ def build():
       if _sources:
          global _built_something
          _built_something = True
-         global _build_success
 
          if not os.path.exists(_obj_dir):
             os.makedirs(_obj_dir)
