@@ -739,7 +739,7 @@ class _threaded_build(threading.Thread):
          inc = ""
          if (_precompile or _chunk_precompile) and _headerfile and self.file != _headerfile:
             inc += "-include {0}".format(_headerfile.rsplit(".", 1)[0])
-         cmd = "{0} {1}{2}{3} -o\"{4}\" \"{5}\" 2>&1".format(_cmd, _get_warnings(), _get_include_dirs(), inc, self.obj, self.file)
+         cmd = "{0} {1}{2}{3} -o\"{4}\" \"{5}\"".format(_cmd, _get_warnings(), _get_include_dirs(), inc, self.obj, os.path.abspath(self.file))
          if _show_commands:
             print cmd
          if os.path.exists(self.obj):
@@ -956,7 +956,6 @@ def _save_md5s(sources, headers):
       
    global _allpaths
    for path in _allpaths:
-      print "saving {0}".format(path)
       _save_md5(os.path.abspath(path))
 
 def _precompile_headers():
@@ -1002,7 +1001,7 @@ def _precompile_headers():
       for header in allheaders:
          if header in _precompile_exclude:
             continue
-         f.write('#include "../{0}"\n'.format(header))
+         f.write('#include "{0}"\n'.format(os.path.abspath(header)))
 
    global _built_something
    _built_something = True
@@ -1487,7 +1486,7 @@ def build():
 
    global _called_something
    if _called_something:
-      print "\n"
+      print " \n"
 
    global _sources
    global _allsources
@@ -1497,7 +1496,7 @@ def build():
       _get_files(_allsources)
 
       if not _allsources:
-         return True
+         return _build_success
 
       #We'll do this even if _use_chunks is false, because it simplifies the linker logic.
       _chunks = _make_chunks(_allsources)
@@ -1607,18 +1606,17 @@ def build():
             
       else:
          LOG_BUILD("Nothing to build.")
-         return True
 
-      compiletime = time.time() - starttime
-      totalmin = math.floor(compiletime/60)
-      totalsec = round(compiletime%60)
-      LOG_BUILD("Compilation took {0}:{1:02}".format(int(totalmin), int(totalsec)))
+   compiletime = time.time() - starttime
+   totalmin = math.floor(compiletime/60)
+   totalsec = round(compiletime%60)
+   LOG_BUILD("Compilation took {0}:{1:02}".format(int(totalmin), int(totalsec)))
 
-      _save_md5s(_allsources, _headers)
+   _save_md5s(_allsources, _headers)
 
-      global _buildtime
-      _buildtime = compiletime + startuptime
-      return _build_success
+   global _buildtime
+   _buildtime = compiletime + startuptime
+   return _build_success
 
    
 def link(*objs):
@@ -1868,16 +1866,23 @@ def call(s, *argsex):
       args.append("-q")
    elif _quiet == 3:
       args.append("-qq")
+      
+   if _color_supported:
+      args.append("--force-color")
+   if _columns == 0:
+      args.append("--no-progress")
    args.append(target)
    args += list(argsex)
    if _show_commands:
       args.append("--show-commands")
       print " ".join(args)
    global _called_something
+   global _build_success
    if _called_something:
       print "\n"
    if subprocess.call(args) != 0:
       LOG_ERROR("Failed build from {0}!".format(s))
+      _build_success = False
    os.chdir(cwd)
    LOG_INFO("Left directory: {0}".format(path))
    _called_something = True
@@ -1907,6 +1912,8 @@ group2.add_argument('-q', action="store_const", const=2, dest="quiet", help="Qui
 group2.add_argument('-qq', action="store_const", const=3, dest="quiet", help="Very quiet. Disables all jmake-specific logging.", default=1)
 parser.add_argument('--overrides', help="Makefile overrides, semicolon-separated. The contents of the string passed to this will be executed as additional script after the makefile is processed.")
 parser.add_argument('--show-commands', help="Show all commands sent to the system.", action="store_true")
+parser.add_argument('--no-progress', help="Turn off the progress bar.", action="store_true")
+parser.add_argument('--force-color', help="Force color on even if the terminal isn't detected as accepting it.", action="store_true")
 parser.add_argument("-H", "--makefile_help", action="store_true", help="Displays specific help for your makefile (if any)")
 args, remainder = parser.parse_known_args()
 
@@ -1917,6 +1924,10 @@ do_install = args.install
 _overrides = args.overrides
 _quiet = args.quiet
 _show_commands = args.show_commands
+if args.no_progress:
+   _columns = 0
+if args.force_color:
+   _color_supported = True
 
 makefile_help = args.makefile_help
 
