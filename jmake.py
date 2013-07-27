@@ -112,113 +112,189 @@ else:
    _columns = curses.tigetnum('cols')
    _color_supported = (curses.tigetnum("colors") >= 8)
 
-_printmutex = threading.Lock()
+def setGlobals():
+   global _printmutex
+   _printmutex = threading.Lock()
 
-_libraries = []
+   global _libraries
+   _libraries = []
 
-_include_dirs = [
-   "/usr/include",
-   "/usr/local/include"
-]
+   global _include_dirs
+   _include_dirs = [
+      "/usr/include",
+      "/usr/local/include"
+   ]
 
-_library_dirs = [
-   "/usr/lib",
-   "/usr/local/lib"
-]
+   global _library_dirs
+   _library_dirs = [
+      "/usr/lib",
+      "/usr/local/lib"
+   ]
 
-_opt_level = 0
-_debug_level = 0
-_warn_flags = []
-_flags = []
-_defines = []
-_undefines = []
-_compiler = "g++"
-_obj_dir = "."
-_output_dir = "."
-_jmake_dir = "./.jmake"
-_output_name = "JMade"
-_output_install_dir = ""
-_header_install_dir = ""
-_automake = True
-_standard = ""
+   global _opt_level
+   _opt_level = 0
+   global _debug_level
+   _debug_level = 0
+   global _warn_flags
+   _warn_flags = []
+   global _flags
+   _flags = []
+   global _defines
+   _defines = []
+   global _undefines
+   _undefines = []
+   global _compiler
+   _compiler = "g++"
+   global _obj_dir
+   _obj_dir = "."
+   global _output_dir
+   _output_dir = "."
+   global _jmake_dir
+   _jmake_dir = "./.jmake"
+   global _output_name
+   _output_name = "JMade"
+   global _output_install_dir
+   _output_install_dir = ""
+   global _header_install_dir
+   _header_install_dir = ""
+   global _automake
+   _automake = True
+   global _standard
+   _standard = ""
 
-_c_files = []
-_headers = []
+   global _c_files
+   _c_files = []
+   global _headers
+   _headers = []
 
-_sources = []
-_allsources = []
+   global _sources
+   _sources = []
+   global _allsources
+   _allsources = []
 
-_shared = False
-_profile = False
+   global _shared
+   _shared = False
+   global _profile
+   _profile = False
 
-_max_threads = multiprocessing.cpu_count()
+   global _max_threads
+   _max_threads = multiprocessing.cpu_count()
 
-_semaphore = threading.BoundedSemaphore(value=_max_threads)
-_lock = threading.Lock()
+   global _semaphore
+   _semaphore = threading.BoundedSemaphore(value=_max_threads)
+   global _lock
+   _lock = threading.Lock()
 
-_extra_flags = ""
-_linker_flags = ""
+   global _extra_flags
+   _extra_flags = ""
+   global _linker_flags
+   _linker_flags = ""
 
-_exclude_dirs = []
-_exclude_files = []
+   global _exclude_dirs
+   _exclude_dirs = []
+   global _exclude_files
+   _exclude_files = []
 
-_built_something = False
-_build_success = True
-_called_something = False
-_overrides = ""
+   global _built_something
+   _built_something = False
+   global _build_success
+   _build_success = True
+   global _called_something
+   _called_something = False
+   global _overrides
+   _overrides = ""
 
-_library_mtimes = []
+   global _library_mtimes
+   _library_mtimes = []
 
-_output_dir_set = False
-_obj_dir_set = False
-_debug_set = False
-_opt_set = False
+   global _output_dir_set
+   _output_dir_set = False
+   global _obj_dir_set
+   _obj_dir_set = False
+   global _debug_set
+   _debug_set = False
+   global _opt_set
+   _opt_set = False
 
-_errors = []
-_warnings = []
+   global _errors
+   _errors = []
+   global _warnings
+   _warnings = []
 
-_allheaders = {}
-_allpaths = []
-_chunks = []
+   global _allheaders
+   _allheaders = {}
+   global _allpaths
+   _allpaths = []
+   global _chunks
+   _chunks = []
 
-_quiet = 1
+   global _quiet
+   _quiet = 1
 
-_use_chunks = True
-_chunk_tolerance = 3
-_chunk_size = 0
-_chunk_filesize = 500000
-_chunk_size_tolerance = 150000
-_interrupted = False
+   global _use_chunks
+   _use_chunks = True
+   global _chunk_tolerance
+   _chunk_tolerance = 3
+   global _chunk_size
+   _chunk_size = 0
+   global _chunk_filesize
+   _chunk_filesize = 500000
+   global _chunk_size_tolerance
+   _chunk_size_tolerance = 150000
+   global _interrupted
+   _interrupted = False
 
-_header_recursion = 0
-_ignore_external_headers = False
+   global _header_recursion
+   _header_recursion = 0
+   global _ignore_external_headers
+   _ignore_external_headers = False
 
-_no_warnings = False
+   global _no_warnings
+   _no_warnings = False
 
-_default_target = "release"
+   global _default_target
+   _default_target = "release"
 
-_chunk_precompile = True
-_precompile = []
-_precompile_exclude = []
-_headerfile = ""
+   global _chunk_precompile
+   _chunk_precompile = True
+   global _precompile
+   _precompile = []
+   global _precompile_exclude
+   _precompile_exclude = []
+   global _headerfile
+   _headerfile = ""
 
-_cmd = ""
-_recompile_all = False
-_show_commands = False
+   global _cmd
+   _cmd = ""
+   global _recompile_all
+   _recompile_all = False
+   global _show_commands
+   _show_commands = False
 
-_oldmd5s = {}
-_newmd5s = {}
+   global _oldmd5s
+   _oldmd5s = {}
+   global _newmd5s
+   _newmd5s = {}
 
-_unity = False
+   global _unity
+   _unity = False
 
-_times = []
+   global _times
+   _times = []
 
-_starttime = 0
-_esttime = 0
-_lastupdate = -1
-_precompile_done = False
+   global _starttime
+   _starttime = 0
+   global _esttime
+   _esttime = 0
+   global _lastupdate
+   _lastupdate = -1
+   global _precompile_done
+   _precompile_done = False
 
-_buildtime = -1
+   global _buildtime
+   _buildtime = -1
+
+setGlobals()
 #</editor-fold>
 
 #<editor-fold desc="Private Functions">
@@ -645,10 +721,13 @@ class _bar_writer(threading.Thread):
    def __init__(self):
       """Initialize the object. Also handles above-mentioned bug with dummy threads."""
       threading.Thread.__init__(self)
+      self._stop = False
       #Prevent certain versions of python from choking on dummy threads.
       if not hasattr(threading.Thread, "_Thread__block"):
          threading.Thread._Thread__block = _dummy_block()
 
+   def stop(self):
+      self._stop = True
    def run(self):
       global _times
       global _sources
@@ -666,7 +745,7 @@ class _bar_writer(threading.Thread):
       if _columns <= 0:
          return
 
-      while _buildtime == -1 and not _interrupted:
+      while _buildtime == -1 and not _interrupted and not self._stop:
          curtime = time.time() - _starttime
          cur = 0
          top = len(_sources)
@@ -1447,6 +1526,7 @@ def EnableUnity():
 #</editor-fold>
 
 #<editor-fold desc="Workers">
+_barWriter = _bar_writer()
 def build():
    """Build the project.
    This step handles:
@@ -1529,7 +1609,7 @@ def build():
    starttime = time.time()
    LOG_BUILD("Building {0} ({1})".format(_output_name, target))
       
-   _bar_writer().start()
+   _barWriter.start()
    if _precompile_headers():
       if _sources:
          global _built_something
@@ -1848,6 +1928,8 @@ def call(s, *argsex):
    path = os.path.dirname(s)
    file = os.path.basename(s)
    ExcludeDirs(path)
+   global _exclude_dirs
+   excludedDirs = _exclude_dirs[:]
    isMakefile = False
    with open(file) as f:
       for line in f:
@@ -1858,37 +1940,50 @@ def call(s, *argsex):
    cwd = os.getcwd()
    os.chdir(path)
    LOG_INFO("Entered directory: {0}".format(path))
-   args = ["python", file]
-   if CleanBuild:
-      args.append("--clean")
-   if do_install:
-      args.append("--install")
-   if _quiet == 0:
-      args.append("-v")
-   elif _quiet == 2:
-      args.append("-q")
-   elif _quiet == 3:
-      args.append("-qq")
-      
-   if _color_supported:
-      args.append("--force-color")
-   if _columns == 0:
-      args.append("--no-progress")
-   args.append(target)
-   args += list(argsex)
-   if _show_commands:
-      args.append("--show-commands")
-      print " ".join(args)
+   # args = ["python", file]
+   # if CleanBuild:
+   #    args.append("--clean")
+   # if do_install:
+   #    args.append("--install")
+   # if _quiet == 0:
+   #    args.append("-v")
+   # elif _quiet == 2:
+   #    args.append("-q")
+   # elif _quiet == 3:
+   #    args.append("-qq")
+   #
+   # if _color_supported:
+   #    args.append("--force-color")
+   # if _columns == 0:
+   #    args.append("--no-progress")
+   # args.append(target)
+   # args += list(argsex)
+   # if _show_commands:
+   #    args.append("--show-commands")
+   #    print " ".join(args)
    global _called_something
    global _build_success
+
    if _called_something:
       print "\n"
-   if subprocess.call(args) != 0:
+   #if subprocess.call(args) != 0:
+   execfile(file)
+   init(s)
+   run()
+   if not _build_success:
       LOG_ERROR("Failed build from {0}!".format(s))
-      _build_success = False
    os.chdir(cwd)
+
+   #Clear out anything that script did.
+   setGlobals()
+   _exclude_dirs = excludedDirs[:]
+   init()
+
    LOG_INFO("Left directory: {0}".format(path))
    _called_something = True
+
+def Include(file):
+   execfile(file)
 
 #</editor-fold>
 #</editor-fold>
@@ -1896,54 +1991,8 @@ def call(s, *argsex):
 #<editor-fold desc="startup">
 #<editor-fold desc="Preprocessing">
 
-#This stuff DOES need to run when the module is imported by another file.
-#Lack of an if __name__ == __main__ is intentional.
-mainfile = sys.modules['__main__'].__file__
-if mainfile is not None:
-   mainfile = os.path.basename(os.path.abspath(mainfile))
-else:
-   mainfile = "<makefile>"
-
-parser = argparse.ArgumentParser(description='JMake: Build files in local directories and subdirectories.')
-parser.add_argument('target', nargs="?", help='Target for build')
-group = parser.add_mutually_exclusive_group()
-group.add_argument('--clean', action="store_true", help='Clean the target build')
-group.add_argument('--install', action="store_true", help='Install the target build')
-group2 = parser.add_mutually_exclusive_group()
-group2.add_argument('-v', action="store_const", const=0, dest="quiet", help="Verbose. Enables additional INFO-level logging.", default=1)
-group2.add_argument('-q', action="store_const", const=2, dest="quiet", help="Quiet. Disables all logging except for WARN and ERROR.", default=1)
-group2.add_argument('-qq', action="store_const", const=3, dest="quiet", help="Very quiet. Disables all jmake-specific logging.", default=1)
-parser.add_argument('--overrides', help="Makefile overrides, semicolon-separated. The contents of the string passed to this will be executed as additional script after the makefile is processed.")
-parser.add_argument('--show-commands', help="Show all commands sent to the system.", action="store_true")
-parser.add_argument('--no-progress', help="Turn off the progress bar.", action="store_true")
-parser.add_argument('--force-color', help="Force color on even if the terminal isn't detected as accepting it.", action="store_true")
-parser.add_argument("-H", "--makefile_help", action="store_true", help="Displays specific help for your makefile (if any)")
-args, remainder = parser.parse_known_args()
-
-if args.target is not None:
-   target = args.target.lower()
-CleanBuild = args.clean
-do_install = args.install
-_overrides = args.overrides
-_quiet = args.quiet
-_show_commands = args.show_commands
-if args.no_progress:
-   _columns = 0
-if args.force_color:
-   _color_supported = True
-
-makefile_help = args.makefile_help
-
-if makefile_help:
-   remainder.append("-h")
-
-args = remainder
-
-_check_version()
-
-if target and target[0] == "_":
-   LOG_ERROR("Invalid target: {0}.".format(target))
-   sys.exit(1)
+makefile_help = False
+mainfile = None
 
 def debug():
    """Default debug target."""
@@ -1968,72 +2017,142 @@ def release():
    if not "clang" in _compiler:
       Flags("lto")
 
-ExcludeDirs(_jmake_dir)
+#This stuff DOES need to run when the module is imported by another file.
+#Lack of an if __name__ == __main__ is intentional.
+def init(file = None):
+   global target
+   global CleanBuild
+   global do_install
+   global _overrides
+   global _quiet
+   global _show_commands
+   global _columns
+   global _color_supported
+   global args
+   global makefile_help
+   global mainfile
+   global __mainfile__
 
-#Import the file that imported this file.
-#This ensures any options set in that file are executed before we continue.
-#It also pulls in its target definitions.
-if mainfile != "<makefile>":
-   exec("import {0} as __mainfile__".format(mainfile.split(".")[0]))
-else:
-   LOG_ERROR("JMake cannot be run from the interactive console.")
-   sys.exit(1)
+   parser = argparse.ArgumentParser(description='JMake: Build files in local directories and subdirectories.')
+   parser.add_argument('target', nargs="?", help='Target for build')
+   group = parser.add_mutually_exclusive_group()
+   group.add_argument('--clean', action="store_true", help='Clean the target build')
+   group.add_argument('--install', action="store_true", help='Install the target build')
+   group2 = parser.add_mutually_exclusive_group()
+   group2.add_argument('-v', action="store_const", const=0, dest="quiet", help="Verbose. Enables additional INFO-level logging.", default=1)
+   group2.add_argument('-q', action="store_const", const=2, dest="quiet", help="Quiet. Disables all logging except for WARN and ERROR.", default=1)
+   group2.add_argument('-qq', action="store_const", const=3, dest="quiet", help="Very quiet. Disables all jmake-specific logging.", default=1)
+   parser.add_argument('--overrides', help="Makefile overrides, semicolon-separated. The contents of the string passed to this will be executed as additional script after the makefile is processed.")
+   parser.add_argument('--show-commands', help="Show all commands sent to the system.", action="store_true")
+   parser.add_argument('--no-progress', help="Turn off the progress bar.", action="store_true")
+   parser.add_argument('--force-color', help="Force color on even if the terminal isn't detected as accepting it.", action="store_true")
+   parser.add_argument("-H", "--makefile_help", action="store_true", help="Displays specific help for your makefile (if any)")
+   args, remainder = parser.parse_known_args()
 
-os.chdir(os.path.dirname(__mainfile__.__file__))
+   if args.target is not None:
+      target = args.target.lower()
+   CleanBuild = args.clean
+   do_install = args.install
+   _overrides = args.overrides
+   _quiet = args.quiet
+   _show_commands = args.show_commands
+   if args.no_progress:
+      _columns = 0
+   if args.force_color:
+      _color_supported = True
 
-if not target:
-   target = _default_target
+   makefile_help = args.makefile_help
 
-#Check if the default debug, release, and none targets have been defined in the makefile script
-#If not, set them to the defaults defined above.
-try:
-   exec "__mainfile__.{0}".format(target)
-except AttributeError:
-   if target == "debug":
-      #__mainfile__ is defined in the above exec statement, but can show as unresolved to some code inspectors.
-      #noinspection PyUnresolvedReferences
-      __mainfile__.debug = debug
-   elif target == "release":
-      #noinspection PyUnresolvedReferences
-      __mainfile__.release = release
+   if makefile_help:
+      remainder.append("-h")
 
-if makefile_help:
-   sys.exit(0)
+   args = remainder
 
-#Try to execute the requested target function
-#If it doesn't exist, throw an error
-try:
-   exec "__mainfile__.{0}()".format(target)
-except AttributeError:
-   LOG_ERROR("Invalid target: {0}".format(target))
-else:
+   if target and target[0] == "_":
+      LOG_ERROR("Invalid target: {0}.".format(target))
+      sys.exit(1)
+   ExcludeDirs(_jmake_dir)
+
+   if file is not None:
+      mainfile = os.path.basename(os.path.abspath(file))
+   else:
+      mainfile = sys.modules['__main__'].__file__
+      if mainfile is not None:
+         mainfile = os.path.basename(os.path.abspath(mainfile))
+      else:
+         mainfile = "<makefile>"
+
+   #Import the file that imported this file.
+   #This ensures any options set in that file are executed before we continue.
+   #It also pulls in its target definitions.
+   if mainfile != "<makefile>":
+      exec("global __mainfile__; import {0} as __mainfile__".format(mainfile.split(".")[0]))
+   else:
+      LOG_ERROR("JMake cannot be run from the interactive console.")
+      sys.exit(1)
+
+   if not file:
+      os.chdir(os.path.dirname(__mainfile__.__file__))
+
+   if not target:
+      target = _default_target
+
+   #Check if the default debug, release, and none targets have been defined in the makefile script
+   #If not, set them to the defaults defined above.
+   if not hasattr(__mainfile__, target):
+      if target == "debug":
+         #__mainfile__ is defined in the above exec statement, but can show as unresolved to some code inspectors.
+         #noinspection PyUnresolvedReferences
+         __mainfile__.debug = debug
+      elif target == "release":
+         #noinspection PyUnresolvedReferences
+         __mainfile__.release = release
+
+   if makefile_help:
+      sys.exit(0)
+
    #Execute any overrides that have been passed
    #These will supercede anything set in the makefile script.
    if _overrides:
       exec _overrides
-   #If automake hasn't been disabled by the makefile script, call the proper function
-   #clean() on --clean
-   #install() on --install
-   #and make() in any other case
-   if _automake:
-      if CleanBuild:
-         clean()
-      elif do_install:
-         install()
-      else:
-         make()
-   #Print out any errors or warnings incurred so the user doesn't have to scroll to see what went wrong
-   if _warnings:
-      print "\n"
-      LOG_WARN("Warnings encountered during build:")
-      for warn in _warnings[0:-1]:
-         LOG_WARN(warn)
-   if _errors:
-      print "\n"
-      LOG_ERROR("Errors encountered during build:")
-      for error in _errors[0:-1]:
-         LOG_ERROR(error)
 
+def run():
+   #Try to execute the requested target function
+   #If it doesn't exist, throw an error
+   if hasattr(__mainfile__, target):
+      getattr(__mainfile__, target)()
+      #If automake hasn't been disabled by the makefile script, call the proper function
+      #clean() on --clean
+      #install() on --install
+      #and make() in any other case
+      if _automake:
+         if CleanBuild:
+            clean()
+         elif do_install:
+            install()
+         else:
+            make()
+      #Print out any errors or warnings incurred so the user doesn't have to scroll to see what went wrong
+      if _warnings:
+         print "\n"
+         LOG_WARN("Warnings encountered during build:")
+         for warn in _warnings[0:-1]:
+            LOG_WARN(warn)
+      if _errors:
+         print "\n"
+         LOG_ERROR("Errors encountered during build:")
+         for error in _errors[0:-1]:
+            LOG_ERROR(error)
+   else:
+      LOG_ERROR("Invalid target: {0}".format(target))
+
+   global _barWriter
+   _barWriter.stop()
+   _barWriter = _bar_writer() #start it over
+
+init()
+_check_version()
+run()
 #And finally, explicitly exit! If we don't do this, the makefile script runs again after this.
 #That looks sloppy if it does anything visible, and besides that, it takes up needless cycles
 if not _build_success:
