@@ -1967,6 +1967,8 @@ def call(s, *argsex):
    if _called_something:
       print "\n"
    #if subprocess.call(args) != 0:
+   prevsuccess = _build_success
+   _build_success = True
    execfile(file)
    init(s)
    run()
@@ -1976,6 +1978,8 @@ def call(s, *argsex):
 
    #Clear out anything that script did.
    setGlobals()
+   if not prevsuccess:
+      _build_success = False
    _exclude_dirs = excludedDirs[:]
    init()
 

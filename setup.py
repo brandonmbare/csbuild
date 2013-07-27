@@ -1,7 +1,14 @@
 from distutils.core import setup
+from distutils.sysconfig import get_python_lib
+
+with open("jmake/version", "r") as f:
+      jmake_version=f.read()
+
 setup(name='JMake',
-      version='0.9.02.2',
+      version=jmake_version,
       py_modules=['jmake'],
+      packages=["jmake"],
+      package_data={"jmake":["version"]},
       author="Jaedyn K. Draper",
       author_email="jaedyn.pypi@jaedyn.co",
       url="https://github.com/ShadauxCat/JMake",
