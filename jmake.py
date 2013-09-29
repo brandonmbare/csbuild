@@ -157,6 +157,8 @@ def setGlobals():
    _output_install_dir = ""
    global _header_install_dir
    _header_install_dir = ""
+   global _header_subdir
+   _header_subdir = ""
    global _automake
    _automake = True
    global _standard
@@ -794,7 +796,7 @@ class _bar_writer(threading.Thread):
                else:
                   sys.stdout.write("[" + "="*num + " " * ((_columns-20)-num) + "]{0: 2}:{1:02}/?:?? (~{2: 3}%)".format(int(minutes), int(seconds), perc))
                sys.stdout.flush()
-               sys.stdout.write("\r" + " " * _columns + "\r");
+               sys.stdout.write("\r" + " " * _columns + "\r")
          time.sleep(0.05)
 
 class _threaded_build(threading.Thread):
@@ -832,10 +834,6 @@ class _threaded_build(threading.Thread):
          ret = fd.close()
          sys.stdout.flush()
          sys.stdout.write(output)
-         if inc:
-            _write_bar(len(_times), len(_sources))
-         else:
-            _write_bar(-1, len(_sources))
          if ret:
             if str(ret) == "2":
                _lock.acquire()
@@ -880,8 +878,7 @@ def _make_chunks(l):
       chunk = []
       while sorted_list:
          chunksize = 0
-         chunk = []
-         chunk.append(sorted_list[0])
+         chunk = [sorted_list[0]]
          chunksize += os.path.getsize(sorted_list[0])
          sorted_list.pop(0)
          for file in reversed(sorted_list):
@@ -1102,7 +1099,6 @@ def _precompile_headers():
       sys.exit(2)
    
    LOG_BUILD("Precompiling {0} (1/{1})...".format(allheaders if not _chunk_precompile else _headerfile, len(_sources)+1))
-   _write_bar(-1, len(_sources))
    
    _threaded_build(_headerfile, obj).start()
 
@@ -1172,17 +1168,6 @@ def _check_version():
          LOG_WARN("A new version of jmake is available. Current version: {0}, latest: {1}".format(jmake_version, latest_version))
          LOG_WARN("Use 'sudo pip install jmake --upgrade' to get the latest version.")
 
-def _write_bar(cur, top):
-   return
-   if _precompile or _chunk_precompile:
-      cur += 1
-      top += 1
-   if _columns > 0 and top > 0:
-      num = int(math.floor(float(cur)/float(top) * (_columns-7)))
-      sys.stdout.write("[" + "="*num + " " * ((_columns-7)-num) + "] {0: 3}%".format(int((float(cur)/float(top))*100)))
-      sys.stdout.flush()
-      sys.stdout.write("\r" + " " * _columns + "\r");
-
 #</editor-fold>
 #</editor-fold>
 
@@ -1201,10 +1186,14 @@ def InstallOutput( s = "/usr/local/lib" ):
    global _output_install_dir
    _output_install_dir = s
 
-def InstallHeaders( s = "-" ):
+def InstallHeaders( s = "/usr/local/include" ):
    """Enables installation of the project's headers. Default target is /usr/local/include."""
    global _header_install_dir
    _header_install_dir = s
+   
+def InstallSubdir( s ):
+   global _header_subdir
+   _header_subdir = s
 
 def ExcludeDirs( *args ):
    """Excludes the given subdirectories from the build. Accepts multiple string arguments."""
@@ -1632,7 +1621,6 @@ def build():
             if not _semaphore.acquire(False):
                if _max_threads != 1:
                   LOG_THREAD("Waiting for a build thread to become available...")
-                  _write_bar(len(_times), len(_sources))
                _semaphore.acquire(True)
             if _interrupted:
                sys.exit(2)
@@ -1654,7 +1642,6 @@ def build():
                minutes = math.floor(totaltime / 60)
                seconds = round(totaltime % 60)
                LOG_BUILD("Building {0}... ({1}/{2}) - {3}:{4:02}".format(obj, i, total, int(minutes), int(seconds)))
-            _write_bar(len(_times), len(_sources))
             _threaded_build(source, obj).start()
             i += 1
 
@@ -1677,7 +1664,6 @@ def build():
                      LOG_THREAD("Waiting on {0} more build thread{1} to finish... ({2}:{3:02}/{4}:{5:02})".format(_max_threads - i, "s" if _max_threads - i != 1 else "", int(minutes), int(seconds), int(estmin), int(estsec)))
                   else:
                      LOG_THREAD("Waiting on {0} more build thread{1} to finish...".format(_max_threads - i, "s" if _max_threads - i != 1 else ""))
-                  _write_bar(len(_times), len(_sources))
                _semaphore.acquire(True)
                if _interrupted:
                   sys.exit(2)
@@ -1786,7 +1772,7 @@ def link(*objs):
    if os.path.exists(output):
       os.remove(output)
 
-   cmd = "{0} -o{1} {7} {2}{3}-g{4} -O{5} {6} {8}".format(_compiler, output, _get_libraries(), _get_library_dirs(), _debug_level, _opt_level, "-shared " if _shared else "", objstr, _linker_flags)
+   cmd = "{0} {9} -o{1} {7} {2}{3}-g{4} -O{5} {6} {8}".format(_compiler, output, _get_libraries(), _get_library_dirs(), _debug_level, _opt_level, "-shared " if _shared else "", objstr, _linker_flags, "-pg " if _profile else "")
    if _show_commands:
       print cmd
    ret = subprocess.call(cmd, shell=True)
@@ -1889,11 +1875,14 @@ def install():
 
       #install headers
       global _header_install_dir
+      global _header_subdir
+      subdir = _header_subdir
+      if not subdir:
+         subdir = _get_base_name(_output_name)
       if _header_install_dir:
-         if _header_install_dir == "-":
-            _header_install_dir = "/usr/local/include/{0}".format(_get_base_name(_output_name))
-         if not os.path.exists(_header_install_dir):
-            LOG_WARN_NOPUSH("Install path '{0}' does not exist. Shall I create it? [Y/n]".format(_header_install_dir))
+         install_dir = "{0}/{1}".format(_header_install_dir, subdir)
+         if not os.path.exists(install_dir):
+            LOG_WARN_NOPUSH("Install path '{0}' does not exist. Shall I create it? [Y/n]".format(install_dir))
             input = raw_input()
             while input.lower() != "y" and input.lower() != "n":
                print "Invalid response. Y or N?"
@@ -1901,13 +1890,13 @@ def install():
                if not input:
                   input = "y"
             if input.lower() == "y":
-               os.makedirs(_header_install_dir)
-         if os.path.exists(_header_install_dir):
+               os.makedirs(install_dir)
+         if os.path.exists(install_dir):
             headers = []
             _get_files(headers=headers)
             for header in headers:
-               LOG_INSTALL("Installing {0} to {1}...".format(header, _header_install_dir))
-               shutil.copy(header, _header_install_dir)
+               LOG_INSTALL("Installing {0} to {1}...".format(header, install_dir))
+               shutil.copy(header, install_dir)
             install_something = True
 
       if not install_something:
@@ -1920,7 +1909,7 @@ def install():
 #</editor-fold>
 
 #<editor-fold desc="Misc. Public Functions">
-def call(s, *argsex):
+def call(s):
    """Calls another makefile script.
    This can be used for multi-tiered projects where each subproject needs its own build script.
    The top-level script will then jmake.call() the other scripts.
@@ -1940,27 +1929,6 @@ def call(s, *argsex):
    cwd = os.getcwd()
    os.chdir(path)
    LOG_INFO("Entered directory: {0}".format(path))
-   # args = ["python", file]
-   # if CleanBuild:
-   #    args.append("--clean")
-   # if do_install:
-   #    args.append("--install")
-   # if _quiet == 0:
-   #    args.append("-v")
-   # elif _quiet == 2:
-   #    args.append("-q")
-   # elif _quiet == 3:
-   #    args.append("-qq")
-   #
-   # if _color_supported:
-   #    args.append("--force-color")
-   # if _columns == 0:
-   #    args.append("--no-progress")
-   # args.append(target)
-   # args += list(argsex)
-   # if _show_commands:
-   #    args.append("--show-commands")
-   #    print " ".join(args)
    global _called_something
    global _build_success
 
@@ -1969,6 +1937,8 @@ def call(s, *argsex):
    #if subprocess.call(args) != 0:
    prevsuccess = _build_success
    _build_success = True
+   
+   exec("global __mainfile__; import {0} as __mainfile__".format(file.split(".")[0]))
    execfile(file)
    init(s)
    run()
@@ -1987,7 +1957,8 @@ def call(s, *argsex):
    _called_something = True
 
 def Include(file):
-   execfile(file)
+   global __mainfile__
+   execfile(file, __mainfile__.__dict__, __mainfile__.__dict__)
 
 #</editor-fold>
 #</editor-fold>
