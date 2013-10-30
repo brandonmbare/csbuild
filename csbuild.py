@@ -152,7 +152,7 @@ def setGlobals():
    global _csbuild_dir
    _csbuild_dir = "./.csbuild"
    global _output_name
-   _output_name = "JMade"
+   _output_name = "a.out"
    global _output_install_dir
    _output_install_dir = ""
    global _header_install_dir
@@ -521,7 +521,7 @@ def _remove_comments(text):
    
 def _remove_whitespace(text):
    #This isn't working correctly, turning it off.
-   return
+   return text
    shlexer = shlex.shlex(text)
    out = []
    token = ""
@@ -1295,7 +1295,7 @@ def Compiler(s):
    _compiler = s
    
 def Output(s):
-   """Sets the output file for the project. If unset, the project will be compiled as "JMade"""""
+   """Sets the output file for the project. If unset, the project will be compiled as "a.out"""""
    global _output_name
    _output_name = s
    
@@ -1533,7 +1533,7 @@ def build():
 
    starttime = time.time()
 
-   LOG_BUILD("Preparing build tasks...")
+   LOG_BUILD("Preparing build tasks for {}...".format(_output_name))
 
    if not os.path.exists(_csbuild_dir):
       os.makedirs(_csbuild_dir)
@@ -1941,7 +1941,7 @@ def call(s):
    _build_success = True
    
    exec("global __mainfile__; import {0} as __mainfile__".format(file.split(".")[0]))
-   execfile(file)
+   execfile(file, __mainfile__.__dict__, __mainfile__.__dict__)
    init(s)
    run()
    if not _build_success:
