@@ -1,12 +1,12 @@
 """
-jmake.py
+csbuild.py
 Python-powered build utility for C and C++
 Uses advanced techniques to reduce build time to a minimum, while attempting to always ensure that  the correct build
 operations are performed every time without need of a clean operation. Eliminates redundant and unnecessary build
 operations, and incorporates the Unity Build concept for larger builds to speed up project compilation, while avoiding
 it for smaller build operations to speed up iteration.
 
-See www.github.net/ShadauxCat/JMake for more information and documentation.
+See www.github.net/ShadauxCat/csbuild for more information and documentation.
 """
 
 import argparse
@@ -149,8 +149,8 @@ def setGlobals():
    _obj_dir = "."
    global _output_dir
    _output_dir = "."
-   global _jmake_dir
-   _jmake_dir = "./.jmake"
+   global _csbuild_dir
+   _csbuild_dir = "./.csbuild"
    global _output_name
    _output_name = "JMade"
    global _output_install_dir
@@ -355,7 +355,7 @@ def _get_files(sources=None, headers=None):
    bFound = False
    for root, dirnames, filenames in os.walk('.'):
       if root in _exclude_dirs:
-         if root != _jmake_dir:
+         if root != _csbuild_dir:
             LOG_INFO("Skipping dir {0}".format(root))
          continue
       bFound = False
@@ -364,7 +364,7 @@ def _get_files(sources=None, headers=None):
             bFound = True
             break
       if bFound:
-         if not root.startswith(_jmake_dir):
+         if not root.startswith(_csbuild_dir):
             LOG_INFO("Skipping dir {0}".format(root))
          continue
       if sources is not None:
@@ -520,6 +520,8 @@ def _remove_comments(text):
    return re.sub(pattern, replacer, text)
    
 def _remove_whitespace(text):
+   #This isn't working correctly, turning it off.
+   return
    shlexer = shlex.shlex(text)
    out = []
    token = ""
@@ -576,7 +578,7 @@ def _should_recompile(file, ofile=None, for_precompiled_header=False):
                newmd5 = _get_md5(f)
             _newmd5s.update({file : newmd5})
 
-         md5file = "{0}/md5s/{1}.md5".format(_jmake_dir, os.path.abspath(file))
+         md5file = "{0}/md5s/{1}.md5".format(_csbuild_dir, os.path.abspath(file))
          
          if os.path.exists(md5file):
             try:
@@ -621,7 +623,7 @@ def _should_recompile(file, ofile=None, for_precompiled_header=False):
          oldmd5 = 1
 
          if not for_precompiled_header:
-            md5file = "{0}/md5s/{1}.md5".format(_jmake_dir, os.path.abspath(path))
+            md5file = "{0}/md5s/{1}.md5".format(_csbuild_dir, os.path.abspath(path))
                
             if os.path.exists(md5file):
                try:
@@ -670,8 +672,8 @@ def _check_libraries():
       out = ""
       try:
          if _show_commands:
-             print "ld -t {0} -l{1}".format(_get_library_dirs(), library)
-         cmd = ["ld", "-t", "-l{0}".format(library)]
+             print "ld -o /dev/null -t {0} -l{1}".format(_get_library_dirs(), library)
+         cmd = ["ld", "-o", "/dev/null", "-t", "-l{0}".format(library)]
          cmd += shlex.split(_get_library_dirs())
          out = subprocess.check_output(cmd, stderr=subprocess.STDOUT)
       except subprocess.CalledProcessError as e:
@@ -693,7 +695,7 @@ def _check_libraries():
    if not libraries_ok:
       LOG_ERROR("Some dependencies are not met on your system.")
       LOG_ERROR("Check that all required libraries are installed.")
-      LOG_ERROR("If they are installed, ensure that the path is included in the makefile (use jmake.LibDirs() to set them)")
+      LOG_ERROR("If they are installed, ensure that the path is included in the makefile (use csbuild.LibDirs() to set them)")
       return False
    LOG_INFO("Libraries OK!")
    return True
@@ -853,12 +855,12 @@ class _threaded_build(threading.Thread):
          #If we don't do this with ALL exceptions, any unhandled exception here will cause the semaphore to never release...
          #Meaning the build will hang. And for whatever reason ctrl+c won't fix it.
          #ABSOLUTELY HAVE TO release the semaphore on ANY exception.
-         #if os.path.dirname(self.file) == _jmake_dir:
+         #if os.path.dirname(self.file) == _csbuild_dir:
          #   os.remove(self.file)
          _semaphore.release()
          raise e
       else:
-         #if os.path.dirname(self.file) == _jmake_dir:
+         #if os.path.dirname(self.file) == _csbuild_dir:
          #   os.remove(self.file)
          if inc or (not _precompile and not _chunk_precompile):
             endtime = time.time()
@@ -937,9 +939,9 @@ def _chunked_build(sources):
    for source in sources:
       chunk = _get_chunk(source)
       if _unity:
-         file = "{0}/{1}_unity.cpp".format(_jmake_dir, _output_name)
+         file = "{0}/{1}_unity.cpp".format(_csbuild_dir, _output_name)
       else:
-         file = "{0}/{1}.cpp".format(_jmake_dir, chunk)
+         file = "{0}/{1}.cpp".format(_csbuild_dir, chunk)
       if chunk not in chunks_to_build and os.path.exists(file):
          chunks_to_build.append(chunk)
 
@@ -969,9 +971,9 @@ def _chunked_build(sources):
       chunksize = _get_size(sources_in_this_chunk)
 
       if _unity:
-         file = "{0}/{1}_unity.cpp".format(_jmake_dir, _output_name)
+         file = "{0}/{1}_unity.cpp".format(_csbuild_dir, _output_name)
       else:
-         file = "{0}/{1}_chunk_{2}.cpp".format(_jmake_dir, _output_name, "__".join(_base_names(chunk)))
+         file = "{0}/{1}_chunk_{2}.cpp".format(_csbuild_dir, _output_name, "__".join(_base_names(chunk)))
 
       #If only one or two sources in this chunk need to be built, we get no benefit from building it as a unit. Split unless we're told not to.
       if len(chunk) > 1 and ((_chunk_size > 0 and len(sources_in_this_chunk) > _chunk_tolerance) or (_chunk_filesize > 0 and chunksize > _chunk_size_tolerance) or (dont_split and (_unity or os.path.exists(file)) and len(sources_in_this_chunk) > 0)):
@@ -1013,7 +1015,7 @@ def _chunked_build(sources):
    return chunks
 
 def _save_md5(file):
-   md5file = "{0}/md5s/{1}.md5".format(_jmake_dir, os.path.abspath(file))
+   md5file = "{0}/md5s/{1}.md5".format(_csbuild_dir, os.path.abspath(file))
    md5dir = os.path.dirname(md5file)
    if not os.path.exists(md5dir):
       os.makedirs(md5dir)
@@ -1058,7 +1060,7 @@ def _precompile_headers():
 
    global _headerfile
 
-   _headerfile = "{0}/{1}_precompiled_headers.hpp".format(_jmake_dir, _output_name.split('.')[0])
+   _headerfile = "{0}/{1}_precompiled_headers.hpp".format(_csbuild_dir, _output_name.split('.')[0])
    obj = "{0}/{1}_{2}.hpp.gch".format(os.path.dirname(_headerfile), os.path.basename(_headerfile).split('.')[0], target)
 
    precompile = False
@@ -1135,28 +1137,28 @@ def _get_base_name(name):
 
 def _check_version():
    """Checks the currently installed version against the latest version, and logs a warning if the current version is out of date."""
-   with open(os.path.dirname(__file__)+"/jmake/version", "r") as f:
-      jmake_version = f.read()
-   if not os.path.exists(os.path.expanduser("~/.jmake/check")):
-      jmake_date = ""
+   with open(os.path.dirname(__file__)+"/csbuild/version", "r") as f:
+      csbuild_version = f.read()
+   if not os.path.exists(os.path.expanduser("~/.csbuild/check")):
+      csbuild_date = ""
    else:
-      with open(os.path.expanduser("~/.jmake/check"), "r") as f:
-         jmake_date = f.read()
+      with open(os.path.expanduser("~/.csbuild/check"), "r") as f:
+         csbuild_date = f.read()
 
    date = datetime.date.today().isoformat()
 
 
-   if date == jmake_date:
+   if date == csbuild_date:
       return
 
-   if not os.path.exists(os.path.expanduser("~/.jmake")):
-      os.makedirs(os.path.expanduser("~/.jmake"))
+   if not os.path.exists(os.path.expanduser("~/.csbuild")):
+      os.makedirs(os.path.expanduser("~/.csbuild"))
 
-   with open(os.path.expanduser("~/.jmake/check"), "w") as f:
+   with open(os.path.expanduser("~/.csbuild/check"), "w") as f:
       f.write(date)
 
    try:
-      out = subprocess.check_output(["pip", "search", "jmake"])
+      out = subprocess.check_output(["pip", "search", "csbuild"])
    except:
       return
    else:
@@ -1164,9 +1166,9 @@ def _check_version():
       if not RMatch:
          return
       latest_version = RMatch.group(1)
-      if latest_version != jmake_version:
-         LOG_WARN("A new version of jmake is available. Current version: {0}, latest: {1}".format(jmake_version, latest_version))
-         LOG_WARN("Use 'sudo pip install jmake --upgrade' to get the latest version.")
+      if latest_version != csbuild_version:
+         LOG_WARN("A new version of csbuild is available. Current version: {0}, latest: {1}".format(csbuild_version, latest_version))
+         LOG_WARN("Use 'sudo pip install csbuild --upgrade' to get the latest version.")
 
 #</editor-fold>
 #</editor-fold>
@@ -1526,22 +1528,22 @@ def build():
 
    global _cmd
    global _recompile_all
-   global _jmake_dir
+   global _csbuild_dir
    global _build_success
 
    starttime = time.time()
 
    LOG_BUILD("Preparing build tasks...")
 
-   if not os.path.exists(_jmake_dir):
-      os.makedirs(_jmake_dir)
+   if not os.path.exists(_csbuild_dir):
+      os.makedirs(_csbuild_dir)
 
    exitcodes = ""
    if "clang" not in _compiler:
       exitcodes = "-pass-exit-codes"
 
    _cmd = "{0} {9} -Winvalid-pch -c {1}-g{2} -O{3} {4}{5}{6} {7}{8}".format(_compiler, _get_defines(), _debug_level, _opt_level, "-fPIC " if _shared else "", "-pg " if _profile else "", "--std={0}".format(_standard) if _standard != "" else "",  _get_flags(), _extra_flags, exitcodes)
-   cmdfile = "{0}/{1}.jmake".format(_jmake_dir, target)
+   cmdfile = "{0}/{1}.csbuild".format(_csbuild_dir, target)
    cmd = ""
    if os.path.exists(cmdfile):
       with open(cmdfile, "r") as f:
@@ -1834,7 +1836,7 @@ def clean(silent=False):
             if not silent:
                LOG_INFO("Deleting {0}".format(obj))
             os.remove(obj)
-   headerfile = "{0}/{1}_precompiled_headers.hpp".format(_jmake_dir, _output_name.split('.')[0])
+   headerfile = "{0}/{1}_precompiled_headers.hpp".format(_csbuild_dir, _output_name.split('.')[0])
    obj = "{0}/{1}_{2}.hpp.gch".format(os.path.dirname(headerfile), os.path.basename(headerfile).split('.')[0], target)
    if os.path.exists(obj):
       if not silent:
@@ -1912,7 +1914,7 @@ def install():
 def call(s):
    """Calls another makefile script.
    This can be used for multi-tiered projects where each subproject needs its own build script.
-   The top-level script will then jmake.call() the other scripts.
+   The top-level script will then csbuild.call() the other scripts.
    """
    path = os.path.dirname(s)
    file = os.path.basename(s)
@@ -1922,7 +1924,7 @@ def call(s):
    isMakefile = False
    with open(file) as f:
       for line in f:
-         if "import jmake" in line or "from jmake import" in line:
+         if "import csbuild" in line or "from csbuild import" in line:
             isMakefile = True
    if not isMakefile:
       LOG_ERROR("Called script is not a makefile script!")
@@ -2008,7 +2010,7 @@ def init(file = None):
    global mainfile
    global __mainfile__
 
-   parser = argparse.ArgumentParser(description='JMake: Build files in local directories and subdirectories.')
+   parser = argparse.ArgumentParser(description='CSB: Build files in local directories and subdirectories.')
    parser.add_argument('target', nargs="?", help='Target for build')
    group = parser.add_mutually_exclusive_group()
    group.add_argument('--clean', action="store_true", help='Clean the target build')
@@ -2016,7 +2018,7 @@ def init(file = None):
    group2 = parser.add_mutually_exclusive_group()
    group2.add_argument('-v', action="store_const", const=0, dest="quiet", help="Verbose. Enables additional INFO-level logging.", default=1)
    group2.add_argument('-q', action="store_const", const=2, dest="quiet", help="Quiet. Disables all logging except for WARN and ERROR.", default=1)
-   group2.add_argument('-qq', action="store_const", const=3, dest="quiet", help="Very quiet. Disables all jmake-specific logging.", default=1)
+   group2.add_argument('-qq', action="store_const", const=3, dest="quiet", help="Very quiet. Disables all csb-specific logging.", default=1)
    parser.add_argument('--overrides', help="Makefile overrides, semicolon-separated. The contents of the string passed to this will be executed as additional script after the makefile is processed.")
    parser.add_argument('--show-commands', help="Show all commands sent to the system.", action="store_true")
    parser.add_argument('--no-progress', help="Turn off the progress bar.", action="store_true")
@@ -2046,7 +2048,7 @@ def init(file = None):
    if target and target[0] == "_":
       LOG_ERROR("Invalid target: {0}.".format(target))
       sys.exit(1)
-   ExcludeDirs(_jmake_dir)
+   ExcludeDirs(_csbuild_dir)
 
    if file is not None:
       mainfile = os.path.basename(os.path.abspath(file))
@@ -2063,7 +2065,7 @@ def init(file = None):
    if mainfile != "<makefile>":
       exec("global __mainfile__; import {0} as __mainfile__".format(mainfile.split(".")[0]))
    else:
-      LOG_ERROR("JMake cannot be run from the interactive console.")
+      LOG_ERROR("CSB cannot be run from the interactive console.")
       sys.exit(1)
 
    if not file:
