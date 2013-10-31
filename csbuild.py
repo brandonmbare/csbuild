@@ -333,11 +333,14 @@ def _get_libraries():
       ret += "-l{0} ".format(lib)
    return ret
 
-def _get_library_dirs():
+def _get_library_dirs(forLinker):
    """Returns a string containing all of the passed library dirs, formatted to be passed to gcc/g++."""
    ret = ""
    for lib in _library_dirs:
       ret += "-L{0} ".format(lib)
+   if forLinker:
+      for lib in _library_dirs:
+         ret += "-Wl,-R{0} ".format(os.path.abspath(lib))
    return ret
 
 def _get_flags():
@@ -672,9 +675,9 @@ def _check_libraries():
       out = ""
       try:
          if _show_commands:
-             print "ld -o /dev/null -t {0} -l{1}".format(_get_library_dirs(), library)
+             print "ld -o /dev/null -t {0} -l{1}".format(_get_library_dirs(False), library)
          cmd = ["ld", "-o", "/dev/null", "-t", "-l{0}".format(library)]
-         cmd += shlex.split(_get_library_dirs())
+         cmd += shlex.split(_get_library_dirs(False))
          out = subprocess.check_output(cmd, stderr=subprocess.STDOUT)
       except subprocess.CalledProcessError as e:
          out = e.output
@@ -1774,7 +1777,7 @@ def link(*objs):
    if os.path.exists(output):
       os.remove(output)
 
-   cmd = "{0} {9} -o{1} {7} {2}{3}-g{4} -O{5} {6} {8}".format(_compiler, output, _get_libraries(), _get_library_dirs(), _debug_level, _opt_level, "-shared " if _shared else "", objstr, _linker_flags, "-pg " if _profile else "")
+   cmd = "{0} {9} -o{1} {7} {2}{3}-g{4} -O{5} {6} {8}".format(_compiler, output, _get_libraries(), _get_library_dirs(True), _debug_level, _opt_level, "-shared " if _shared else "", objstr, _linker_flags, "-pg " if _profile else "")
    if _show_commands:
       print cmd
    ret = subprocess.call(cmd, shell=True)
