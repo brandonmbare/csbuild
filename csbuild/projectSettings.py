@@ -31,7 +31,10 @@ warn_flags = []
 flags = []
 defines = []
 undefines = []
-compiler = "g++"
+cxx = "g++"
+cc = "gcc"
+hasCppFiles = False
+
 obj_dir = "."
 output_dir = "."
 csbuild_dir = "./.csbuild"
@@ -40,7 +43,8 @@ output_install_dir = ""
 header_install_dir = ""
 header_subdir = ""
 automake = True
-standard = ""
+cppstandard = ""
+cstandard = ""
 
 c_files = []
 headers = []
@@ -83,8 +87,10 @@ default_target = "release"
 chunk_precompile = True
 precompile = []
 precompile_exclude = []
-headerfile = ""
-needs_precompile = True
+cppheaderfile = ""
+cheaderfile = ""
+needs_cpp_precompile = False
+needs_c_precompile = False
 
 unity = False
 
@@ -94,7 +100,8 @@ no_warnings = False
 
 compiler_model = gcc_clang_compiler_model
 
-cmd = ""
+cxxcmd = ""
+cccmd = ""
 
 recompile_all = False
 
@@ -108,15 +115,24 @@ compiles_completed = 0
 
 compile_failed = False
 
+static_runtime = False
+debug_runtime = False
+
+force_64_bit = False
+force_32_bit = False
+
+cheaders = []
 
 def copy():
     ret = {"libraries": list(libraries), "static_libraries": list(static_libraries), "include_dirs": list(include_dirs),
            "library_dirs": list(library_dirs),
            "opt_level": opt_level, "debug_level": debug_level, "warn_flags": list(warn_flags), "flags": list(flags),
-           "defines": list(defines), "undefines": list(undefines), "compiler": compiler, "obj_dir": obj_dir,
+           "defines": list(defines), "undefines": list(undefines), "cxx": cxx, "cc": cc, "hasCppFiles": hasCppFiles,
+           "obj_dir": obj_dir,
            "output_dir": output_dir, "csbuild_dir": csbuild_dir, "output_name": output_name,
            "output_install_dir": output_install_dir, "header_install_dir": header_install_dir,
-           "header_subdir": header_subdir, "automake": automake, "standard": standard, "c_files": list(c_files),
+           "header_subdir": header_subdir, "automake": automake, "cppstandard": cppstandard, "cstandard": cstandard,
+           "c_files": list(c_files),
            "headers": list(headers), "sources": list(sources), "allsources": list(allsources), "shared": shared,
            "static": static, "profile": profile, "extra_flags": extra_flags, "linker_flags": linker_flags,
            "exclude_dirs": list(exclude_dirs), "exclude_files": list(exclude_files), "output_dir_set": output_dir_set,
@@ -126,12 +142,15 @@ def copy():
            "chunk_size": chunk_size, "chunk_filesize": chunk_filesize, "chunk_size_tolerance": chunk_size_tolerance,
            "header_recursion": header_recursion, "ignore_external_headers": ignore_external_headers,
            "default_target": default_target, "chunk_precompile": chunk_precompile, "precompile": list(precompile),
-           "precompile_exclude": list(precompile_exclude), "headerfile": headerfile, "unity": unity,
-           "precompile_done": precompile_done, "no_warnings": no_warnings, "compiler_model": compiler_model, "cmd": cmd,
+           "precompile_exclude": list(precompile_exclude), "cppheaderfile": cppheaderfile, "cheaderfile": cheaderfile,
+           "unity": unity,
+           "precompile_done": precompile_done, "no_warnings": no_warnings, "compiler_model": compiler_model,
+           "cxxcmd": cxxcmd, "cccmd": cccmd,
            "recompile_all": recompile_all, "targets": dict(targets), "targetName": targetName,
            "final_chunk_set": list(final_chunk_set),
-           "needs_precompile": needs_precompile, "compiles_completed": compiles_completed,
-           "compile_failed": compile_failed,
-           "copy": copy}
+           "needs_c_precompile": needs_c_precompile, "needs_cpp_precompile": needs_cpp_precompile,
+           "compiles_completed": compiles_completed,
+           "compile_failed": compile_failed, "static_runtime": static_runtime, "debug_runtime": debug_runtime,
+           "force_64_bit": force_64_bit, "force_32_bit": force_32_bit, "cheaders": list(cheaders), "copy": copy}
 
     return ret

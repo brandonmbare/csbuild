@@ -63,6 +63,7 @@ def get_files(project, sources=None, headers=None):
                 path = os.path.join(root, filename)
                 if path not in project.globalDict.exclude_files:
                     sources.append(os.path.abspath(path))
+                    project.globalDict.hasCppFiles = True
             for filename in fnmatch.filter(filenames, '*.c'):
                 path = os.path.join(root, filename)
                 if path not in project.globalDict.exclude_files:
@@ -75,6 +76,7 @@ def get_files(project, sources=None, headers=None):
                 path = os.path.join(root, filename)
                 if path not in project.globalDict.exclude_files:
                     headers.append(os.path.abspath(path))
+                    project.globalDict.hasCppFiles = True
             for filename in fnmatch.filter(filenames, '*.h'):
                 path = os.path.join(root, filename)
                 if path not in project.globalDict.exclude_files:
@@ -434,12 +436,13 @@ class threaded_build(threading.Thread):
     machine.
     """
 
-    def __init__(self, infile, inobj, proj):
+    def __init__(self, infile, inobj, proj, forPrecompiledHeader=False):
         """Initialize the object. Also handles above-mentioned bug with dummy threads."""
         threading.Thread.__init__(self)
         self.file = infile
         self.obj = os.path.abspath(inobj)
         self.project = proj
+        self.forPrecompiledHeader = forPrecompiledHeader
         #Prevent certain versions of python from choking on dummy threads.
         if not hasattr(threading.Thread, "_Thread__block"):
             threading.Thread._Thread__block = _shared_globals.dummy_block()
@@ -449,15 +452,21 @@ class threaded_build(threading.Thread):
         starttime = time.time()
         try:
             inc = ""
-            if (
-                    self.project.globalDict.precompile or self.project.globalDict.chunk_precompile) and self.project\
-                .globalDict.headerfile and self.file != self \
-                .project.globalDict.headerfile:
-                inc += self.project.globalDict.headerfile
-            cmd = self.project.globalDict.compiler_model.get_extended_command(self.project.globalDict.cmd,
-                self.project.globalDict.warn_flags, self.project.globalDict.no_warnings,
-                self.project.globalDict.include_dirs, inc, self.obj, os.path.abspath(self.file)
-            )
+            headerfile = ""
+            if self.file.endswith(".c") or self.file == self.project.globalDict.cheaderfile:
+                if self.project.globalDict.cheaders and not self.forPrecompiledHeader:
+                    headerfile = self.project.globalDict.cheaderfile
+                baseCommand = self.project.globalDict.cccmd
+            else:
+                if (self.project.globalDict.precompile or self.project.globalDict.chunk_precompile) \
+                    and not self.forPrecompiledHeader:
+                    headerfile = self.project.globalDict.cppheaderfile
+                baseCommand = self.project.globalDict.cxxcmd
+
+            if headerfile:
+                inc += headerfile
+            cmd = self.project.globalDict.compiler_model.get_extended_command(baseCommand,
+                self.project, inc, self.obj, os.path.abspath(self.file))
 
             if _shared_globals.show_commands:
                 print(cmd)
@@ -471,7 +480,7 @@ class threaded_build(threading.Thread):
             sys.stdout.flush()
             sys.stdout.write(output)
             if ret:
-                if str(ret) == "2":
+                if str(ret) == str(self.project.globalDict.compiler_model.interrupt_exit_code):
                     _shared_globals.lock.acquire()
                     if not _shared_globals.interrupted:
                         log.LOG_ERROR("Keyboard interrupt received. Aborting build.")
@@ -733,58 +742,79 @@ def prepare_precompiles():
     wd = os.getcwd()
     for project in _shared_globals.projects.values():
         os.chdir(project.workingDirectory)
-        allheaders = []
 
-        if project.globalDict.chunk_precompile:
-            get_files(project, headers=allheaders)
-        else:
-            allheaders = project.globalDict.precompile
+        def handleHeaderFile(headerfile, allheaders, forCpp):
+            if forCpp:
+                obj = "{0}/{1}_{2}.hpp.gch".format(os.path.dirname(headerfile),
+                    os.path.basename(headerfile).split('.')[0],
+                    project.globalDict.targetName)
+            else:
+                obj = "{0}/{1}_{2}.h.gch".format(os.path.dirname(headerfile),
+                    os.path.basename(headerfile).split('.')[0],
+                    project.globalDict.targetName)
 
-        if not allheaders:
-            project.globalDict.needs_precompile = False
-            continue
+            precompile = False
+            if not os.path.exists(headerfile) or should_recompile(headerfile, obj,
+                    True):
+                precompile = True
+            else:
+                for header in allheaders:
+                    if should_recompile(header, obj, True):
+                        precompile = True
+                        break
 
-        project.globalDict.headers = allheaders
+            if not precompile:
+                return False, obj
 
-        if not project.globalDict.precompile and not project.globalDict.chunk_precompile:
-            project.globalDict.needs_precompile = False
-            continue
+            with open(headerfile, "w") as f:
+                for header in allheaders:
+                    if header in project.globalDict.precompile_exclude:
+                        continue
+                    externed = False
+                    if forCpp and os.path.abspath(header) in project.globalDict.cheaders:
+                        f.write("extern \"C\"\n{\n\t")
+                        externed = True
+                    f.write('#include "{0}"\n'.format(os.path.abspath(header)))
+                    if externed:
+                        f.write("}\n")
+            return True, headerfile
 
-        project.globalDict.headerfile = "{0}/{1}_precompiled_headers.hpp".format(project.globalDict.csbuild_dir,
-            project.globalDict.output_name.split('.')[0])
+        if project.globalDict.chunk_precompile or project.globalDict.precompile:
+            allheaders = []
 
-        obj = "{0}/{1}_{2}.hpp.gch".format(os.path.dirname(project.globalDict.headerfile),
-            os.path.basename(project.globalDict.headerfile).split('.')[0],
-            project.globalDict.targetName)
+            if project.globalDict.chunk_precompile:
+                get_files(project, headers=allheaders)
+            else:
+                allheaders = project.globalDict.precompile
 
-        precompile = False
-        if not os.path.exists(project.globalDict.headerfile) or should_recompile(project.globalDict.headerfile, obj,
-                True):
-            precompile = True
-        else:
-            for header in allheaders:
-                if should_recompile(header, obj, True):
-                    precompile = True
-                    break
+            if not allheaders:
+                project.globalDict.needs_cpp_precompile = False
+                continue
 
-        if not precompile:
-            project.globalDict.headerfile = obj
-            project.globalDict.needs_precompile = False
-            continue
+            project.globalDict.headers = allheaders
 
-        with open(project.globalDict.headerfile, "w") as f:
-            for header in allheaders:
-                if header in project.globalDict.precompile_exclude:
-                    continue
-                f.write('#include "{0}"\n'.format(os.path.abspath(header)))
+            if not project.globalDict.precompile and not project.globalDict.chunk_precompile:
+                project.globalDict.needs_cpp_precompile = False
+                continue
+
+            project.globalDict.cppheaderfile = "{0}/{1}_cpp_precompiled_headers.hpp".format(project.globalDict.csbuild_dir,
+                project.globalDict.output_name.split('.')[0])
+            project.globalDict.needs_cpp_precompile, project.globalDict.cppheaderfile = \
+                handleHeaderFile(project.globalDict.cppheaderfile, allheaders, True)
+
+        if project.globalDict.cheaders:
+            project.globalDict.cheaderfile = "{0}/{1}_c_precompiled_headers.h".format(
+                project.globalDict.csbuild_dir,
+                project.globalDict.output_name.split('.')[0])
+            project.globalDict.needs_c_precompile, project.globalDict.cheaderfile = \
+                handleHeaderFile(project.globalDict.cheaderfile, project.globalDict.cheaders, False)
 
         _shared_globals.total_precompiles += 1
     os.chdir(wd)
 
 
-#TODO: Parallelize
 def precompile_headers(proj):
-    if not proj.globalDict.needs_precompile:
+    if not proj.globalDict.needs_c_precompile and not proj.globalDict.needs_cpp_precompile:
         return True
 
     starttime = time.time()
@@ -795,27 +825,61 @@ def precompile_headers(proj):
     if not os.path.exists(proj.globalDict.obj_dir):
         os.makedirs(proj.globalDict.obj_dir)
 
-    if not _shared_globals.semaphore.acquire(False):
-        if _shared_globals.max_threads != 1:
-            log.LOG_THREAD("Waiting for a build thread to become available...")
-            _shared_globals.semaphore.acquire(True)
-    if _shared_globals.interrupted:
-        sys.exit(2)
+    thread = None
+    cthread = None
+    cppobj = ""
+    cobj = ""
+    if proj.globalDict.needs_cpp_precompile:
+        if not _shared_globals.semaphore.acquire(False):
+            if _shared_globals.max_threads != 1:
+                log.LOG_THREAD("Waiting for a build thread to become available...")
+                _shared_globals.semaphore.acquire(True)
+        if _shared_globals.interrupted:
+            sys.exit(2)
 
-    log.LOG_BUILD(
-        "Precompiling {0} ({1}/{2})...".format(
-            proj.globalDict.headerfile,
-            _shared_globals.current_compile,
-            _shared_globals.total_compiles))
+        log.LOG_BUILD(
+            "Precompiling {0} ({1}/{2})...".format(
+                proj.globalDict.cppheaderfile,
+                _shared_globals.current_compile,
+                _shared_globals.total_compiles))
 
-    obj = "{0}/{1}_{2}.hpp.gch".format(os.path.dirname(proj.globalDict.headerfile),
-        os.path.basename(proj.globalDict.headerfile).split('.')[0],
-        proj.globalDict.targetName)
+        cppobj = "{0}/{1}_{2}.hpp.gch".format(os.path.dirname(proj.globalDict.cppheaderfile),
+            os.path.basename(proj.globalDict.cppheaderfile).split('.')[0],
+            proj.globalDict.targetName)
 
-    #precompiled headers block on current thread - run runs on current thread rather than starting a new one
-    threaded_build(proj.globalDict.headerfile, obj, proj).run()
+        #precompiled headers block on current thread - run runs on current thread rather than starting a new one
+        thread = threaded_build(proj.globalDict.cppheaderfile, cppobj, proj, True)
+        thread.start()
 
-    proj.globalDict.headerfile = obj
+    if proj.globalDict.needs_c_precompile:
+        if not _shared_globals.semaphore.acquire(False):
+            if _shared_globals.max_threads != 1:
+                log.LOG_THREAD("Waiting for a build thread to become available...")
+                _shared_globals.semaphore.acquire(True)
+        if _shared_globals.interrupted:
+            sys.exit(2)
+
+        log.LOG_BUILD(
+            "Precompiling {0} ({1}/{2})...".format(
+                proj.globalDict.cheaderfile,
+                _shared_globals.current_compile,
+                _shared_globals.total_compiles))
+
+        cobj = "{0}/{1}_{2}.h.gch".format(os.path.dirname(proj.globalDict.cheaderfile),
+            os.path.basename(proj.globalDict.cheaderfile).split('.')[0],
+            proj.globalDict.targetName)
+
+        #precompiled headers block on current thread - run runs on current thread rather than starting a new one
+        cthread = threaded_build(proj.globalDict.cheaderfile, cobj, proj, True)
+        cthread.start()
+
+    if thread:
+        thread.join()
+    if cthread:
+        cthread.join()
+
+    proj.globalDict.cppheaderfile = cppobj
+    proj.globalDict.cheaderfile = cobj
 
     totaltime = time.time() - starttime
     totalmin = math.floor(totaltime / 60)

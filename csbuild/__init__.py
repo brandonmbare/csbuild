@@ -53,6 +53,10 @@ __all__ = []
 
 signal.signal(signal.SIGINT, signal.SIG_DFL)
 
+#TODO: Specify number of jobs (in code and on command line)
+#TODO: Specify C compiler or C++ compiler for precompiled headers
+#TODO: -stdlib
+
 #TODO: Verify compiler features
 #TODO: Mark scripts uncallable
 #TODO: csbuild.ScriptLocation()?
@@ -189,9 +193,14 @@ def ClearUndefines():
     projectSettings.undefines = []
 
 
-def Compiler(s):
+def CppCompiler(s):
     """Sets the compiler to use for the project. Default is g++"""
-    projectSettings.compiler = s
+    projectSettings.cxx = s
+
+
+def CCompiler(s):
+    """Sets the compiler to use for the project. Default is gcc"""
+    projectSettings.cc = s
 
 
 def Output(s):
@@ -296,9 +305,14 @@ def ClearLinkerFlags():
     projectSettings.linker_flags = ""
 
 
-def Standard(s):
+def CppStandard(s):
     """The C/C++ standard to be used when compiling. gcc/g++ --std"""
-    projectSettings.standard = s
+    projectSettings.cppstandard = s
+
+
+def CStandard(s):
+    """The C/C++ standard to be used when compiling. gcc/g++ --std"""
+    projectSettings.cstandard = s
 
 
 def DisableChunkedBuild():
@@ -390,9 +404,16 @@ def DefaultTarget(s):
 
 def Precompile(*args):
     """Explicit list of header files to precompile. Disables chunk precompile when called."""
-    args = list(args)
-    projectSettings.precompile = args
+    projectSettings.precompile = []
+    for arg in list(args):
+        projectSettings.precompile.append(os.path.abspath(arg))
     projectSettings.chunk_precompile = False
+
+
+def PrecompileAsC(*args):
+    projectSettings.cheaders = []
+    for arg in list(args):
+        projectSettings.cheaders.append(os.path.abspath(arg))
 
 
 def ChunkPrecompile():
@@ -418,6 +439,32 @@ def NoPrecompile(*args):
 def EnableUnity():
     """Turns on true unity builds, combining all files into only one compilation unit."""
     projectSettings.unity = True
+
+
+def StaticRuntime():
+    projectSettings.static_runtime = True
+
+
+def SharedRuntime():
+    projectSettings.static_runtime = False
+
+
+def DebugRuntime():
+    projectSettings.debug_runtime = True
+
+
+def ReleaseRuntime():
+    projectSettings.debug_runtime = False
+
+
+def Force32Bit():
+    projectSettings.force_32_bit = True
+    projectSettings.force_64_bit = False
+
+
+def Force64Bit():
+    projectSettings.force_64_bit = True
+    projectSettings.force_32_bit = False
 
 #</editor-fold>
 
@@ -460,11 +507,8 @@ def project(name, workingDirectory, linkDepends=None, srcDepends=None):
             if not os.path.exists(self.globalDict.csbuild_dir):
                 os.makedirs(self.globalDict.csbuild_dir)
 
-            self.globalDict.cmd = self.globalDict.compiler_model.get_base_command(self.globalDict.compiler,
-                self.globalDict.defines, self.globalDict.undefines, self.globalDict.debug_level,
-                self.globalDict.opt_level, self.globalDict.shared, self.globalDict.profile,
-                self.globalDict.standard, self.globalDict.flags, self.globalDict.extra_flags
-            )
+            self.globalDict.cccmd = self.globalDict.compiler_model.get_base_cc_command(self)
+            self.globalDict.cxxcmd = self.globalDict.compiler_model.get_base_cxx_command(self)
 
             cmdfile = "{0}/{1}.csbuild".format(self.globalDict.csbuild_dir, self.globalDict.targetName)
             cmd = ""
@@ -472,11 +516,11 @@ def project(name, workingDirectory, linkDepends=None, srcDepends=None):
                 with open(cmdfile, "r") as f:
                     cmd = f.read()
 
-            if self.globalDict.cmd != cmd:
+            if self.globalDict.cxxcmd + self.globalDict.cccmd != cmd:
                 self.globalDict.recompile_all = True
                 clean(True)
                 with open(cmdfile, "w") as f:
-                    f.write(self.globalDict.cmd)
+                    f.write(self.globalDict.cxxcmd + self.globalDict.cccmd)
 
             if not self.globalDict.chunks:
                 _utils.get_files(self, self.globalDict.allsources)
@@ -607,7 +651,8 @@ def build():
 
                     for otherProj in list(projects_in_flight):
                         if otherProj.globalDict.compiles_completed >= len(otherProj.globalDict.final_chunk_set) + int(
-                                otherProj.globalDict.needs_precompile):
+                                otherProj.globalDict.needs_c_precompile) + int(
+                                otherProj.globalDict.needs_cpp_precompile):
                             totaltime = (time.time() - otherProj.starttime)
                             minutes = math.floor(totaltime / 60)
                             seconds = round(totaltime % 60)
@@ -718,7 +763,8 @@ def build():
 
         for otherProj in list(projects_in_flight):
             if otherProj.globalDict.compiles_completed >= len(otherProj.globalDict.final_chunk_set) + int(
-                    otherProj.globalDict.needs_precompile):
+                    otherProj.globalDict.needs_c_precompile) + int(
+                    otherProj.globalDict.needs_cpp_precompile):
                 totaltime = (time.time() - otherProj.starttime)
                 minutes = math.floor(totaltime / 60)
                 seconds = round(totaltime % 60)
@@ -785,7 +831,7 @@ def link(project, *objs):
     to relink anyway, even though nothing was compiled.
     """
 
-    #starttime = time.time()
+    starttime = time.time()
 
     output = "{0}/{1}".format(project.globalDict.output_dir, project.globalDict.output_name)
 
@@ -864,24 +910,18 @@ def link(project, *objs):
     if os.path.exists(output):
         os.remove(output)
 
-    if project.globalDict.static:
-        cmd = project.globalDict.compiler_model.get_static_link_command(output, objs)
-    else:
-        cmd = project.globalDict.compiler_model.get_dynamic_link_command(project.globalDict.compiler, project.globalDict.profile,
-            output, objs, project.globalDict.libraries, project.globalDict.static_libraries,
-            project.globalDict.library_dirs,
-            project.globalDict.debug_level, project.globalDict.opt_level, project.globalDict.shared,
-            project.globalDict.linker_flags)
+    cmd = project.globalDict.compiler_model.get_link_command(project, output, objs)
     if _shared_globals.show_commands:
         print(cmd)
     ret = subprocess.call(cmd, shell=True)
     if ret != 0:
         log.LOG_ERROR("Linking failed.")
         return False
-        #totaltime = time.time() - starttime
-    #totalmin = math.floor(totaltime / 60)
-    #totalsec = round(totaltime % 60)
-    #log.LOG_LINKER("Link time: {0}:{1:02}".format(int(totalmin), int(totalsec)))
+
+    totaltime = time.time() - starttime
+    totalmin = math.floor(totaltime / 60)
+    totalsec = round(totaltime % 60)
+    log.LOG_LINKER("Link time: {0}:{1:02}".format(int(totalmin), int(totalsec)))
     #if _buildtime >= 0:
     #    totaltime = totaltime + _buildtime
     #    totalmin = math.floor(totaltime / 60)
@@ -907,7 +947,7 @@ def clean(silent=False):
                 if not silent:
                     log.LOG_INFO("Deleting {0}".format(obj))
                 os.remove(obj)
-        headerfile = "{0}/{1}_precompiled_headers.hpp".format(project.globalDict.csbuild_dir,
+        headerfile = "{0}/{1}_cpp_precompiled_headers.hpp".format(project.globalDict.csbuild_dir,
             project.globalDict.output_name.split('.')[0])
         obj = "{0}/{1}_{2}.hpp.gch".format(os.path.dirname(headerfile), os.path.basename(headerfile).split('.')[0],
             project.globalDict.targetName)
@@ -915,6 +955,16 @@ def clean(silent=False):
             if not silent:
                 log.LOG_INFO("Deleting {0}".format(obj))
             os.remove(obj)
+
+        headerfile = "{0}/{1}_c_precompiled_headers.h".format(project.globalDict.csbuild_dir,
+            project.globalDict.output_name.split('.')[0])
+        obj = "{0}/{1}_{2}.h.gch".format(os.path.dirname(headerfile), os.path.basename(headerfile).split('.')[0],
+            project.globalDict.targetName)
+        if os.path.exists(obj):
+            if not silent:
+                log.LOG_INFO("Deleting {0}".format(obj))
+            os.remove(obj)
+
         if not silent:
             log.LOG_BUILD("Done.")
 
@@ -1007,8 +1057,6 @@ def release():
         projectSettings.output_dir = "Release"
     if not projectSettings.obj_dir_set:
         projectSettings.obj_dir = "Release/obj"
-    if not "clang" in projectSettings.compiler:
-        Flags("lto")
 
 
 parser = argparse.ArgumentParser(description='CSB: Build files in local directories and subdirectories.')
@@ -1025,9 +1073,6 @@ group2.add_argument('-q', action="store_const", const=2, dest="quiet",
     help="Quiet. Disables all logging except for WARN and ERROR.", default=1)
 group2.add_argument('-qq', action="store_const", const=3, dest="quiet",
     help="Very quiet. Disables all csb-specific logging.", default=1)
-parser.add_argument('--overrides',
-    help="Makefile overrides, semicolon-separated. The contents of the string passed to this will be executed as "
-         "additional script after the makefile is processed.")
 parser.add_argument('--show-commands', help="Show all commands sent to the system.", action="store_true")
 parser.add_argument('--no-progress', help="Turn off the progress bar.", action="store_true")
 parser.add_argument('--force-color', help="Force color on even if the terminal isn't detected as accepting it.",
@@ -1041,7 +1086,6 @@ if args.target is not None:
     _shared_globals.target = args.target.lower()
 _shared_globals.CleanBuild = args.clean
 _shared_globals.do_install = args.install
-_shared_globals.overrides = args.overrides
 _shared_globals.quiet = args.quiet
 _shared_globals.show_commands = args.show_commands
 if args.project:
@@ -1095,11 +1139,6 @@ _shared_globals.sortedProjects = _utils.sortProjects()
 
 for proj in _shared_globals.sortedProjects:
     proj.prepareBuild()
-
-#Execute any overrides that have been passed
-#These will supercede anything set in the makefile script.
-if _shared_globals.overrides:
-    exec(_shared_globals.overrides)
 
 _utils.check_version()
 
