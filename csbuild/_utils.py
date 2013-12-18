@@ -18,12 +18,9 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-import log
-import _shared_globals
 import fnmatch
 import os
 import re
-import shlex
 import hashlib
 import subprocess
 import threading
@@ -31,7 +28,10 @@ import time
 import sys
 import math
 import datetime
-import projectSettings as currentProject
+
+from csbuild import log
+from csbuild import _shared_globals
+from csbuild import projectSettings as currentProject
 
 
 def get_files(project, sources=None, headers=None):
@@ -101,7 +101,11 @@ def follow_headers(headerFile, allheaders):
     if headerFile in _shared_globals.allheaders:
         return
 
-    with open(headerFile) as f:
+    if sys.version_info >= (3,0):
+        f = open(headerFile, encoding="latin-1")
+    else:
+        f = open(headerFile)
+    with f:
         for line in f:
             if line[0] != '#':
                 continue
@@ -164,7 +168,11 @@ def follow_headers2(headerFile, allheaders, n):
     headers = []
     if not headerFile:
         return
-    with open(headerFile) as f:
+    if sys.version_info >= (3,0):
+        f = open(headerFile, encoding="latin-1")
+    else:
+        f = open(headerFile)
+    with f:
         for line in f:
             if line[0] != '#':
                 continue
@@ -251,7 +259,10 @@ def remove_whitespace(text):
 
 
 def get_md5(inFile):
-    return hashlib.md5(remove_whitespace(remove_comments(inFile.read()))).digest()
+    if sys.version_info >= (3,0):
+        return hashlib.md5(remove_whitespace(remove_comments(inFile.read())).encode('utf-8')).digest()
+    else:
+        return hashlib.md5(remove_whitespace(remove_comments(inFile.read()))).digest()
 
 
 def should_recompile(srcFile, ofile=None, for_precompiled_header=False):
@@ -303,7 +314,7 @@ def should_recompile(srcFile, ofile=None, for_precompiled_header=False):
             try:
                 oldmd5 = _shared_globals.oldmd5s[md5file]
             except KeyError:
-                with open(md5file, "r") as f:
+                with open(md5file, "rb") as f:
                     oldmd5 = f.read()
                 _shared_globals.oldmd5s.update({md5file: oldmd5})
 
@@ -346,14 +357,18 @@ def should_recompile(srcFile, ofile=None, for_precompiled_header=False):
                 try:
                     newmd5 = _shared_globals.newmd5s[path]
                 except KeyError:
-                    with open(path, "r") as f:
+                    if sys.version_info >= (3, 0):
+                        f = open(path, encoding="latin-1")
+                    else:
+                        f = open(path)
+                    with f:
                         newmd5 = get_md5(f)
                     _shared_globals.newmd5s.update({path: newmd5})
                 if os.path.exists(md5file):
                     try:
                         oldmd5 = _shared_globals.oldmd5s[md5file]
                     except KeyError:
-                        with open(md5file, "r") as f:
+                        with open(md5file, "rb") as f:
                             oldmd5 = f.read()
                         _shared_globals.oldmd5s.update({md5file: oldmd5})
 
@@ -394,36 +409,14 @@ def check_libraries():
     log.LOG_INFO("Checking required libraries...")
     for library in (currentProject.libraries + currentProject.static_libraries):
         log.LOG_INFO("Looking for lib{0}...".format(library))
-        success = True
-        out = ""
-        if os.name == "posix":
-            try:
-                if _shared_globals.show_commands:
-                    print "ld -o /dev/null --verbose {0} -l{1}".format(
-                        currentProject.compiler_model.get_library_dirs(currentProject.library_dirs, False),
-                        library)
-                cmd = ["ld", "-o", "/dev/null", "--verbose", "-l{0}".format(library)]
-                cmd += shlex.split(currentProject.compiler_model.get_library_dirs(currentProject.library_dirs, False))
-                out = subprocess.check_output(cmd, stderr=subprocess.PIPE)
-            except subprocess.CalledProcessError as e:
-                out = e.output
-                success = False
-            finally:
-                mtime = 0
-                RMatch = re.search("attempt to open (.*) succeeded".format(re.escape(library)), out)
-                #Some libraries (such as -liberty) will return successful but don't have a file (internal to ld maybe?)
-                #In those cases we can probably assume they haven't been modified.
-                #Set the mtime to 0 and return success as long as ld didn't return an error code.
-                if RMatch is not None:
-                    lib = RMatch.group(1)
-                    mtime = os.path.getmtime(lib)
-                    log.LOG_INFO("Found library lib{0} at {1}".format(library, lib))
-                elif not success:
-                    log.LOG_ERROR("Could not locate library: {0}".format(library))
-                    libraries_ok = False
-                _shared_globals.library_mtimes.append(mtime)
+        lib = currentProject.compiler_model.find_library(library, currentProject.library_dirs)
+        if lib:
+            mtime = os.path.getmtime(lib)
+            log.LOG_INFO("Found library lib{0} at {1}".format(library, lib))
+            _shared_globals.library_mtimes.append(mtime)
         else:
-            log.LOG_WARN("Library checking not yet implemented in non-posix systems")
+            log.LOG_ERROR("Could not locate library: {0}".format(library))
+            libraries_ok = False
     if not libraries_ok:
         log.LOG_ERROR("Some dependencies are not met on your system.")
         log.LOG_ERROR("Check that all required libraries are installed.")
@@ -457,13 +450,15 @@ class threaded_build(threading.Thread):
         try:
             inc = ""
             if (
-                self.project.globalDict.precompile or self.project.globalDict.chunk_precompile) and self.project.globalDict.headerfile and self.file != self\
+                    self.project.globalDict.precompile or self.project.globalDict.chunk_precompile) and self.project\
+                .globalDict.headerfile and self.file != self \
                 .project.globalDict.headerfile:
-                inc += "-include {0}".format(self.project.globalDict.headerfile.rsplit(".", 1)[0])
-            cmd = "{0} {1}{2}{3} -o\"{4}\" \"{5}\"".format(self.project.globalDict.cmd,
-                self.project.globalDict.compiler_model.get_warnings(self.project.globalDict.warn_flags, self.project.globalDict.no_warnings),
-                self.project.globalDict.compiler_model.get_include_dirs(self.project.globalDict.include_dirs), inc, self.obj,
-                os.path.abspath(self.file))
+                inc += self.project.globalDict.headerfile
+            cmd = self.project.globalDict.compiler_model.get_extended_command(self.project.globalDict.cmd,
+                self.project.globalDict.warn_flags, self.project.globalDict.no_warnings,
+                self.project.globalDict.include_dirs, inc, self.obj, os.path.abspath(self.file)
+            )
+
             if _shared_globals.show_commands:
                 print(cmd)
             if os.path.exists(self.obj):
@@ -543,7 +538,7 @@ def make_chunks(l):
         log.LOG_INFO("Made chunk: {0}".format(chunk))
         log.LOG_INFO("Chunk size: {0}".format(chunksize))
     elif currentProject.chunk_size > 0:
-        for i in xrange(0, len(l), currentProject.chunk_size):
+        for i in range(0, len(l), currentProject.chunk_size):
             chunks.append(l[i:i + currentProject.chunk_size])
     else:
         return [l]
@@ -607,11 +602,13 @@ def chunked_build():
         return
 
     if totalChunks == 1 and not owningProject.globalDict.unity:
-        chunkname = "{0}_chunk_{1}".format(owningProject.globalDict.output_name.split('.')[0], "__".join(base_names(owningProject.chunks[0])))
+        chunkname = "{0}_chunk_{1}".format(owningProject.globalDict.output_name.split('.')[0],
+            "__".join(base_names(owningProject.chunks[0])))
         obj = "{0}/{1}_{2}.o".format(owningProject.globalDict.obj_dir, chunkname, owningProject.globalDict.targetName)
         if os.path.exists(obj):
             log.LOG_WARN_NOPUSH(
-                "Breaking chunk ({0}) into individual files to improve future iteration turnaround.".format(owningProject.chunks[0]))
+                "Breaking chunk ({0}) into individual files to improve future iteration turnaround.".format(
+                    owningProject.chunks[0]))
         owningProject.globalDict.final_chunk_set = owningProject.globalDict.sources
         return
 
@@ -639,21 +636,25 @@ def chunked_build():
             if project.globalDict.unity:
                 outFile = "{0}/{1}_unity.cpp".format(project.globalDict.csbuild_dir, project.globalDict.output_name)
             else:
-                outFile = "{0}/{1}_chunk_{2}.cpp".format(project.globalDict.csbuild_dir, project.globalDict.output_name.split('.')[0],
+                outFile = "{0}/{1}_chunk_{2}.cpp".format(project.globalDict.csbuild_dir,
+                    project.globalDict.output_name.split('.')[0],
                     "__".join(base_names(chunk)))
 
             #If only one or two sources in this chunk need to be built, we get no benefit from building it as a unit.
             # Split unless we're told not to.
             if project.globalDict.use_chunks and len(chunk) > 1 and (
-                    (project.globalDict.chunk_size > 0 and len(sources_in_this_chunk) > project.globalDict.chunk_tolerance) or (
-                                project.globalDict.chunk_filesize > 0 and chunksize > project.globalDict.chunk_size_tolerance) or (
-                        dont_split and (project.globalDict.unity or os.path.exists(outFile)) and len(
-                        sources_in_this_chunk) > 0)):
+                        (project.globalDict.chunk_size > 0 and len(
+                                sources_in_this_chunk) > project.globalDict.chunk_tolerance) or (
+                                project.globalDict.chunk_filesize > 0 and chunksize > project.globalDict
+                        .chunk_size_tolerance) or (
+                            dont_split and (project.globalDict.unity or os.path.exists(outFile)) and len(
+                            sources_in_this_chunk) > 0)):
                 log.LOG_INFO("Going to build chunk {0} as {1}".format(chunk, outFile))
                 with open(outFile, "w") as f:
                     f.write("//Automatically generated file, do not edit.\n")
                     for source in chunk:
-                        f.write('#include "{0}" // {1} bytes\n'.format(os.path.abspath(source), os.path.getsize(source)))
+                        f.write(
+                            '#include "{0}" // {1} bytes\n'.format(os.path.abspath(source), os.path.getsize(source)))
                         obj = "{0}/{1}_{2}.o".format(project.globalDict.obj_dir, os.path.basename(source).split('.')[0],
                             project.globalDict.targetName)
                         if os.path.exists(obj):
@@ -662,11 +663,13 @@ def chunked_build():
 
                 project.globalDict.final_chunk_set.append(outFile)
             elif len(sources_in_this_chunk) > 0:
-                chunkname = "{0}_chunk_{1}".format(project.globalDict.output_name.split('.')[0], "__".join(base_names(chunk)))
+                chunkname = "{0}_chunk_{1}".format(project.globalDict.output_name.split('.')[0],
+                    "__".join(base_names(chunk)))
                 obj = "{0}/{1}_{2}.o".format(project.globalDict.obj_dir, chunkname, project.globalDict.targetName)
                 if os.path.exists(obj):
                     #If the chunk object exists, the last build of these files was the full chunk.
-                    #We're now splitting the chunk to speed things up for future incremental builds, which means the chunk
+                    #We're now splitting the chunk to speed things up for future incremental builds,
+                    # which means the chunk
                     #is getting deleted and *every* file in it needs to be recompiled this time only.
                     #The next time any of these files changes, only that section of the chunk will get built.
                     #This keeps large builds fast through the chunked build, without sacrificing the speed of smaller
@@ -675,15 +678,19 @@ def chunked_build():
                     add_chunk = chunk
                     if project.globalDict.use_chunks:
                         log.LOG_INFO(
-                            "Keeping chunk ({0}) broken up because chunking has been disabled for this project".format(chunk))
+                            "Keeping chunk ({0}) broken up because chunking has been disabled for this project".format(
+                                chunk))
                     else:
                         log.LOG_WARN_NOPUSH(
-                            "Breaking chunk ({0}) into individual files to improve future iteration turnaround.".format(chunk))
+                            "Breaking chunk ({0}) into individual files to improve future iteration turnaround.".format(
+                                chunk))
                 else:
                     add_chunk = sources_in_this_chunk
                 if len(add_chunk) == 1:
                     if len(chunk) == 1:
-                        log.LOG_INFO("Going to build {0} as an individual file because it's the only file in its chunk.".format(chunk[0]))
+                        log.LOG_INFO(
+                            "Going to build {0} as an individual file because it's the only file in its chunk.".format(
+                                chunk[0]))
                     else:
                         log.LOG_INFO("Going to build {0} as an individual file.".format(add_chunk))
                 else:
@@ -696,13 +703,18 @@ def save_md5(inFile):
     md5dir = os.path.dirname(md5file)
     if not os.path.exists(md5dir):
         os.makedirs(md5dir)
+    newmd5 = ""
     try:
         newmd5 = _shared_globals.newmd5s[inFile]
     except KeyError:
-        with open(inFile, "r") as f:
+        if sys.version_info >= (3, 0):
+            f = open(inFile, encoding="latin-1")
+        else:
+            f = open(inFile)
+        with f:
             newmd5 = get_md5(f)
     finally:
-        with open(md5file, "w") as f:
+        with open(md5file, "wb") as f:
             f.write(newmd5)
 
 
@@ -746,7 +758,8 @@ def prepare_precompiles():
             project.globalDict.targetName)
 
         precompile = False
-        if not os.path.exists(project.globalDict.headerfile) or should_recompile(project.globalDict.headerfile, obj, True):
+        if not os.path.exists(project.globalDict.headerfile) or should_recompile(project.globalDict.headerfile, obj,
+                True):
             precompile = True
         else:
             for header in allheaders:

@@ -18,12 +18,13 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-import _shared_globals
 import threading
 import time
 import math
 import sys
-import projectSettings
+from csbuild import _shared_globals
+from csbuild import projectSettings
+
 try:
     import curses
 except:
@@ -39,9 +40,9 @@ def LOG_MSG(color, level, msg):
     """Print a message to stdout"""
     with _shared_globals.printmutex:
         if _shared_globals.color_supported:
-            print " ", "\033[{0};1m{1}:\033[0m".format(color, level), msg
+            print(" \033[{0};1m{1}:\033[0m {2}".format(color, level, msg))
         else:
-            print " ", level + ":", msg
+            print(" {0}: {1}".format(level, msg))
 
 
 def LOG_ERROR(msg):
@@ -111,13 +112,13 @@ class bar_writer(threading.Thread):
     def __init__(self):
         """Initialize the object. Also handles above-mentioned bug with dummy threads."""
         threading.Thread.__init__(self)
-        self._stop = False
+        self._stopWriting = False
         #Prevent certain versions of python from choking on dummy threads.
         if not hasattr(threading.Thread, "_Thread__block"):
             threading.Thread._Thread__block = _shared_globals.dummy_block()
 
     def stop(self):
-        self._stop = True
+        self._stopWriting = True
 
     def run(self):
         highperc = 0
@@ -126,7 +127,7 @@ class bar_writer(threading.Thread):
         if _shared_globals.columns <= 0:
             return
 
-        while _shared_globals.buildtime == -1 and not _shared_globals.interrupted and not self._stop:
+        while _shared_globals.buildtime == -1 and not _shared_globals.interrupted and not self._stopWriting:
             curtime = time.time() - _shared_globals.starttime
             cur = 0
             top = len(_shared_globals.allfiles)
@@ -146,7 +147,8 @@ class bar_writer(threading.Thread):
                     avgtime = sum(_shared_globals.times) / (len(_shared_globals.times))
                     top = _shared_globals.lastupdate + ((avgtime * (_shared_globals.total_compiles -
                                                                     len(
-                                                                        _shared_globals.times))) / _shared_globals.max_threads)
+                                                                        _shared_globals.times))) / _shared_globals
+                    .max_threads)
                     if top < cur:
                         top = cur
                     estmin = math.floor(top / 60)
@@ -174,16 +176,16 @@ class bar_writer(threading.Thread):
                     if _shared_globals.times:
                         sys.stdout.write("[" + "=" * num + " " * (
                             (_shared_globals.columns - 20) - num) + "]{0: 2}:{1:02}/{2: 2}:{3:02} ({4: 3}%)".format(
-                                int(minutes),
-                                int(seconds),
-                                int(estmin),
-                                int(estsec), perc
-                            )
+                            int(minutes),
+                            int(seconds),
+                            int(estmin),
+                            int(estsec), perc
+                        )
                         )
                     else:
                         sys.stdout.write(
                             "[" + "=" * num + " " * (
-                            (_shared_globals.columns - 20) - num) + "]{0: 2}:{1:02}/?:?? (~{2: 3}%)".format(
+                                (_shared_globals.columns - 20) - num) + "]{0: 2}:{1:02}/?:?? (~{2: 3}%)".format(
                                 int(minutes), int(seconds), perc))
                     sys.stdout.flush()
                     sys.stdout.write("\r" + " " * _shared_globals.columns + "\r")

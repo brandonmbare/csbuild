@@ -19,6 +19,12 @@
 # SOFTWARE.
 
 import os
+import shlex
+import subprocess
+import re
+import sys
+from csbuild import _shared_globals
+
 
 def get_warnings(warnFlags, noWarnings):
     """Returns a string containing all of the passed warning flags, formatted to be passed to gcc/g++."""
@@ -84,3 +90,65 @@ def get_flags(flags):
     for flag in flags:
         ret += "-f{0} ".format(flag)
     return ret
+
+
+def get_dynamic_link_command(compiler, profileEnabled, outputFile, objList, libraries, staticLibraries, libraryDirs,
+        debug_level, opt_level, isShared, linkerFlags):
+    return "{0} {1} -o{2} {3} {4}{5}{6}-g{7} -O{8} {9} {10}".format(compiler, "-pg" if profileEnabled else "",
+        outputFile, " ".join(objList),
+        get_libraries(libraries), get_static_libraries(staticLibraries), get_library_dirs(libraryDirs, True),
+        debug_level, opt_level, "-shared" if isShared else "", linkerFlags)
+
+
+def get_static_link_command(outputFile, objList):
+    return "ar rcs {0} {1}".format(outputFile, " ".join(objList))
+
+
+def find_library(library, library_dirs):
+    success = True
+    out = ""
+    try:
+        if _shared_globals.show_commands:
+            print("ld -o /dev/null --verbose {0} -l{1}".format(
+                get_library_dirs(library_dirs, False),
+                library))
+        cmd = ["ld", "-o", "/dev/null", "--verbose", "-l{0}".format(library)]
+        cmd += shlex.split(get_library_dirs(library_dirs, False))
+        out = subprocess.check_output(cmd, stderr=subprocess.PIPE)
+    except subprocess.CalledProcessError as e:
+        out = e.output
+        success = False
+    finally:
+        if sys.version_info >= (3,0):
+            RMatch = re.search("attempt to open (.*) succeeded".format(re.escape(library)).encode('utf-8'), out)
+        else:
+            RMatch = re.search("attempt to open (.*) succeeded".format(re.escape(library)), out)
+        #Some libraries (such as -liberty) will return successful but don't have a file (internal to ld maybe?)
+        #In those cases we can probably assume they haven't been modified.
+        #Set the mtime to 0 and return success as long as ld didn't return an error code.
+        if RMatch is not None:
+            lib = RMatch.group(1)
+            return lib
+        elif not success:
+            return None
+
+
+def get_base_command(compiler, defines, undefines, debug_level, opt_level, isShared, enableProfile, standard, flags,
+        extraFlags):
+    exitcodes = ""
+    if "clang" not in compiler:
+        exitcodes = "-pass-exit-codes"
+    return "{0} {1} -Winvalid-pch -c {2}-g{3} -O{4} {5}{6}{7} {8}{9}".format(compiler, exitcodes,
+        get_defines(defines, undefines), debug_level, opt_level, "-fPIC " if isShared else "",
+        "-pg " if enableProfile else "", "--std={0}".format(standard) if standard != "" else "",
+        get_flags(flags), extraFlags)
+
+
+def get_extended_command(baseCmd, warnFlags, disableWarnings, includeDirs, forceIncludeFile, outObj, inFile):
+    inc = ""
+    if forceIncludeFile:
+        inc = "-include {0}".format(forceIncludeFile.rsplit(".", 1)[0])
+    return "{0} {1}{2}{3} -o\"{4}\" \"{5}\"".format(baseCmd,
+        get_warnings(warnFlags, disableWarnings),
+        get_include_dirs(includeDirs), inc, outObj,
+        inFile)
