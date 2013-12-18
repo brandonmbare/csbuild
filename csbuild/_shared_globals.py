@@ -81,7 +81,7 @@ total_precompiles = 0
 precompiles_done = 0
 total_compiles = 0
 
-install_prefix="/usr/local/"
+install_prefix = "/usr/local/"
 
 makefile_dict = {}
 

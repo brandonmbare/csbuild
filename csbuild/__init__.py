@@ -35,13 +35,14 @@ import signal
 import itertools
 import math
 import subprocess
-import _utils
-import log
 import os
 import sys
-import _shared_globals
-import projectSettings
 import time
+
+from csbuild import _utils
+from csbuild import log
+from csbuild import _shared_globals
+from csbuild import projectSettings
 
 __author__ = 'Jaedyn K Draper'
 __copyright__ = 'Copyright (C) 2013 Jaedyn K Draper'
@@ -52,16 +53,19 @@ __all__ = []
 
 signal.signal(signal.SIGINT, signal.SIG_DFL)
 
-#TODO: Better compiler model encapsulation
-#TODO: Enable to disable of default debug and release target
 #TODO: Verify compiler features
 #TODO: Mark scripts uncallable
 #TODO: csbuild.ScriptLocation()?
-#TODO: Python3 support
 
 
 #<editor-fold desc="Setters">
 #Setters
+def NoBuiltinTargets():
+    if projectSettings.targets["debug"] == debug:
+        del projectSettings.targets["debug"]
+    if projectSettings.targets["release"] == release:
+        del projectSettings.targets["release"]
+
 def InstallOutput(s="lib"):
     """Enables installation of the compiled output file. Default target is /usr/local/lib."""
     projectSettings.output_install_dir = s
@@ -449,27 +453,18 @@ def project(name, workingDirectory, linkDepends=None, srcDepends=None):
 
             self.globalDict.exclude_dirs.append(self.globalDict.csbuild_dir)
 
+            projectSettings.__dict__.update(self.globalDict.__dict__)
+
             log.LOG_BUILD("Preparing build tasks for {}...".format(self.globalDict.output_name))
 
             if not os.path.exists(self.globalDict.csbuild_dir):
                 os.makedirs(self.globalDict.csbuild_dir)
 
-            exitcodes = ""
-            if "clang" not in self.globalDict.compiler:
-                exitcodes = "-pass-exit-codes"
-
-            self.globalDict.cmd = "{0} {9} -Winvalid-pch -c {1}-g{2} -O{3} {4}{5}{6} {7}{8}".format(
-                self.globalDict.compiler,
-                self.globalDict.compiler_model.get_defines(self.globalDict.defines, self.globalDict.undefines),
-                self.globalDict.debug_level,
-                self.globalDict.opt_level,
-                "-fPIC " if self.globalDict.shared else "",
-                "-pg " if self.globalDict.profile else "",
-                "--std={0}".format(
-                    self.globalDict.standard) if self.globalDict.standard != "" else "",
-                self.globalDict.compiler_model.get_flags(self.globalDict.flags),
-                self.globalDict.extra_flags,
-                exitcodes)
+            self.globalDict.cmd = self.globalDict.compiler_model.get_base_command(self.globalDict.compiler,
+                self.globalDict.defines, self.globalDict.undefines, self.globalDict.debug_level,
+                self.globalDict.opt_level, self.globalDict.shared, self.globalDict.profile,
+                self.globalDict.standard, self.globalDict.flags, self.globalDict.extra_flags
+            )
 
             cmdfile = "{0}/{1}.csbuild".format(self.globalDict.csbuild_dir, self.globalDict.targetName)
             cmd = ""
@@ -582,8 +577,6 @@ def build():
 
             projectSettings.__dict__.update(project.globalDict.__dict__)
 
-            project.globalDict.targets[project.globalDict.targetName]()
-
             project.starttime = time.time()
 
             log.LOG_BUILD(
@@ -613,7 +606,6 @@ def build():
                         _shared_globals.semaphore.acquire(True)
 
                     for otherProj in list(projects_in_flight):
-                        print otherProj.name, otherProj.globalDict.compiles_completed
                         if otherProj.globalDict.compiles_completed >= len(otherProj.globalDict.final_chunk_set) + int(
                                 otherProj.globalDict.needs_precompile):
                             totaltime = (time.time() - otherProj.starttime)
@@ -666,7 +658,7 @@ def build():
                         seconds = round(totaltime % 60)
                         avgtime = sum(_shared_globals.times) / (len(_shared_globals.times))
                         esttime = totaltime + ((avgtime * (
-                        _shared_globals.total_compiles - len(_shared_globals.times))) / _shared_globals.max_threads)
+                            _shared_globals.total_compiles - len(_shared_globals.times))) / _shared_globals.max_threads)
                         if esttime < totaltime:
                             esttime = totaltime
                             _shared_globals.esttime = esttime
@@ -864,12 +856,6 @@ def link(project, *objs):
 
     log.LOG_LINKER("Linking {0}...".format(output))
 
-    objstr = ""
-
-    #Generate the list of objects to link
-    for obj in objs:
-        objstr += obj + " "
-
     if not os.path.exists(project.globalDict.output_dir):
         os.makedirs(project.globalDict.output_dir)
 
@@ -879,19 +865,15 @@ def link(project, *objs):
         os.remove(output)
 
     if project.globalDict.static:
-        cmd = "ar rcs {0} {1}".format(output, objstr)
+        cmd = project.globalDict.compiler_model.get_static_link_command(output, objs)
     else:
-        cmd = "{0} {9} -o{1} {7} {2}{10}{3}-g{4} -O{5} {6} {8}".format(project.globalDict.compiler, output,
-            project.globalDict.compiler_model.get_libraries(project.globalDict.libraries),
-            project.globalDict.compiler_model.get_library_dirs(project.globalDict.library_dirs, True),
-            project.globalDict.debug_level,
-            project.globalDict.opt_level,
-            "-shared " if project.globalDict.shared else "", objstr,
-            project.globalDict.linker_flags,
-            "-pg " if project.globalDict.profile else "",
-            project.globalDict.compiler_model.get_static_libraries(project.globalDict.static_libraries))
+        cmd = project.globalDict.compiler_model.get_dynamic_link_command(project.globalDict.compiler, project.globalDict.profile,
+            output, objs, project.globalDict.libraries, project.globalDict.static_libraries,
+            project.globalDict.library_dirs,
+            project.globalDict.debug_level, project.globalDict.opt_level, project.globalDict.shared,
+            project.globalDict.linker_flags)
     if _shared_globals.show_commands:
-        print cmd
+        print(cmd)
     ret = subprocess.call(cmd, shell=True)
     if ret != 0:
         log.LOG_ERROR("Linking failed.")
@@ -962,7 +944,8 @@ def install():
             if not subdir:
                 subdir = _utils.get_base_name(project.globalDict.output_name)
             if project.globalDict.header_install_dir:
-                install_dir = "{0}/{1}/{2}".format(project.globalDict.install_prefix, project.globalDict.header_install_dir, subdir)
+                install_dir = "{0}/{1}/{2}".format(project.globalDict.install_prefix,
+                    project.globalDict.header_install_dir, subdir)
                 if not os.path.exists(install_dir):
                     os.makedirs(install_dir)
                 headers = []
@@ -995,7 +978,8 @@ def AddScript(incFile):
     path = os.path.dirname(incFile)
     wd = os.getcwd()
     os.chdir(path)
-    execfile(incFile, _shared_globals.makefile_dict, _shared_globals.makefile_dict)
+    with open(incFile, "r") as f:
+        exec(f.read(), _shared_globals.makefile_dict, _shared_globals.makefile_dict)
     os.chdir(wd)
 
 
@@ -1087,7 +1071,8 @@ else:
 #This ensures any options set in that file are executed before we continue.
 #It also pulls in its target definitions.
 if mainfile != "<makefile>":
-    execfile(mainfile, _shared_globals.makefile_dict, _shared_globals.makefile_dict)
+    with open(mainfile, "r") as f:
+        exec(f.read(), _shared_globals.makefile_dict, _shared_globals.makefile_dict)
 else:
     log.LOG_ERROR("CSB cannot be run from the interactive console.")
     sys.exit(1)
@@ -1114,7 +1099,7 @@ for proj in _shared_globals.sortedProjects:
 #Execute any overrides that have been passed
 #These will supercede anything set in the makefile script.
 if _shared_globals.overrides:
-    exec (_shared_globals.overrides)
+    exec(_shared_globals.overrides)
 
 _utils.check_version()
 
@@ -1126,19 +1111,19 @@ log.LOG_BUILD("Build preparation took {0}:{1:02}".format(int(totalmin), int(tota
 if _shared_globals.CleanBuild:
     clean()
 elif _shared_globals.do_install:
-     install()
+    install()
 else:
     make()
 
 #Print out any errors or warnings incurred so the user doesn't have to scroll to see what went wrong
 for proj in _shared_globals.sortedProjects:
     if proj.globalDict.warnings:
-        print "\n"
+        print("\n")
         log.LOG_WARN("Warnings encountered during build:")
         for warn in proj.globalDict.warnings[0:-1]:
             log.LOG_WARN(warn)
     if proj.globalDict.errors:
-        print "\n"
+        print("\n")
         log.LOG_ERROR("Errors encountered during build:")
         for error in proj.globalDict.errors[0:-1]:
             log.LOG_ERROR(error)

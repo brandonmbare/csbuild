@@ -18,7 +18,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-import gcc_clang_compiler_model
+from csbuild import gcc_clang_compiler_model
 
 libraries = []
 static_libraries = []
@@ -108,6 +108,7 @@ compiles_completed = 0
 
 compile_failed = False
 
+
 def copy():
     ret = {"libraries": list(libraries), "static_libraries": list(static_libraries), "include_dirs": list(include_dirs),
            "library_dirs": list(library_dirs),
@@ -127,8 +128,10 @@ def copy():
            "default_target": default_target, "chunk_precompile": chunk_precompile, "precompile": list(precompile),
            "precompile_exclude": list(precompile_exclude), "headerfile": headerfile, "unity": unity,
            "precompile_done": precompile_done, "no_warnings": no_warnings, "compiler_model": compiler_model, "cmd": cmd,
-           "recompile_all": recompile_all, "targets": dict(targets), "targetName": targetName, "final_chunk_set": list(final_chunk_set),
-           "needs_precompile": needs_precompile, "compiles_completed": compiles_completed, "compile_failed": compile_failed,
+           "recompile_all": recompile_all, "targets": dict(targets), "targetName": targetName,
+           "final_chunk_set": list(final_chunk_set),
+           "needs_precompile": needs_precompile, "compiles_completed": compiles_completed,
+           "compile_failed": compile_failed,
            "copy": copy}
 
     return ret
