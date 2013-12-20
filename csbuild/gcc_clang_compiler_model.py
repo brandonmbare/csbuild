@@ -92,28 +92,28 @@ def get_flags(flags):
     return ret
 
 def get_link_command(project, outputFile, objList):
-    if project.globalDict.static:
+    if project.settings.static:
         return "ar rcs {} {}".format(outputFile, " ".join(objList))
     else:
-        if project.globalDict.hasCppFiles:
-            cmd = project.globalDict.cxx
+        if project.settings.hasCppFiles:
+            cmd = project.settings.cxx
         else:
-            cmd = project.globalDict.cc
+            cmd = project.settings.cc
 
         return "{} {}{}-o{} {} {}{}{}{}-g{} -O{} {} {}".format(
             cmd,
-            "-m32 " if project.globalDict.force_32_bit else "-m64 " if project.globalDict.force_64_bit else "",
-            "-pg " if project.globalDict.profile else "",
+            "-m32 " if project.settings.force_32_bit else "-m64 " if project.settings.force_64_bit else "",
+            "-pg " if project.settings.profile else "",
             outputFile,
             " ".join(objList),
-            "-static-libgcc -static-libstdc++ " if project.globalDict.static_runtime else "",
-            get_libraries(project.globalDict.libraries),
-            get_static_libraries(project.globalDict.static_libraries),
-            get_library_dirs(project.globalDict.library_dirs, True),
-            project.globalDict.debug_level,
-            project.globalDict.opt_level,
-            "-shared" if project.globalDict.shared else "",
-            project.globalDict.linker_flags
+            "-static-libgcc -static-libstdc++ " if project.settings.static_runtime else "",
+            get_libraries(project.settings.libraries),
+            get_static_libraries(project.settings.static_libraries),
+            get_library_dirs(project.settings.library_dirs, True),
+            project.settings.debug_level,
+            project.settings.opt_level,
+            "-shared" if project.settings.shared else "",
+            project.settings.linker_flags
         )
 
 def find_library(library, library_dirs):
@@ -151,30 +151,30 @@ def get_base_command(compiler, project, isCpp):
         exitcodes = "-pass-exit-codes"
 
     if isCpp:
-        standard = project.globalDict.cppstandard
+        standard = project.settings.cppstandard
     else:
-        standard = project.globalDict.cstandard
+        standard = project.settings.cstandard
     return "{} {}{} -Winvalid-pch -c {}-g{} -O{} {}{}{} {}{}".format(
         compiler,
-        "-m32 " if project.globalDict.force_32_bit else "-m64 " if project.globalDict.force_64_bit else "",
+        "-m32 " if project.settings.force_32_bit else "-m64 " if project.settings.force_64_bit else "",
         exitcodes,
-        get_defines(project.globalDict.defines, project.globalDict.undefines),
-        project.globalDict.debug_level,
-        project.globalDict.opt_level,
-        "-fPIC " if project.globalDict.shared else "",
-        "-pg " if project.globalDict.profile else "",
+        get_defines(project.settings.defines, project.settings.undefines),
+        project.settings.debug_level,
+        project.settings.opt_level,
+        "-fPIC " if project.settings.shared else "",
+        "-pg " if project.settings.profile else "",
         "--std={0}".format(standard) if standard != "" else "",
-        get_flags(project.globalDict.flags),
-        project.globalDict.extra_flags
+        get_flags(project.settings.flags),
+        project.settings.extra_flags
     )
 
 
 def get_base_cxx_command(project):
-    return get_base_command(project.globalDict.cxx, project, True)
+    return get_base_command(project.settings.cxx, project, True)
 
 
 def get_base_cc_command(project):
-    return get_base_command(project.globalDict.cc, project, False)
+    return get_base_command(project.settings.cc, project, False)
 
 
 def get_extended_command(baseCmd, project, forceIncludeFile, outObj, inFile):
@@ -182,8 +182,8 @@ def get_extended_command(baseCmd, project, forceIncludeFile, outObj, inFile):
     if forceIncludeFile:
         inc = "-include {0}".format(forceIncludeFile.rsplit(".", 1)[0])
     return "{} {}{}{} -o\"{}\" \"{}\"".format(baseCmd,
-        get_warnings(project.globalDict.warn_flags, project.globalDict.no_warnings),
-        get_include_dirs(project.globalDict.include_dirs), inc, outObj,
+        get_warnings(project.settings.warn_flags, project.settings.no_warnings),
+        get_include_dirs(project.settings.include_dirs), inc, outObj,
         inFile)
 
 

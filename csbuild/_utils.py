@@ -42,48 +42,48 @@ def get_files(project, sources=None, headers=None):
     """
     for root, dirnames, filenames in os.walk('.'):
         absroot = os.path.abspath(root)
-        if absroot in project.globalDict.exclude_dirs:
-            if absroot != project.globalDict.csbuild_dir:
+        if absroot in project.settings.exclude_dirs:
+            if absroot != project.settings.csbuild_dir:
                 log.LOG_INFO("Skipping dir {0}".format(root))
             continue
-        if absroot == project.globalDict.csbuild_dir or absroot.startswith(project.globalDict.csbuild_dir):
+        if absroot == project.settings.csbuild_dir or absroot.startswith(project.settings.csbuild_dir):
             continue
         bFound = False
-        for testDir in project.globalDict.exclude_dirs:
+        for testDir in project.settings.exclude_dirs:
             if absroot.startswith(testDir):
                 bFound = True
                 break
         if bFound:
-            if not absroot.startswith(project.globalDict.csbuild_dir):
+            if not absroot.startswith(project.settings.csbuild_dir):
                 log.LOG_INFO("Skipping dir {0}".format(root))
             continue
         log.LOG_INFO("Looking in directory {0}".format(root))
         if sources is not None:
             for filename in fnmatch.filter(filenames, '*.cpp'):
-                path = os.path.join(root, filename)
-                if path not in project.globalDict.exclude_files:
+                path = os.path.join(absroot, filename)
+                if path not in project.settings.exclude_files:
                     sources.append(os.path.abspath(path))
-                    project.globalDict.hasCppFiles = True
+                    project.settings.hasCppFiles = True
             for filename in fnmatch.filter(filenames, '*.c'):
-                path = os.path.join(root, filename)
-                if path not in project.globalDict.exclude_files:
+                path = os.path.join(absroot, filename)
+                if path not in project.settings.exclude_files:
                     sources.append(os.path.abspath(path))
 
             sources.sort(key=str.lower)
 
         if headers is not None:
             for filename in fnmatch.filter(filenames, '*.hpp'):
-                path = os.path.join(root, filename)
-                if path not in project.globalDict.exclude_files:
+                path = os.path.join(absroot, filename)
+                if path not in project.settings.exclude_files:
                     headers.append(os.path.abspath(path))
-                    project.globalDict.hasCppFiles = True
+                    project.settings.hasCppFiles = True
             for filename in fnmatch.filter(filenames, '*.h'):
-                path = os.path.join(root, filename)
-                if path not in project.globalDict.exclude_files:
+                path = os.path.join(absroot, filename)
+                if path not in project.settings.exclude_files:
                     headers.append(os.path.abspath(path))
             for filename in fnmatch.filter(filenames, '*.inl'):
-                path = os.path.join(root, filename)
-                if path not in project.globalDict.exclude_files:
+                path = os.path.join(absroot, filename)
+                if path not in project.settings.exclude_files:
                     headers.append(os.path.abspath(path))
 
             headers.sort(key=str.lower)
@@ -400,7 +400,7 @@ def should_recompile(srcFile, ofile=None, for_precompiled_header=False):
     return False
 
 
-def check_libraries():
+def check_libraries(project):
     """Checks the libraries designated by the make script.
     Invokes ld to determine whether or not the library exists.1
     Uses the -t flag to get its location.
@@ -410,6 +410,15 @@ def check_libraries():
     libraries_ok = True
     log.LOG_INFO("Checking required libraries...")
     for library in (currentProject.libraries + currentProject.static_libraries):
+        bFound = False
+        for depend in project.linkDepends:
+            if _shared_globals.projects[depend].settings.output_name == library or \
+               _shared_globals.projects[depend].settings.output_name.startswith("lib{}".format(library)):
+                bFound = True
+                break
+        if bFound:
+            continue
+
         log.LOG_INFO("Looking for lib{0}...".format(library))
         lib = currentProject.compiler_model.find_library(library, currentProject.library_dirs)
         if lib:
@@ -453,19 +462,19 @@ class threaded_build(threading.Thread):
         try:
             inc = ""
             headerfile = ""
-            if self.file.endswith(".c") or self.file == self.project.globalDict.cheaderfile:
-                if self.project.globalDict.cheaders and not self.forPrecompiledHeader:
-                    headerfile = self.project.globalDict.cheaderfile
-                baseCommand = self.project.globalDict.cccmd
+            if self.file.endswith(".c") or self.file == self.project.settings.cheaderfile:
+                if self.project.settings.cheaders and not self.forPrecompiledHeader:
+                    headerfile = self.project.settings.cheaderfile
+                baseCommand = self.project.settings.cccmd
             else:
-                if (self.project.globalDict.precompile or self.project.globalDict.chunk_precompile) \
+                if (self.project.settings.precompile or self.project.settings.chunk_precompile) \
                     and not self.forPrecompiledHeader:
-                    headerfile = self.project.globalDict.cppheaderfile
-                baseCommand = self.project.globalDict.cxxcmd
+                    headerfile = self.project.settings.cppheaderfile
+                baseCommand = self.project.settings.cxxcmd
 
             if headerfile:
                 inc += headerfile
-            cmd = self.project.globalDict.compiler_model.get_extended_command(baseCommand,
+            cmd = self.project.settings.compiler_model.get_extended_command(baseCommand,
                 self.project, inc, self.obj, os.path.abspath(self.file))
 
             if _shared_globals.show_commands:
@@ -480,7 +489,7 @@ class threaded_build(threading.Thread):
             sys.stdout.flush()
             sys.stdout.write(output)
             if ret:
-                if str(ret) == str(self.project.globalDict.compiler_model.interrupt_exit_code):
+                if str(ret) == str(self.project.settings.compiler_model.interrupt_exit_code):
                     _shared_globals.lock.acquire()
                     if not _shared_globals.interrupted:
                         log.LOG_ERROR("Keyboard interrupt received. Aborting build.")
@@ -493,8 +502,8 @@ class threaded_build(threading.Thread):
                 if not _shared_globals.interrupted:
                     log.LOG_ERROR("Compile of {0} failed!".format(self.file, ret))
                 _shared_globals.build_success = False
-                self.project.globalDict.compile_failed = True
-                self.project.globalDict.compiles_completed += 1
+                self.project.settings.compile_failed = True
+                self.project.settings.compiles_completed += 1
         except Exception as e:
             #If we don't do this with ALL exceptions, any unhandled exception here will cause the semaphore to never
             # release...
@@ -503,17 +512,17 @@ class threaded_build(threading.Thread):
             #if os.path.dirname(self.file) == _csbuild_dir:
             #   os.remove(self.file)
             _shared_globals.semaphore.release()
-            self.project.globalDict.compile_failed = True
-            self.project.globalDict.compiles_completed += 1
+            self.project.settings.compile_failed = True
+            self.project.settings.compiles_completed += 1
             raise e
         else:
             #if os.path.dirname(self.file) == _csbuild_dir:
             #   os.remove(self.file)
-            #if inc or (not self.project.globalDict.precompile and not self.project.globalDict.chunk_precompile):
+            #if inc or (not self.project.settings.precompile and not self.project.settings.chunk_precompile):
             endtime = time.time()
             _shared_globals.times.append(endtime - starttime)
             _shared_globals.semaphore.release()
-            self.project.globalDict.compiles_completed += 1
+            self.project.settings.compiles_completed += 1
 
 
 def make_chunks(l):
@@ -591,16 +600,16 @@ def chunked_build():
     owningProject = None
 
     for project in _shared_globals.projects.values():
-        for source in project.globalDict.sources:
+        for source in project.settings.sources:
             chunk = get_chunk(source)
             if currentProject.unity:
-                outFile = "{0}/{1}_unity.cpp".format(project.globalDict.csbuild_dir, project.globalDict.output_name)
+                outFile = "{0}/{1}_unity.cpp".format(project.settings.csbuild_dir, project.settings.output_name)
             else:
-                outFile = "{0}/{1}.cpp".format(project.globalDict.csbuild_dir, chunk)
+                outFile = "{0}/{1}.cpp".format(project.settings.csbuild_dir, chunk)
             if chunk not in chunks_to_build and os.path.exists(outFile):
                 chunks_to_build.append(chunk)
 
-        totalChunks += len(project.globalDict.chunks)
+        totalChunks += len(project.settings.chunks)
 
         #if we never get a second chunk, we'll want to know about the project that made the first one
         if totalChunks == 1:
@@ -610,15 +619,15 @@ def chunked_build():
     if totalChunks == 0:
         return
 
-    if totalChunks == 1 and not owningProject.globalDict.unity:
-        chunkname = "{0}_chunk_{1}".format(owningProject.globalDict.output_name.split('.')[0],
+    if totalChunks == 1 and not owningProject.settings.unity:
+        chunkname = "{0}_chunk_{1}".format(owningProject.settings.output_name.split('.')[0],
             "__".join(base_names(owningProject.chunks[0])))
-        obj = "{0}/{1}_{2}.o".format(owningProject.globalDict.obj_dir, chunkname, owningProject.globalDict.targetName)
+        obj = "{0}/{1}_{2}.o".format(owningProject.settings.obj_dir, chunkname, owningProject.settings.targetName)
         if os.path.exists(obj):
             log.LOG_WARN_NOPUSH(
                 "Breaking chunk ({0}) into individual files to improve future iteration turnaround.".format(
                     owningProject.chunks[0]))
-        owningProject.globalDict.final_chunk_set = owningProject.globalDict.sources
+        owningProject.settings.final_chunk_set = owningProject.settings.sources
         return
 
     dont_split_any = False
@@ -631,32 +640,32 @@ def chunked_build():
 
     for project in _shared_globals.projects.values():
         dont_split = dont_split_any
-        if project.globalDict.unity:
+        if project.settings.unity:
             dont_split = True
 
-        for chunk in project.globalDict.chunks:
+        for chunk in project.settings.chunks:
             sources_in_this_chunk = []
-            for source in project.globalDict.sources:
+            for source in project.settings.sources:
                 if source in chunk:
                     sources_in_this_chunk.append(source)
 
             chunksize = get_size(sources_in_this_chunk)
 
-            if project.globalDict.unity:
-                outFile = "{0}/{1}_unity.cpp".format(project.globalDict.csbuild_dir, project.globalDict.output_name)
+            if project.settings.unity:
+                outFile = "{0}/{1}_unity.cpp".format(project.settings.csbuild_dir, project.settings.output_name)
             else:
-                outFile = "{0}/{1}_chunk_{2}.cpp".format(project.globalDict.csbuild_dir,
-                    project.globalDict.output_name.split('.')[0],
+                outFile = "{0}/{1}_chunk_{2}.cpp".format(project.settings.csbuild_dir,
+                    project.settings.output_name.split('.')[0],
                     "__".join(base_names(chunk)))
 
             #If only one or two sources in this chunk need to be built, we get no benefit from building it as a unit.
             # Split unless we're told not to.
-            if project.globalDict.use_chunks and len(chunk) > 1 and (
-                        (project.globalDict.chunk_size > 0 and len(
-                                sources_in_this_chunk) > project.globalDict.chunk_tolerance) or (
-                                project.globalDict.chunk_filesize > 0 and chunksize > project.globalDict
+            if project.settings.use_chunks and len(chunk) > 1 and (
+                        (project.settings.chunk_size > 0 and len(
+                                sources_in_this_chunk) > project.settings.chunk_tolerance) or (
+                                project.settings.chunk_filesize > 0 and chunksize > project.settings
                         .chunk_size_tolerance) or (
-                            dont_split and (project.globalDict.unity or os.path.exists(outFile)) and len(
+                            dont_split and (project.settings.unity or os.path.exists(outFile)) and len(
                             sources_in_this_chunk) > 0)):
                 log.LOG_INFO("Going to build chunk {0} as {1}".format(chunk, outFile))
                 with open(outFile, "w") as f:
@@ -664,17 +673,17 @@ def chunked_build():
                     for source in chunk:
                         f.write(
                             '#include "{0}" // {1} bytes\n'.format(os.path.abspath(source), os.path.getsize(source)))
-                        obj = "{0}/{1}_{2}.o".format(project.globalDict.obj_dir, os.path.basename(source).split('.')[0],
-                            project.globalDict.targetName)
+                        obj = "{0}/{1}_{2}.o".format(project.settings.obj_dir, os.path.basename(source).split('.')[0],
+                            project.settings.targetName)
                         if os.path.exists(obj):
                             os.remove(obj)
                     f.write("//Total size: {0} bytes".format(chunksize))
 
-                project.globalDict.final_chunk_set.append(outFile)
+                project.settings.final_chunk_set.append(outFile)
             elif len(sources_in_this_chunk) > 0:
-                chunkname = "{0}_chunk_{1}".format(project.globalDict.output_name.split('.')[0],
+                chunkname = "{0}_chunk_{1}".format(project.settings.output_name.split('.')[0],
                     "__".join(base_names(chunk)))
-                obj = "{0}/{1}_{2}.o".format(project.globalDict.obj_dir, chunkname, project.globalDict.targetName)
+                obj = "{0}/{1}_{2}.o".format(project.settings.obj_dir, chunkname, project.settings.targetName)
                 if os.path.exists(obj):
                     #If the chunk object exists, the last build of these files was the full chunk.
                     #We're now splitting the chunk to speed things up for future incremental builds,
@@ -685,7 +694,7 @@ def chunked_build():
                     #incremental builds (except on the first build after the chunk)
                     os.remove(obj)
                     add_chunk = chunk
-                    if project.globalDict.use_chunks:
+                    if project.settings.use_chunks:
                         log.LOG_INFO(
                             "Keeping chunk ({0}) broken up because chunking has been disabled for this project".format(
                                 chunk))
@@ -704,7 +713,7 @@ def chunked_build():
                         log.LOG_INFO("Going to build {0} as an individual file.".format(add_chunk))
                 else:
                     log.LOG_INFO("Going to build chunk {0} as individual files.".format(add_chunk))
-                project.globalDict.final_chunk_set += add_chunk
+                project.settings.final_chunk_set += add_chunk
 
 
 def save_md5(inFile):
@@ -747,11 +756,11 @@ def prepare_precompiles():
             if forCpp:
                 obj = "{0}/{1}_{2}.hpp.gch".format(os.path.dirname(headerfile),
                     os.path.basename(headerfile).split('.')[0],
-                    project.globalDict.targetName)
+                    project.settings.targetName)
             else:
                 obj = "{0}/{1}_{2}.h.gch".format(os.path.dirname(headerfile),
                     os.path.basename(headerfile).split('.')[0],
-                    project.globalDict.targetName)
+                    project.settings.targetName)
 
             precompile = False
             if not os.path.exists(headerfile) or should_recompile(headerfile, obj,
@@ -768,10 +777,10 @@ def prepare_precompiles():
 
             with open(headerfile, "w") as f:
                 for header in allheaders:
-                    if header in project.globalDict.precompile_exclude:
+                    if header in project.settings.precompile_exclude:
                         continue
                     externed = False
-                    if forCpp and os.path.abspath(header) in project.globalDict.cheaders:
+                    if forCpp and os.path.abspath(header) in project.settings.cheaders:
                         f.write("extern \"C\"\n{\n\t")
                         externed = True
                     f.write('#include "{0}"\n'.format(os.path.abspath(header)))
@@ -779,42 +788,44 @@ def prepare_precompiles():
                         f.write("}\n")
             return True, headerfile
 
-        if project.globalDict.chunk_precompile or project.globalDict.precompile:
+        if project.settings.chunk_precompile or project.settings.precompile:
             allheaders = []
 
-            if project.globalDict.chunk_precompile:
+            if project.settings.chunk_precompile:
                 get_files(project, headers=allheaders)
             else:
-                allheaders = project.globalDict.precompile
+                allheaders = project.settings.precompile
 
             if not allheaders:
-                project.globalDict.needs_cpp_precompile = False
+                project.settings.needs_cpp_precompile = False
                 continue
 
-            project.globalDict.headers = allheaders
+            project.settings.headers = allheaders
 
-            if not project.globalDict.precompile and not project.globalDict.chunk_precompile:
-                project.globalDict.needs_cpp_precompile = False
+            if not project.settings.precompile and not project.settings.chunk_precompile:
+                project.settings.needs_cpp_precompile = False
                 continue
 
-            project.globalDict.cppheaderfile = "{0}/{1}_cpp_precompiled_headers.hpp".format(project.globalDict.csbuild_dir,
-                project.globalDict.output_name.split('.')[0])
-            project.globalDict.needs_cpp_precompile, project.globalDict.cppheaderfile = \
-                handleHeaderFile(project.globalDict.cppheaderfile, allheaders, True)
+            project.settings.cppheaderfile = "{0}/{1}_cpp_precompiled_headers.hpp".format(project.settings.csbuild_dir,
+                project.settings.output_name.split('.')[0])
+            project.settings.needs_cpp_precompile, project.settings.cppheaderfile = \
+                handleHeaderFile(project.settings.cppheaderfile, allheaders, True)
 
-        if project.globalDict.cheaders:
-            project.globalDict.cheaderfile = "{0}/{1}_c_precompiled_headers.h".format(
-                project.globalDict.csbuild_dir,
-                project.globalDict.output_name.split('.')[0])
-            project.globalDict.needs_c_precompile, project.globalDict.cheaderfile = \
-                handleHeaderFile(project.globalDict.cheaderfile, project.globalDict.cheaders, False)
+            _shared_globals.total_precompiles += int(project.settings.needs_cpp_precompile)
 
-        _shared_globals.total_precompiles += 1
+        if project.settings.cheaders:
+            project.settings.cheaderfile = "{0}/{1}_c_precompiled_headers.h".format(
+                project.settings.csbuild_dir,
+                project.settings.output_name.split('.')[0])
+            project.settings.needs_c_precompile, project.settings.cheaderfile = \
+                handleHeaderFile(project.settings.cheaderfile, project.settings.cheaders, False)
+
+            _shared_globals.total_precompiles += int(project.settings.needs_c_precompile)
     os.chdir(wd)
 
 
 def precompile_headers(proj):
-    if not proj.globalDict.needs_c_precompile and not proj.globalDict.needs_cpp_precompile:
+    if not proj.settings.needs_c_precompile and not proj.settings.needs_cpp_precompile:
         return True
 
     starttime = time.time()
@@ -822,73 +833,77 @@ def precompile_headers(proj):
 
     _shared_globals.built_something = True
 
-    if not os.path.exists(proj.globalDict.obj_dir):
-        os.makedirs(proj.globalDict.obj_dir)
+    if not os.path.exists(proj.settings.obj_dir):
+        os.makedirs(proj.settings.obj_dir)
 
     thread = None
     cthread = None
     cppobj = ""
     cobj = ""
-    if proj.globalDict.needs_cpp_precompile:
+    if proj.settings.needs_cpp_precompile:
         if not _shared_globals.semaphore.acquire(False):
             if _shared_globals.max_threads != 1:
-                log.LOG_THREAD("Waiting for a build thread to become available...")
-                _shared_globals.semaphore.acquire(True)
+                log.LOG_INFO("Waiting for a build thread to become available...")
+            _shared_globals.semaphore.acquire(True)
         if _shared_globals.interrupted:
             sys.exit(2)
 
         log.LOG_BUILD(
             "Precompiling {0} ({1}/{2})...".format(
-                proj.globalDict.cppheaderfile,
+                proj.settings.cppheaderfile,
                 _shared_globals.current_compile,
                 _shared_globals.total_compiles))
 
-        cppobj = "{0}/{1}_{2}.hpp.gch".format(os.path.dirname(proj.globalDict.cppheaderfile),
-            os.path.basename(proj.globalDict.cppheaderfile).split('.')[0],
-            proj.globalDict.targetName)
+        _shared_globals.current_compile += 1
+
+        cppobj = "{0}/{1}_{2}.hpp.gch".format(os.path.dirname(proj.settings.cppheaderfile),
+            os.path.basename(proj.settings.cppheaderfile).split('.')[0],
+            proj.settings.targetName)
 
         #precompiled headers block on current thread - run runs on current thread rather than starting a new one
-        thread = threaded_build(proj.globalDict.cppheaderfile, cppobj, proj, True)
+        thread = threaded_build(proj.settings.cppheaderfile, cppobj, proj, True)
         thread.start()
 
-    if proj.globalDict.needs_c_precompile:
+    if proj.settings.needs_c_precompile:
         if not _shared_globals.semaphore.acquire(False):
             if _shared_globals.max_threads != 1:
-                log.LOG_THREAD("Waiting for a build thread to become available...")
-                _shared_globals.semaphore.acquire(True)
+                log.LOG_INFO("Waiting for a build thread to become available...")
+            _shared_globals.semaphore.acquire(True)
         if _shared_globals.interrupted:
             sys.exit(2)
 
         log.LOG_BUILD(
             "Precompiling {0} ({1}/{2})...".format(
-                proj.globalDict.cheaderfile,
+                proj.settings.cheaderfile,
                 _shared_globals.current_compile,
                 _shared_globals.total_compiles))
 
-        cobj = "{0}/{1}_{2}.h.gch".format(os.path.dirname(proj.globalDict.cheaderfile),
-            os.path.basename(proj.globalDict.cheaderfile).split('.')[0],
-            proj.globalDict.targetName)
+        _shared_globals.current_compile += 1
+
+        cobj = "{0}/{1}_{2}.h.gch".format(os.path.dirname(proj.settings.cheaderfile),
+            os.path.basename(proj.settings.cheaderfile).split('.')[0],
+            proj.settings.targetName)
 
         #precompiled headers block on current thread - run runs on current thread rather than starting a new one
-        cthread = threaded_build(proj.globalDict.cheaderfile, cobj, proj, True)
+        cthread = threaded_build(proj.settings.cheaderfile, cobj, proj, True)
         cthread.start()
 
     if thread:
         thread.join()
+        _shared_globals.precompiles_done += 1
     if cthread:
         cthread.join()
+        _shared_globals.precompiles_done += 1
 
-    proj.globalDict.cppheaderfile = cppobj
-    proj.globalDict.cheaderfile = cobj
+    proj.settings.cppheaderfile = cppobj
+    proj.settings.cheaderfile = cobj
 
     totaltime = time.time() - starttime
     totalmin = math.floor(totaltime / 60)
     totalsec = round(totaltime % 60)
     log.LOG_BUILD("Precompile took {0}:{1:02}".format(int(totalmin), int(totalsec)))
 
-    _shared_globals.precompiles_done += 1
-    _shared_globals.current_compile += 1
-    proj.globalDict.precompile_done = True
+    proj.settings.precompile_done = True
 
     return _shared_globals.build_success
 
