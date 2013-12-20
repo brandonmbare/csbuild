@@ -43,6 +43,7 @@ def LOG_MSG(color, level, msg):
             print(" \033[{0};1m{1}:\033[0m {2}".format(color, level, msg))
         else:
             print(" {0}: {1}".format(level, msg))
+        sys.stdout.flush()
 
 
 def LOG_ERROR(msg):

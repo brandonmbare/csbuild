@@ -37,6 +37,7 @@ import math
 import subprocess
 import os
 import sys
+import threading
 import time
 
 from csbuild import _utils
@@ -53,13 +54,23 @@ __all__ = []
 
 signal.signal(signal.SIGINT, signal.SIG_DFL)
 
-#TODO: Specify number of jobs (in code and on command line)
-#TODO: Specify C compiler or C++ compiler for precompiled headers
-#TODO: -stdlib
+#TODO: More verbose errors when paths can't be found
+#TODO: Better detection of whether or not something should be linked
 
+#TODO: CXX and CC environment variables
+#TODO: --cxx and --cc flags
+#TODO: Rename compiler model to toolchain
+#TODO: Move compiler-specific items to toolchain
+#TODO: Errors on nonexistent targets/projects
+#TODO: Errors on duplicate project names
+#TODO: Errors on nonexistent dependencies
+
+#TODO: Project generation with plugin model
+#TODO: *Import* existing projects
 #TODO: Verify compiler features
 #TODO: Mark scripts uncallable
 #TODO: csbuild.ScriptLocation()?
+#TODO: -stdlib
 
 
 #<editor-fold desc="Setters">
@@ -430,7 +441,7 @@ def NoPrecompile(*args):
         for arg in args:
             if arg[0] != '/' and not arg.startswith("./"):
                 arg = "./" + arg
-            newargs.append(arg)
+            newargs.append(os.path.abspath(arg))
             projectSettings.precompile_exclude += newargs
     else:
         projectSettings.chunk_precompile = False
@@ -482,65 +493,65 @@ def project(name, workingDirectory, linkDepends=None, srcDepends=None):
         srcDepends = [srcDepends]
 
     class projectData(object):
-        def __init__(self, name, workingDirectory, linkDepends, srcDepends, func, globalDict):
+        def __init__(self, name, workingDirectory, linkDepends, srcDepends, func, settings):
             self.name = name
             self.workingDirectory = os.path.abspath(workingDirectory)
             self.linkDepends = linkDepends
             self.srcDepends = srcDepends
             self.func = func
-            self.globalDict = globalDict
+            self.settings = settings
 
         def prepareBuild(self):
             wd = os.getcwd()
             os.chdir(self.workingDirectory)
 
-            self.globalDict.obj_dir = os.path.abspath(self.globalDict.obj_dir)
-            self.globalDict.output_dir = os.path.abspath(self.globalDict.output_dir)
-            self.globalDict.csbuild_dir = os.path.abspath(self.globalDict.csbuild_dir)
+            self.settings.obj_dir = os.path.abspath(self.settings.obj_dir)
+            self.settings.output_dir = os.path.abspath(self.settings.output_dir)
+            self.settings.csbuild_dir = os.path.abspath(self.settings.csbuild_dir)
 
-            self.globalDict.exclude_dirs.append(self.globalDict.csbuild_dir)
+            self.settings.exclude_dirs.append(self.settings.csbuild_dir)
 
-            projectSettings.__dict__.update(self.globalDict.__dict__)
+            projectSettings.__dict__.update(self.settings.__dict__)
 
-            log.LOG_BUILD("Preparing build tasks for {}...".format(self.globalDict.output_name))
+            log.LOG_BUILD("Preparing build tasks for {}...".format(self.settings.output_name))
 
-            if not os.path.exists(self.globalDict.csbuild_dir):
-                os.makedirs(self.globalDict.csbuild_dir)
+            if not os.path.exists(self.settings.csbuild_dir):
+                os.makedirs(self.settings.csbuild_dir)
 
-            self.globalDict.cccmd = self.globalDict.compiler_model.get_base_cc_command(self)
-            self.globalDict.cxxcmd = self.globalDict.compiler_model.get_base_cxx_command(self)
+            self.settings.cccmd = self.settings.compiler_model.get_base_cc_command(self)
+            self.settings.cxxcmd = self.settings.compiler_model.get_base_cxx_command(self)
 
-            cmdfile = "{0}/{1}.csbuild".format(self.globalDict.csbuild_dir, self.globalDict.targetName)
+            cmdfile = "{0}/{1}.csbuild".format(self.settings.csbuild_dir, self.settings.targetName)
             cmd = ""
             if os.path.exists(cmdfile):
                 with open(cmdfile, "r") as f:
                     cmd = f.read()
 
-            if self.globalDict.cxxcmd + self.globalDict.cccmd != cmd:
-                self.globalDict.recompile_all = True
+            if self.settings.cxxcmd + self.settings.cccmd != cmd:
+                self.settings.recompile_all = True
                 clean(True)
                 with open(cmdfile, "w") as f:
-                    f.write(self.globalDict.cxxcmd + self.globalDict.cccmd)
+                    f.write(self.settings.cxxcmd + self.settings.cccmd)
 
-            if not self.globalDict.chunks:
-                _utils.get_files(self, self.globalDict.allsources)
+            if not self.settings.chunks:
+                _utils.get_files(self, self.settings.allsources)
 
-                if not self.globalDict.allsources:
+                if not self.settings.allsources:
                     return
 
                 #We'll do this even if _use_chunks is false, because it simplifies the linker logic.
-                self.globalDict.chunks = _utils.make_chunks(self.globalDict.allsources)
+                self.settings.chunks = _utils.make_chunks(self.settings.allsources)
             else:
-                self.globalDict.allsources = list(itertools.chain(*self.globalDict.chunks))
+                self.settings.allsources = list(itertools.chain(*self.settings.chunks))
 
             if not _shared_globals.CleanBuild and not _shared_globals.do_install:
-                for source in self.globalDict.allsources:
+                for source in self.settings.allsources:
                     if _utils.should_recompile(source):
-                        self.globalDict.sources.append(source)
+                        self.settings.sources.append(source)
             else:
-                self.globalDict.sources = list(self.globalDict.allsources)
+                self.settings.sources = list(self.settings.allsources)
 
-            _shared_globals.allfiles += self.globalDict.sources
+            _shared_globals.allfiles += self.settings.sources
 
             os.chdir(wd)
 
@@ -595,7 +606,7 @@ def build():
     _utils.prepare_precompiles()
 
     for project in _shared_globals.sortedProjects:
-        _shared_globals.total_compiles += len(project.globalDict.final_chunk_set)
+        _shared_globals.total_compiles += len(project.settings.final_chunk_set)
 
     _shared_globals.total_compiles += _shared_globals.total_precompiles
     _shared_globals.current_compile = 1
@@ -604,6 +615,11 @@ def build():
     projects_done = set()
     pending_links = set()
     pending_builds = _shared_globals.sortedProjects
+
+    for project in _shared_globals.sortedProjects:
+        log.LOG_BUILD("Verifying libraries for {}".format(project.settings.output_name))
+        if not _utils.check_libraries(project):
+            sys.exit(1)
 
     starttime = time.time()
 
@@ -619,17 +635,14 @@ def build():
 
             os.chdir(project.workingDirectory)
 
-            projectSettings.__dict__.update(project.globalDict.__dict__)
+            projectSettings.__dict__.update(project.settings.__dict__)
 
             project.starttime = time.time()
 
             log.LOG_BUILD(
-                "Preparing to build {0} ({1})".format(projectSettings.output_name, project.globalDict.targetName))
+                "Preparing to build {0} ({1})".format(projectSettings.output_name, project.settings.targetName))
 
-            if not _utils.check_libraries():
-                continue
-
-            log.LOG_BUILD("Building {0} ({1})".format(projectSettings.output_name, project.globalDict.targetName))
+            log.LOG_BUILD("Building {0} ({1})".format(projectSettings.output_name, project.settings.targetName))
 
             if _utils.precompile_headers(project):
                 _shared_globals.built_something = True
@@ -643,27 +656,28 @@ def build():
                 for chunk in projectSettings.final_chunk_set:
                     built = True
                     obj = "{0}/{1}_{2}.o".format(projectSettings.obj_dir, os.path.basename(chunk).split('.')[0],
-                        project.globalDict.targetName)
+                        project.settings.targetName)
                     if not _shared_globals.semaphore.acquire(False):
                         if _shared_globals.max_threads != 1:
-                            log.LOG_THREAD("Waiting for a build thread to become available...")
+                            log.LOG_INFO("Waiting for a build thread to become available...")
                         _shared_globals.semaphore.acquire(True)
 
                     for otherProj in list(projects_in_flight):
-                        if otherProj.globalDict.compiles_completed >= len(otherProj.globalDict.final_chunk_set) + int(
-                                otherProj.globalDict.needs_c_precompile) + int(
-                                otherProj.globalDict.needs_cpp_precompile):
+                        if otherProj.settings.compiles_completed >= len(otherProj.settings.final_chunk_set) + int(
+                                otherProj.settings.needs_c_precompile) + int(
+                                otherProj.settings.needs_cpp_precompile):
                             totaltime = (time.time() - otherProj.starttime)
                             minutes = math.floor(totaltime / 60)
                             seconds = round(totaltime % 60)
 
-                            log.LOG_BUILD(
-                                "Compile of {0} took {1}:{2:02}".format(otherProj.globalDict.output_name, minutes,
-                                    seconds))
+                            if otherProj.settings.final_chunk_set:
+                                log.LOG_BUILD(
+                                    "Compile of {0} took {1}:{2:02}".format(otherProj.settings.output_name, minutes,
+                                        seconds))
                             projects_in_flight.remove(otherProj)
-                            if otherProj.globalDict.compile_failed:
+                            if otherProj.settings.compile_failed:
                                 log.LOG_ERROR("Build of {0} failed! Finishing up non-dependent build tasks...".format(
-                                    otherProj.globalDict.output_name))
+                                    otherProj.settings.output_name))
                                 continue
 
                             okToLink = True
@@ -674,12 +688,12 @@ def build():
                                         break
                             if okToLink:
                                 link(otherProj)
-                                log.LOG_BUILD("Finished {0}".format(otherProj.globalDict.output_name))
+                                log.LOG_BUILD("Finished {0}".format(otherProj.settings.output_name))
                                 projects_done.add(otherProj.name)
                             else:
                                 log.LOG_LINKER(
                                     "Linking for {0} deferred until all dependencies have finished building...".format(
-                                        otherProj.globalDict.output_name))
+                                        otherProj.settings.output_name))
                                 pending_links.add(otherProj)
 
                     for otherProj in list(pending_links):
@@ -690,7 +704,7 @@ def build():
                                 break
                         if okToLink:
                             link(otherProj)
-                            log.LOG_BUILD("Finished {0}".format(otherProj.globalDict.output_name))
+                            log.LOG_BUILD("Finished {0}".format(otherProj.settings.output_name))
                             projects_done.add(otherProj.name)
                             pending_links.remove(otherProj)
 
@@ -710,7 +724,7 @@ def build():
                         estmin = math.floor(esttime / 60)
                         estsec = round(esttime % 60)
                         log.LOG_BUILD(
-                            "Building {0}... ({1}/{2}) - {3}:{4:02}/{5}:{6:02}".format(obj,
+                            "Building {0}... ({1}/{2}) - {3}:{4:02}/{5}:{6:02}".format(os.path.basename(obj),
                                 _shared_globals.current_compile, _shared_globals.total_compiles, int(minutes),
                                 int(seconds), int(estmin),
                                 int(estsec)))
@@ -719,7 +733,7 @@ def build():
                         minutes = math.floor(totaltime / 60)
                         seconds = round(totaltime % 60)
                         log.LOG_BUILD(
-                            "Building {0}... ({1}/{2}) - {3}:{4:02}".format(obj, _shared_globals.current_compile,
+                            "Building {0}... ({1}/{2}) - {3}:{4:02}".format(os.path.basename(obj), _shared_globals.current_compile,
                                 _shared_globals.total_compiles, int(minutes), int(seconds)))
                     _utils.threaded_build(chunk, obj, project).start()
                     _shared_globals.current_compile += 1
@@ -762,19 +776,19 @@ def build():
             _shared_globals.semaphore.release()
 
         for otherProj in list(projects_in_flight):
-            if otherProj.globalDict.compiles_completed >= len(otherProj.globalDict.final_chunk_set) + int(
-                    otherProj.globalDict.needs_c_precompile) + int(
-                    otherProj.globalDict.needs_cpp_precompile):
+            if otherProj.settings.compiles_completed >= len(otherProj.settings.final_chunk_set) + int(
+                    otherProj.settings.needs_c_precompile) + int(
+                    otherProj.settings.needs_cpp_precompile):
                 totaltime = (time.time() - otherProj.starttime)
                 minutes = math.floor(totaltime / 60)
                 seconds = round(totaltime % 60)
 
                 log.LOG_BUILD(
-                    "Compile of {0} took {1}:{2:02}".format(otherProj.globalDict.output_name, minutes, seconds))
+                    "Compile of {0} took {1}:{2:02}".format(otherProj.settings.output_name, minutes, seconds))
                 projects_in_flight.remove(otherProj)
-                if otherProj.globalDict.compile_failed:
+                if otherProj.settings.compile_failed:
                     log.LOG_ERROR("Build of {0} failed! Finishing up non-dependent build tasks...".format(
-                        otherProj.globalDict.output_name))
+                        otherProj.settings.output_name))
                     continue
 
                 okToLink = True
@@ -785,11 +799,11 @@ def build():
                             break
                 if okToLink:
                     link(otherProj)
-                    log.LOG_BUILD("Finished {0}".format(otherProj.globalDict.output_name))
+                    log.LOG_BUILD("Finished {0}".format(otherProj.settings.output_name))
                     projects_done.add(otherProj.name)
                 else:
                     log.LOG_LINKER("Linking for {0} deferred until all dependencies have finished building...".format(
-                        otherProj.globalDict.output_name))
+                        otherProj.settings.output_name))
                     pending_links.add(otherProj)
 
         for otherProj in list(pending_links):
@@ -800,7 +814,7 @@ def build():
                     break
             if okToLink:
                 link(otherProj)
-                log.LOG_BUILD("Finished {0}".format(otherProj.globalDict.output_name))
+                log.LOG_BUILD("Finished {0}".format(otherProj.settings.output_name))
                 projects_done.add(otherProj.name)
                 pending_links.remove(otherProj)
 
@@ -833,25 +847,25 @@ def link(project, *objs):
 
     starttime = time.time()
 
-    output = "{0}/{1}".format(project.globalDict.output_dir, project.globalDict.output_name)
+    output = "{0}/{1}".format(project.settings.output_dir, project.settings.output_name)
 
     objs = list(objs)
     if not objs:
-        for chunk in project.globalDict.chunks:
-            if not project.globalDict.unity:
-                obj = "{0}/{1}_chunk_{2}_{3}.o".format(project.globalDict.obj_dir,
-                    project.globalDict.output_name.split('.')[0],
-                    "__".join(_utils.base_names(chunk)), project.globalDict.targetName)
+        for chunk in project.settings.chunks:
+            if not project.settings.unity:
+                obj = "{0}/{1}_chunk_{2}_{3}.o".format(project.settings.obj_dir,
+                    project.settings.output_name.split('.')[0],
+                    "__".join(_utils.base_names(chunk)), project.settings.targetName)
             else:
-                obj = "{0}/{1}_unity_{2}.o".format(project.globalDict.obj_dir, project.globalDict.output_name,
-                    project.globalDict.targetName)
-            if project.globalDict.use_chunks and os.path.exists(obj):
+                obj = "{0}/{1}_unity_{2}.o".format(project.settings.obj_dir, project.settings.output_name,
+                    project.settings.targetName)
+            if project.settings.use_chunks and os.path.exists(obj):
                 objs.append(obj)
             else:
                 if type(chunk) == list:
                     for source in chunk:
-                        obj = "{0}/{1}_{2}.o".format(project.globalDict.obj_dir, os.path.basename(source).split('.')[0],
-                            project.globalDict.targetName)
+                        obj = "{0}/{1}_{2}.o".format(project.settings.obj_dir, os.path.basename(source).split('.')[0],
+                            project.settings.targetName)
                         if os.path.exists(obj):
                             objs.append(obj)
                         else:
@@ -859,8 +873,8 @@ def link(project, *objs):
                                 "Some object files are missing. Either the build failed, or you haven't built yet.")
                             return False
                 else:
-                    obj = "{0}/{1}_{2}.o".format(project.globalDict.obj_dir, os.path.basename(chunk).split('.')[0],
-                        project.globalDict.targetName)
+                    obj = "{0}/{1}_{2}.o".format(project.settings.obj_dir, os.path.basename(chunk).split('.')[0],
+                        project.settings.targetName)
                     if os.path.exists(obj):
                         objs.append(obj)
                     else:
@@ -891,7 +905,7 @@ def link(project, *objs):
                     log.LOG_LINKER(
                         "Library {0} has been modified since the last successful build. Relinking to new library."
                         .format(
-                            project.globalDict.libraries[i]))
+                            project.settings.libraries[i]))
                     _shared_globals.built_something = True
 
             #Barring the two above cases, there's no point linking if the compiler did nothing.
@@ -900,17 +914,17 @@ def link(project, *objs):
                     log.LOG_LINKER("Nothing to link.")
                 return True
 
-    log.LOG_LINKER("Linking {0}...".format(output))
+    log.LOG_LINKER("Linking {0}...".format(os.path.abspath(output)))
 
-    if not os.path.exists(project.globalDict.output_dir):
-        os.makedirs(project.globalDict.output_dir)
+    if not os.path.exists(project.settings.output_dir):
+        os.makedirs(project.settings.output_dir)
 
     #Remove the output file so we're not just clobbering it
     #If it gets clobbered while running it could cause BAD THINGS (tm)
     if os.path.exists(output):
         os.remove(output)
 
-    cmd = project.globalDict.compiler_model.get_link_command(project, output, objs)
+    cmd = project.settings.compiler_model.get_link_command(project, output, objs)
     if _shared_globals.show_commands:
         print(cmd)
     ret = subprocess.call(cmd, shell=True)
@@ -939,27 +953,27 @@ def clean(silent=False):
     for project in _shared_globals.sortedProjects:
 
         if not silent:
-            log.LOG_BUILD("Cleaning {0} ({1})...".format(project.globalDict.output_name, project.globalDict.targetName))
-        for source in project.globalDict.sources:
-            obj = "{0}/{1}_{2}.o".format(project.globalDict.obj_dir, os.path.basename(source).split('.')[0],
-                project.globalDict.targetName)
+            log.LOG_BUILD("Cleaning {0} ({1})...".format(project.settings.output_name, project.settings.targetName))
+        for source in project.settings.sources:
+            obj = "{0}/{1}_{2}.o".format(project.settings.obj_dir, os.path.basename(source).split('.')[0],
+                project.settings.targetName)
             if os.path.exists(obj):
                 if not silent:
                     log.LOG_INFO("Deleting {0}".format(obj))
                 os.remove(obj)
-        headerfile = "{0}/{1}_cpp_precompiled_headers.hpp".format(project.globalDict.csbuild_dir,
-            project.globalDict.output_name.split('.')[0])
+        headerfile = "{0}/{1}_cpp_precompiled_headers.hpp".format(project.settings.csbuild_dir,
+            project.settings.output_name.split('.')[0])
         obj = "{0}/{1}_{2}.hpp.gch".format(os.path.dirname(headerfile), os.path.basename(headerfile).split('.')[0],
-            project.globalDict.targetName)
+            project.settings.targetName)
         if os.path.exists(obj):
             if not silent:
                 log.LOG_INFO("Deleting {0}".format(obj))
             os.remove(obj)
 
-        headerfile = "{0}/{1}_c_precompiled_headers.h".format(project.globalDict.csbuild_dir,
-            project.globalDict.output_name.split('.')[0])
+        headerfile = "{0}/{1}_c_precompiled_headers.h".format(project.settings.csbuild_dir,
+            project.settings.output_name.split('.')[0])
         obj = "{0}/{1}_{2}.h.gch".format(os.path.dirname(headerfile), os.path.basename(headerfile).split('.')[0],
-            project.globalDict.targetName)
+            project.settings.targetName)
         if os.path.exists(obj):
             if not silent:
                 log.LOG_INFO("Deleting {0}".format(obj))
@@ -976,13 +990,13 @@ def install():
     Does nothing if neither InstallHeaders() nor InstallOutput() has been called in the make script.
     """
     for project in _shared_globals.sortedProjects:
-        output = "{0}/{1}".format(project.globalDict.output_dir, project.globalDict.output_name)
+        output = "{0}/{1}".format(project.settings.output_dir, project.settings.output_name)
         install_something = False
 
-        if not project.globalDict.output_install_dir or os.path.exists(output):
+        if not project.settings.output_install_dir or os.path.exists(output):
             #install output file
-            if project.globalDict.output_install_dir:
-                outputDir = "{0}/{1}".format(project.globalDict.install_prefix, project.globalDict.output_install_dir)
+            if project.settings.output_install_dir:
+                outputDir = "{0}/{1}".format(project.settings.install_prefix, project.settings.output_install_dir)
                 if not os.path.exists(outputDir):
                     os.makedirs(outputDir)
                 log.LOG_INSTALL("Installing {0} to {1}...".format(output, outputDir))
@@ -990,12 +1004,12 @@ def install():
                 install_something = True
 
             #install headers
-            subdir = project.globalDict.header_subdir
+            subdir = project.settings.header_subdir
             if not subdir:
-                subdir = _utils.get_base_name(project.globalDict.output_name)
-            if project.globalDict.header_install_dir:
-                install_dir = "{0}/{1}/{2}".format(project.globalDict.install_prefix,
-                    project.globalDict.header_install_dir, subdir)
+                subdir = _utils.get_base_name(project.settings.output_name)
+            if project.settings.header_install_dir:
+                install_dir = "{0}/{1}/{2}".format(project.settings.install_prefix,
+                    project.settings.header_install_dir, subdir)
                 if not os.path.exists(install_dir):
                     os.makedirs(install_dir)
                 headers = []
@@ -1026,10 +1040,14 @@ def make():
 
 def AddScript(incFile):
     path = os.path.dirname(incFile)
+    incFile = os.path.abspath(incFile)
     wd = os.getcwd()
     os.chdir(path)
-    with open(incFile, "r") as f:
-        exec(f.read(), _shared_globals.makefile_dict, _shared_globals.makefile_dict)
+    if sys.version_info >= (3, 0):
+        with open(incFile, "r") as f:
+            exec(f.read(), _shared_globals.makefile_dict, _shared_globals.makefile_dict)
+    else:
+        execfile(incFile, _shared_globals.makefile_dict, _shared_globals.makefile_dict)
     os.chdir(wd)
 
 
@@ -1073,6 +1091,7 @@ group2.add_argument('-q', action="store_const", const=2, dest="quiet",
     help="Quiet. Disables all logging except for WARN and ERROR.", default=1)
 group2.add_argument('-qq', action="store_const", const=3, dest="quiet",
     help="Very quiet. Disables all csb-specific logging.", default=1)
+parser.add_argument("-j", "--jobs", action="store", dest="jobs", type=int)
 parser.add_argument('--show-commands', help="Show all commands sent to the system.", action="store_true")
 parser.add_argument('--no-progress', help="Turn off the progress bar.", action="store_true")
 parser.add_argument('--force-color', help="Force color on even if the terminal isn't detected as accepting it.",
@@ -1098,6 +1117,10 @@ if args.force_color:
 if args.prefix:
     _shared_globals.install_prefix = args.prefix
 
+if args.jobs:
+    _shared_globals.max_threads = args.jobs
+    _shared_globals.semaphore = threading.BoundedSemaphore(value=_shared_globals.max_threads)
+
 makefile_help = args.makefile_help
 
 if makefile_help:
@@ -1115,8 +1138,11 @@ else:
 #This ensures any options set in that file are executed before we continue.
 #It also pulls in its target definitions.
 if mainfile != "<makefile>":
-    with open(mainfile, "r") as f:
-        exec(f.read(), _shared_globals.makefile_dict, _shared_globals.makefile_dict)
+    if sys.version_info >= (3, 0):
+        with open(mainfile, "r") as f:
+            exec(f.read(), _shared_globals.makefile_dict, _shared_globals.makefile_dict)
+    else:
+        execfile(mainfile, _shared_globals.makefile_dict, _shared_globals.makefile_dict)
 else:
     log.LOG_ERROR("CSB cannot be run from the interactive console.")
     sys.exit(1)
@@ -1124,15 +1150,31 @@ else:
 if makefile_help:
     sys.exit(0)
 
+def insert_depends(proj, projList, already_inserted=set()):
+    already_inserted.add(proj.name)
+    for depend in proj.linkDepends:
+        projData = _shared_globals.projects[depend]
+        projList[depend] = projData
+        if depend in already_inserted:
+            log.LOG_ERROR("Circular dependencies detected: {0} and {1} in linkDepends".format(depend, proj.name))
+            sys.exit(1)
+        insert_depends(projData, projList)
+    for depend in proj.srcDepends:
+        projData = _shared_globals.projects[depend]
+        projList[depend] = projData
+        if depend in already_inserted:
+            log.LOG_ERROR("Circular dependencies detected: {0} and {1} in linkDepends".format(depend, proj.name))
+            sys.exit(1)
+        insert_depends(projData, projList)
+    already_inserted.remove(proj.name)
+
+
 if _shared_globals.project_build_list:
     newProjList = {}
     for proj in _shared_globals.project_build_list:
         projData = _shared_globals.projects[proj]
         newProjList[proj] = projData
-        for depend in projData.linkDepends:
-            newProjList[depend] = _shared_globals.projects[depend]
-        for depend in projData.srcDepends:
-            newProjList[depend] = _shared_globals.projects[depend]
+        insert_depends(projData, newProjList)
     _shared_globals.projects = newProjList
 
 _shared_globals.sortedProjects = _utils.sortProjects()
@@ -1156,15 +1198,15 @@ else:
 
 #Print out any errors or warnings incurred so the user doesn't have to scroll to see what went wrong
 for proj in _shared_globals.sortedProjects:
-    if proj.globalDict.warnings:
+    if proj.settings.warnings:
         print("\n")
         log.LOG_WARN("Warnings encountered during build:")
-        for warn in proj.globalDict.warnings[0:-1]:
+        for warn in proj.settings.warnings[0:-1]:
             log.LOG_WARN(warn)
-    if proj.globalDict.errors:
+    if proj.settings.errors:
         print("\n")
         log.LOG_ERROR("Errors encountered during build:")
-        for error in proj.globalDict.errors[0:-1]:
+        for error in proj.settings.errors[0:-1]:
             log.LOG_ERROR(error)
 
 _barWriter.stop()
