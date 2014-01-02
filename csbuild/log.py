@@ -23,7 +23,6 @@ import time
 import math
 import sys
 from csbuild import _shared_globals
-from csbuild import projectSettings
 
 try:
     import curses
@@ -54,7 +53,7 @@ def LOG_ERROR(msg):
     if _shared_globals.quiet >= 3:
         return
     LOG_MSG(31, "ERROR", msg)
-    projectSettings.errors.append(msg)
+    _shared_globals.errors.append(msg)
 
 
 def LOG_WARN(msg):
@@ -62,7 +61,7 @@ def LOG_WARN(msg):
     if _shared_globals.quiet >= 3:
         return
     LOG_WARN_NOPUSH(msg)
-    projectSettings.warnings.append(msg)
+    _shared_globals.warnings.append(msg)
 
 
 def LOG_WARN_NOPUSH(msg):
