@@ -28,10 +28,11 @@ import time
 import sys
 import math
 import datetime
+import platform
 
 from csbuild import log
 from csbuild import _shared_globals
-from csbuild import projectSettings as currentProject
+from csbuild.projectSettings import currentProject
 
 
 def get_files(project, sources=None, headers=None):
@@ -300,6 +301,12 @@ def should_recompile(srcFile, ofile=None, for_precompiled_header=False):
     omtime = os.path.getmtime(ofile)
 
     if mtime > omtime:
+        if for_precompiled_header:
+            log.LOG_INFO(
+                "Going to recompile {0} because it has been modified since the last successful build.".format(
+                    srcFile))
+            return True
+
         oldmd5 = 1
         newmd5 = 9
 
@@ -349,6 +356,10 @@ def should_recompile(srcFile, ofile=None, for_precompiled_header=False):
         header_mtime = os.path.getmtime(path)
 
         if header_mtime > omtime:
+            if for_precompiled_header:
+                updatedheaders.append([header, path])
+                continue
+
             #newmd5 is 0, oldmd5 is 1, so that they won't report equal if we ignore them.
             newmd5 = 0
             oldmd5 = 1
@@ -390,11 +401,6 @@ def should_recompile(srcFile, ofile=None, for_precompiled_header=False):
                 srcFile, files))
         return True
 
-    #Handle condition where precompiled headers will fail when modified time on a header has changed,
-    #but the header itself has not. Just update the timestamp on the object file.
-    if for_precompiled_header:
-        os.utime(ofile, None)
-
     #If we got here, we assume the object file's already up to date.
     log.LOG_INFO("Skipping {0}: Already up to date".format(srcFile))
     return False
@@ -420,7 +426,7 @@ def check_libraries(project):
             continue
 
         log.LOG_INFO("Looking for lib{0}...".format(library))
-        lib = currentProject.compiler_model.find_library(library, currentProject.library_dirs)
+        lib = currentProject.activeToolchain.find_library(library, currentProject.library_dirs)
         if lib:
             mtime = os.path.getmtime(lib)
             log.LOG_INFO("Found library lib{0} at {1}".format(library, lib))
@@ -474,22 +480,34 @@ class threaded_build(threading.Thread):
 
             if headerfile:
                 inc += headerfile
-            cmd = self.project.settings.compiler_model.get_extended_command(baseCommand,
+            cmd = self.project.settings.activeToolchain.get_extended_command(baseCommand,
                 self.project, inc, self.obj, os.path.abspath(self.file))
 
             if _shared_globals.show_commands:
                 print(cmd)
             if os.path.exists(self.obj):
                 os.remove(self.obj)
-                #We have to use os.popen here, not subprocess.call. For some reason, subprocess.call likes to freeze
-                # here, but os.popen works fine.
-            fd = os.popen(cmd)
-            output = fd.read()
-            ret = fd.close()
-            sys.stdout.flush()
-            sys.stdout.write(output)
+
+            # We have to use os.popen here on Linux, not subprocess.Popen. For some reason, any call to subprocess
+            # likes to freeze here when running under Linux, but os.popen works fine.  However, Windows needs subprocess
+            # because os.popen won't pipe its output.
+            if platform.system() == "Windows":
+                fd = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                (output, errors) = fd.communicate()
+                ret = fd.returncode
+                sys.stdout.flush()
+                sys.stderr.flush()
+                sys.stdout.write(output)
+                sys.stderr.write(errors)
+            else:
+                fd = os.popen(cmd)
+                output = fd.read()
+                ret = fd.close()
+                sys.stdout.flush()
+                sys.stdout.write(output)
+
             if ret:
-                if str(ret) == str(self.project.settings.compiler_model.interrupt_exit_code):
+                if str(ret) == str(self.project.tings.activeToolchain.interrupt_exit_code):
                     _shared_globals.lock.acquire()
                     if not _shared_globals.interrupted:
                         log.LOG_ERROR("Keyboard interrupt received. Aborting build.")
@@ -500,7 +518,7 @@ class threaded_build(threading.Thread):
                     _shared_globals.semaphore.release()
                     log.LOG_BUILD("Closing thread...")
                 if not _shared_globals.interrupted:
-                    log.LOG_ERROR("Compile of {0} failed!".format(self.file, ret))
+                    log.LOG_ERROR("Compile of {} failed!  (Return code: {})".format(self.file, ret))
                 _shared_globals.build_success = False
                 self.project.settings.compile_failed = True
                 self.project.settings.compiles_completed += 1
@@ -621,12 +639,12 @@ def chunked_build():
 
     if totalChunks == 1 and not owningProject.settings.unity:
         chunkname = "{0}_chunk_{1}".format(owningProject.settings.output_name.split('.')[0],
-            "__".join(base_names(owningProject.chunks[0])))
+            "__".join(base_names(owningProject.settings.chunks[0])))
         obj = "{0}/{1}_{2}.o".format(owningProject.settings.obj_dir, chunkname, owningProject.settings.targetName)
         if os.path.exists(obj):
             log.LOG_WARN_NOPUSH(
                 "Breaking chunk ({0}) into individual files to improve future iteration turnaround.".format(
-                    owningProject.chunks[0]))
+                    owningProject.settings.chunks[0]))
         owningProject.settings.final_chunk_set = owningProject.settings.sources
         return
 
@@ -717,7 +735,14 @@ def chunked_build():
 
 
 def save_md5(inFile):
-    md5file = "{0}/md5s/{1}.md5".format(currentProject.csbuild_dir, os.path.abspath(inFile))
+    tempInFile = os.path.abspath(inFile)
+
+    # If we're running on Windows, we need to remove the drive letter from the input file path.
+    if platform.system() == "Windows":
+        tempInFile = tempInFile[2:]
+
+    md5file = "{}{}".format(currentProject.csbuild_dir, os.path.join(os.path.sep, "md5s", tempInFile))
+
     md5dir = os.path.dirname(md5file)
     if not os.path.exists(md5dir):
         os.makedirs(md5dir)
@@ -763,8 +788,7 @@ def prepare_precompiles():
                     project.settings.targetName)
 
             precompile = False
-            if not os.path.exists(headerfile) or should_recompile(headerfile, obj,
-                    True):
+            if not os.path.exists(headerfile) or should_recompile(headerfile, obj, True):
                 precompile = True
             else:
                 for header in allheaders:
@@ -905,7 +929,7 @@ def precompile_headers(proj):
 
     proj.settings.precompile_done = True
 
-    return _shared_globals.build_success
+    return not proj.settings.compile_failed
 
 
 def get_base_name(name):

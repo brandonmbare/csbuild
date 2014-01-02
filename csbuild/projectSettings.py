@@ -18,139 +18,210 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-from csbuild import gcc_clang_compiler_model
 
-libraries = []
-static_libraries = []
-include_dirs = []
-library_dirs = []
+class projectSettings(object):
+    def __init__(self, setupDict=True):
+        if not setupDict:
+            return
 
-opt_level = 0
-debug_level = 0
-warn_flags = []
-flags = []
-defines = []
-undefines = []
-cxx = "g++"
-cc = "gcc"
-hasCppFiles = False
+        self.libraries = []
+        self.static_libraries = []
+        self.include_dirs = []
+        self.library_dirs = []
 
-obj_dir = "."
-output_dir = "."
-csbuild_dir = "./.csbuild"
-output_name = "a.out"
-output_install_dir = ""
-header_install_dir = ""
-header_subdir = ""
-automake = True
-cppstandard = ""
-cstandard = ""
+        self.opt_level = 0
+        self.debug_level = 0
+        self.warn_flags = []
+        self.flags = []
+        self.defines = []
+        self.undefines = []
+        self.cxx = "g++"
+        self.cc = "gcc"
+        self.hasCppFiles = False
 
-c_files = []
-headers = []
+        self.obj_dir = "."
+        self.output_dir = "."
+        self.csbuild_dir = "./.csbuild"
+        self.output_name = "a.out"
+        self.output_install_dir = ""
+        self.header_install_dir = ""
+        self.header_subdir = ""
+        self.automake = True
+        self.cppstandard = ""
+        self.cstandard = ""
 
-sources = []
-allsources = []
+        self.c_files = []
+        self.headers = []
 
-shared = False
-static = False
-profile = False
+        self.sources = []
+        self.allsources = []
 
-extra_flags = ""
-linker_flags = ""
+        self.shared = False
+        self.static = False
+        self.profile = False
 
-exclude_dirs = []
-exclude_files = []
+        self.extra_flags = ""
+        self.linker_flags = ""
 
-output_dir_set = False
-obj_dir_set = False
-debug_set = False
-opt_set = False
+        self.exclude_dirs = []
+        self.exclude_files = []
 
-errors = []
-warnings = []
+        self.output_dir_set = False
+        self.obj_dir_set = False
+        self.debug_set = False
+        self.opt_set = False
 
-allpaths = []
-chunks = []
+        self.allpaths = []
+        self.chunks = []
 
-use_chunks = True
-chunk_tolerance = 3
-chunk_size = 0
-chunk_filesize = 500000
-chunk_size_tolerance = 150000
+        self.use_chunks = True
+        self.chunk_tolerance = 3
+        self.chunk_size = 0
+        self.chunk_filesize = 500000
+        self.chunk_size_tolerance = 150000
 
-header_recursion = 0
-ignore_external_headers = False
+        self.header_recursion = 0
+        self.ignore_external_headers = False
 
-default_target = "release"
+        self.default_target = "release"
 
-chunk_precompile = True
-precompile = []
-precompile_exclude = []
-cppheaderfile = ""
-cheaderfile = ""
-needs_cpp_precompile = False
-needs_c_precompile = False
+        self.chunk_precompile = True
+        self.precompile = []
+        self.precompile_exclude = []
+        self.cppheaderfile = ""
+        self.cheaderfile = ""
+        self.needs_cpp_precompile = False
+        self.needs_c_precompile = False
 
-unity = False
+        self.unity = False
 
-precompile_done = False
+        self.precompile_done = False
 
-no_warnings = False
+        self.no_warnings = False
 
-compiler_model = gcc_clang_compiler_model
+        self.toolchains = {}
 
-cxxcmd = ""
-cccmd = ""
+        self.cxxcmd = ""  # return value of get_base_cxx_command
+        self.cccmd = ""  # return value of get_base_cc_command
 
-recompile_all = False
+        self.recompile_all = False
 
-targets = {}
+        self.targets = {}
 
-targetName = ""
+        self.targetName = ""
 
-final_chunk_set = []
+        self.final_chunk_set = []
 
-compiles_completed = 0
+        self.compiles_completed = 0
 
-compile_failed = False
+        self.compile_failed = False
 
-static_runtime = False
-debug_runtime = False
+        self.static_runtime = False
+        self.debug_runtime = False
 
-force_64_bit = False
-force_32_bit = False
+        self.force_64_bit = False
+        self.force_32_bit = False
 
-cheaders = []
+        self.cheaders = []
 
-def copy():
-    ret = {"libraries": list(libraries), "static_libraries": list(static_libraries), "include_dirs": list(include_dirs),
-           "library_dirs": list(library_dirs),
-           "opt_level": opt_level, "debug_level": debug_level, "warn_flags": list(warn_flags), "flags": list(flags),
-           "defines": list(defines), "undefines": list(undefines), "cxx": cxx, "cc": cc, "hasCppFiles": hasCppFiles,
-           "obj_dir": obj_dir,
-           "output_dir": output_dir, "csbuild_dir": csbuild_dir, "output_name": output_name,
-           "output_install_dir": output_install_dir, "header_install_dir": header_install_dir,
-           "header_subdir": header_subdir, "automake": automake, "cppstandard": cppstandard, "cstandard": cstandard,
-           "c_files": list(c_files),
-           "headers": list(headers), "sources": list(sources), "allsources": list(allsources), "shared": shared,
-           "static": static, "profile": profile, "extra_flags": extra_flags, "linker_flags": linker_flags,
-           "exclude_dirs": list(exclude_dirs), "exclude_files": list(exclude_files), "output_dir_set": output_dir_set,
-           "obj_dir_set": obj_dir_set, "debug_set": debug_set, "opt_set": opt_set, "errors": list(errors),
-           "warnings": list(warnings), "allpaths": list(allpaths),
-           "chunks": list(chunks), "use_chunks": use_chunks, "chunk_tolerance": chunk_tolerance,
-           "chunk_size": chunk_size, "chunk_filesize": chunk_filesize, "chunk_size_tolerance": chunk_size_tolerance,
-           "header_recursion": header_recursion, "ignore_external_headers": ignore_external_headers,
-           "default_target": default_target, "chunk_precompile": chunk_precompile, "precompile": list(precompile),
-           "precompile_exclude": list(precompile_exclude), "cppheaderfile": cppheaderfile, "cheaderfile": cheaderfile,
-           "unity": unity,
-           "precompile_done": precompile_done, "no_warnings": no_warnings, "compiler_model": compiler_model,
-           "cxxcmd": cxxcmd, "cccmd": cccmd,
-           "recompile_all": recompile_all, "targets": dict(targets), "targetName": targetName,
-           "final_chunk_set": list(final_chunk_set),
-           "needs_c_precompile": needs_c_precompile, "needs_cpp_precompile": needs_cpp_precompile,
-           "compiles_completed": compiles_completed,
-           "compile_failed": compile_failed, "static_runtime": static_runtime, "debug_runtime": debug_runtime,
-           "force_64_bit": force_64_bit, "force_32_bit": force_32_bit, "cheaders": list(cheaders), "copy": copy}
+        self.activeToolchainName = None
+        self.activeToolchain = None
 
-    return ret
+        self.warnings_as_errors = False
+
+
+    def __getattribute__(self, name):
+        activeToolchain = object.__getattribute__(self, "activeToolchain")
+        if activeToolchain and name in activeToolchain.settingsOverrides:
+            return activeToolchain.settingsOverrides[name]
+        return object.__getattribute__(self, name)
+
+
+    def copy(self):
+        ret = projectSettings()
+        toolchains = {}
+        for kvp in self.toolchains.items():
+            toolchains[kvp[0]] = kvp[1].copy()
+
+        ret.__dict__ = {
+            "libraries": list(self.libraries),
+            "static_libraries": list(self.static_libraries),
+            "include_dirs": list(self.include_dirs),
+            "library_dirs": list(self.library_dirs),
+            "opt_level": self.opt_level,
+            "debug_level": self.debug_level,
+            "warn_flags": list(self.warn_flags),
+            "flags": list(self.flags),
+            "defines": list(self.defines),
+            "undefines": list(self.undefines),
+            "cxx": self.cxx,
+            "cc": self.cc,
+            "hasCppFiles": self.hasCppFiles,
+            "obj_dir": self.obj_dir,
+            "output_dir": self.output_dir,
+            "csbuild_dir": self.csbuild_dir,
+            "output_name": self.output_name,
+            "output_install_dir": self.output_install_dir,
+            "header_install_dir": self.header_install_dir,
+            "header_subdir": self.header_subdir,
+            "automake": self.automake,
+            "cppstandard": self.cppstandard,
+            "cstandard": self.cstandard,
+            "c_files": list(self.c_files),
+            "headers": list(self.headers),
+            "sources": list(self.sources),
+            "allsources": list(self.allsources),
+            "shared": self.shared,
+            "static": self.static,
+            "profile": self.profile,
+            "extra_flags": self.extra_flags,
+            "linker_flags": self.linker_flags,
+            "exclude_dirs": list(self.exclude_dirs),
+            "exclude_files": list(self.exclude_files),
+            "output_dir_set": self.output_dir_set,
+            "obj_dir_set": self.obj_dir_set,
+            "debug_set": self.debug_set,
+            "opt_set": self.opt_set,
+            "allpaths": list(self.allpaths),
+            "chunks": list(self.chunks),
+            "use_chunks": self.use_chunks,
+            "chunk_tolerance": self.chunk_tolerance,
+            "chunk_size": self.chunk_size,
+            "chunk_filesize": self.chunk_filesize,
+            "chunk_size_tolerance": self.chunk_size_tolerance,
+            "header_recursion": self.header_recursion,
+            "ignore_external_headers": self.ignore_external_headers,
+            "default_target": self.default_target,
+            "chunk_precompile": self.chunk_precompile,
+            "precompile": list(self.precompile),
+            "precompile_exclude": list(self.precompile_exclude),
+            "cppheaderfile": self.cppheaderfile,
+            "cheaderfile": self.cheaderfile,
+            "unity": self.unity,
+            "precompile_done": self.precompile_done,
+            "no_warnings": self.no_warnings,
+            "toolchains": toolchains,
+            "cxxcmd": self.cxxcmd,
+            "cccmd": self.cccmd,
+            "recompile_all": self.recompile_all,
+            "targets": dict(self.targets),
+            "targetName": self.targetName,
+            "final_chunk_set": list(self.final_chunk_set),
+            "needs_c_precompile": self.needs_c_precompile,
+            "needs_cpp_precompile": self.needs_cpp_precompile,
+            "compiles_completed": self.compiles_completed,
+            "compile_failed": self.compile_failed,
+            "static_runtime": self.static_runtime,
+            "debug_runtime": self.debug_runtime,
+            "force_64_bit": self.force_64_bit,
+            "force_32_bit": self.force_32_bit,
+            "cheaders": list(self.cheaders),
+            "activeToolchainName": self.activeToolchainName,
+            "activeToolchain": toolchains[self.activeToolchainName],
+            "warnings_as_errors": self.warnings_as_errors
+        }
+
+        return ret
+
+
+currentProject = projectSettings()
