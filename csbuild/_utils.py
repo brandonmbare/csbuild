@@ -415,7 +415,7 @@ def check_libraries(project):
     """
     libraries_ok = True
     log.LOG_INFO("Checking required libraries...")
-    for library in (currentProject.libraries + currentProject.static_libraries):
+    for library in (project.settings.libraries + project.settings.static_libraries):
         bFound = False
         for depend in project.linkDepends:
             if _shared_globals.projects[depend].settings.output_name == library or \
@@ -426,7 +426,7 @@ def check_libraries(project):
             continue
 
         log.LOG_INFO("Looking for lib{0}...".format(library))
-        lib = currentProject.activeToolchain.find_library(library, currentProject.library_dirs)
+        lib = project.settings.activeToolchain.find_library(library, project.settings.library_dirs)
         if lib:
             mtime = os.path.getmtime(lib)
             log.LOG_INFO("Found library lib{0} at {1}".format(library, lib))
@@ -507,7 +507,7 @@ class threaded_build(threading.Thread):
                 sys.stdout.write(output)
 
             if ret:
-                if str(ret) == str(self.project.tings.activeToolchain.interrupt_exit_code):
+                if str(ret) == str(self.project.settings.activeToolchain.interrupt_exit_code):
                     _shared_globals.lock.acquire()
                     if not _shared_globals.interrupted:
                         log.LOG_ERROR("Keyboard interrupt received. Aborting build.")
