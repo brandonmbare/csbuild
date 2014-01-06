@@ -421,7 +421,7 @@ def check_libraries(project):
             bFound = False
             for depend in project.linkDepends:
                 if _shared_globals.projects[depend].settings.output_name == library or \
-                        _shared_globals.projects[depend].settings.output_name.startswith("lib{}".format(library)):
+                   _shared_globals.projects[depend].settings.output_name.startswith("lib{}".format(library)):
                     bFound = True
                     break
             if bFound:
@@ -515,7 +515,7 @@ class threaded_build(threading.Thread):
                 sys.stdout.write(output)
 
             if ret:
-                if str(ret) == str(self.project.tings.activeToolchain.interrupt_exit_code()):
+                if str(ret) == str(self.project.settings.activeToolchain.interrupt_exit_code()):
                     _shared_globals.lock.acquire()
                     if not _shared_globals.interrupted:
                         log.LOG_ERROR("Keyboard interrupt received. Aborting build.")

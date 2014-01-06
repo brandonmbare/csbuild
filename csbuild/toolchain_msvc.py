@@ -33,6 +33,19 @@ X86 = "X86"
 HAS_SET_VC_VARS = False
 WINDOWS_SDK_DIR = ""
 
+class SubSystem:
+    (   DEFAULT,
+        CONSOLE,
+        WINDOWS,
+        WINDOWS_CE,
+        NATIVE,
+        POSIX,
+        BOOT_APPLICATION,
+        EFI_APPLICATION,
+        EFI_BOOT_SERVICE_DRIVER,
+        EFI_ROM,
+        EFI_RUNTIME_DRIVER ) = range(11)
+
 class toolchain_msvc(toolchain.toolchainBase):
     '''Helper class for interfacing with the MSVC toolchain.'''
 
@@ -43,6 +56,7 @@ class toolchain_msvc(toolchain.toolchainBase):
         self.settingsOverrides["msvc_version"] = 100
         self.settingsOverrides["debug_runtime"] = False
         self.settingsOverrides["debug_runtime_set"] = False
+        self._subsystem = SubSystem.DEFAULT
 
     def SetupForProject(self, project):
         platform_architectures = {
@@ -100,15 +114,15 @@ class toolchain_msvc(toolchain.toolchainBase):
 
 
     def _get_linker_exe(self):
-        return '"{}" '.format(os.path.join(self._bin_path, "link"))
+        return '"{}" '.format(os.path.join(self._bin_path, "lib" if self._project_settings.static else "link"))
 
 
     def _get_default_compiler_args(self):
-        return '/nologo /c /arch:AVX '
+        return "/nologo /c /arch:AVX "
 
 
     def _get_default_linker_args(self):
-        default_args = "/NOLOGO /SUBSYSTEM:WINDOWS /SUBSYSTEM:CONSOLE "
+        default_args = "/NOLOGO "
         for lib_path in self._lib_path:
             default_args += '/LIBPATH:"{}" '.format(lib_path)
         return default_args
@@ -123,14 +137,22 @@ class toolchain_msvc(toolchain.toolchainBase):
             self._get_include_directory_args())
 
 
-    def _get_linker_args(self, output_file, obj_list):
-        return "{}{}{}{}{}{}{}{}{}{}".format(
-            self._get_default_linker_args(),
+    def _get_non_static_library_linker_args(self):
+        # The following arguments should only be specified for dynamic libraries and executables (being used with link.exe, not lib.exe).
+        return "" if self._project_settings.static else "{}{}{}{}".format(
             self._get_runtime_library_arg(),
-            self._get_architecture_arg(),
             "/PROFILE " if self._project_settings.profile else "",
             "/DEBUG " if self._project_settings.profile or self._project_settings.debug_level > 0 else "",
-            "/DLL " if self._project_settings.type == csbuild.ProjectType.SharedLibrary else "",
+            "/DLL " if self._project_settings.type == csbuild.ProjectType.SharedLibrary else "")
+
+
+    def _get_linker_args(self, output_file, obj_list):
+        return "{}{}{}{}{}{}{}{}{}".format(
+            self._get_default_linker_args(),
+            self._get_non_static_library_linker_args(),
+            self._get_subsystem_arg(),
+            self._get_architecture_arg(),
+            self._get_linker_warning_arg(),
             self._get_library_directory_args(),
             self._get_linker_output_arg(output_file),
             self._get_library_args(),
@@ -152,6 +174,7 @@ class toolchain_msvc(toolchain.toolchainBase):
 
 
     def _get_architecture_arg(self):
+        #TODO: This will need to change to support other machine architectures.
         return "/MACHINE:{} ".format("X64" if self._build_64_bit else "X86")
 
 
@@ -165,6 +188,31 @@ class toolchain_msvc(toolchain.toolchainBase):
         return '/DEFAULTLIB:{}{}.lib '.format(
             "libcmt" if self._project_settings.static_runtime else "msvcrt",
             "d" if self.settingsOverrides["debug_runtime"] else "")
+
+
+    def _get_subsystem_arg(self):
+        # The default subsystem is implied, so it has no explicit argument.
+        # When no argument is specified, the linker will assume a default subsystem which depends on a number of factors:
+        #   CONSOLE -> Either main or wmain are defined (or int main(array<String^>^) for managed code).
+        #   WINDOWS -> Either WinMain or wWinMain are defined (or WinMain(HINSTANCE*, HINSTANCE*, char*, int) or wWinMain(HINSTANCE*, HINSTANCE*, wchar_t*, int) for managed code).
+        #   NATIVE -> The /DRIVER:WDM argument is specified (currently unsupported).
+        if self._subsystem == SubSystem.DEFAULT:
+            return ''
+
+        sub_system_type = {
+            SubSystem.CONSOLE: "CONSOLE",
+            SubSystem.WINDOWS: "WINDOWS",
+            SubSystem.WINDOWS_CE: "WINDOWSCE",
+            SubSystem.NATIVE: "NATIVE",
+            SubSystem.POSIX: "POSIX",
+            SubSystem.BOOT_APPLICATION: "BOOT_APPLICATION",
+            SubSystem.EFI_APPLICATION: "EFI_APPLICATION",
+            SubSystem.EFI_BOOT_SERVICE_DRIVER: "EFI_BOOT_SERVICE_DRIVER",
+            SubSystem.EFI_ROM: "EFI_ROM",
+            SubSystem.EFI_RUNTIME_DRIVER: "EFI_RUNTIME_DRIVER" }
+
+        return "/SUBSYSTEM:{} ".format(sub_system_type[self._subsystem])
+
 
     def _get_library_args(self):
         #args = "kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib "
@@ -184,6 +232,11 @@ class toolchain_msvc(toolchain.toolchainBase):
             return "/WX "
 
         return ""
+
+
+    def _get_linker_warning_arg(self):
+        # When linking, the only warning argument supported is whether or not to treat warnings as errors.
+        return "/WX{} ".format("" if self._project_settings.warnings_as_errors else ":NO")
 
 
     def _get_include_directory_args(self):
@@ -301,4 +354,7 @@ class toolchain_msvc(toolchain.toolchainBase):
     def ReleaseRuntime(self):
         self.settingsOverrides["debug_runtime"] = False
         self.settingsOverrides["debug_runtime_set"] = True
+
+    def SetOutputSubSystem(self, subsystem):
+        self._subsystem = subsystem
 
