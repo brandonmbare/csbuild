@@ -83,7 +83,7 @@ class toolchain_msvc(toolchain.toolchainBase):
         # If we're trying to build for 64-bit, determine the appropriate path for the 64-bit tools based on the machine's architecture.
         if self._build_64_bit:
             #TODO: Switch the assembler to ml64.exe when assemblers are supported.
-            self._bin_path = os.path.join(self._bin_path, "amd64" if self._platform_arch == X64 else "x64_amd64")
+            self._bin_path = os.path.join(self._bin_path, "amd64" if self._platform_arch == X64 else "x86_amd64")
             self._lib_path[0] = os.path.join(self._lib_path[0], "amd64")
 
         global HAS_SET_VC_VARS

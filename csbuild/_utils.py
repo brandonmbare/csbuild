@@ -32,7 +32,7 @@ import platform
 
 from csbuild import log
 from csbuild import _shared_globals
-from csbuild.projectSettings import currentProject
+from csbuild import projectSettings
 
 
 def get_files(project, sources=None, headers=None):
@@ -133,7 +133,7 @@ def follow_headers(headerFile, allheaders):
         #Find the header in the listed includes.
         path = "{0}/{1}".format(os.path.dirname(headerFile), header)
         if not os.path.exists(path):
-            for incDir in currentProject.include_dirs:
+            for incDir in projectSettings.currentProject.include_dirs:
                 path = "{0}/{1}".format(incDir, header)
                 if os.path.exists(path):
                     break
@@ -142,14 +142,14 @@ def follow_headers(headerFile, allheaders):
         if not os.path.exists(path):
             continue
 
-        if currentProject.ignore_external_headers and not path.startswith("./"):
+        if projectSettings.currentProject.ignore_external_headers and not path.startswith("./"):
             continue
 
         allheaders.append(header)
 
         theseheaders = set()
 
-        if currentProject.header_recursion != 1:
+        if projectSettings.currentProject.header_recursion != 1:
             #Check to see if we've already followed this header.
             #If we have, the list we created from it is already stored in _allheaders under this header's key.
             try:
@@ -200,7 +200,7 @@ def follow_headers2(headerFile, allheaders, n):
 
         path = "{0}/{1}".format(os.path.dirname(headerFile), header)
         if not os.path.exists(path):
-            for incDir in currentProject.include_dirs:
+            for incDir in projectSettings.currentProject.include_dirs:
                 path = "{0}/{1}".format(incDir, header)
                 if os.path.exists(path):
                     break
@@ -209,14 +209,14 @@ def follow_headers2(headerFile, allheaders, n):
         if not os.path.exists(path):
             continue
 
-        if currentProject.ignore_external_headers and not path.startswith("./"):
+        if projectSettings.currentProject.ignore_external_headers and not path.startswith("./"):
             continue
 
         allheaders.add(header)
 
         theseheaders = set(allheaders)
 
-        if currentProject.header_recursion == 0 or n < currentProject.header_recursion:
+        if projectSettings.currentProject.header_recursion == 0 or n < projectSettings.currentProject.header_recursion:
             #Check to see if we've already followed this header.
             #If we have, the list we created from it is already stored in _allheaders under this header's key.
             try:
@@ -273,7 +273,7 @@ def should_recompile(srcFile, ofile=None, for_precompiled_header=False):
 
     log.LOG_INFO("Checking whether to recompile {0}...".format(srcFile))
 
-    if currentProject.recompile_all:
+    if projectSettings.currentProject.recompile_all:
         log.LOG_INFO(
             "Going to recompile {0} because settings have changed in the makefile that will impact output.".format(
                 srcFile))
@@ -281,11 +281,11 @@ def should_recompile(srcFile, ofile=None, for_precompiled_header=False):
 
     basename = os.path.basename(srcFile).split('.')[0]
     if not ofile:
-        ofile = "{0}/{1}_{2}.o".format(currentProject.obj_dir, basename, currentProject.targetName)
+        ofile = "{0}/{1}_{2}.o".format(projectSettings.currentProject.obj_dir, basename, projectSettings.currentProject.targetName)
 
-    if currentProject.use_chunks:
+    if projectSettings.currentProject.use_chunks:
         chunk = get_chunk(srcFile)
-        chunkfile = "{0}/{1}_{2}.o".format(currentProject.obj_dir, chunk, currentProject.targetName)
+        chunkfile = "{0}/{1}_{2}.o".format(projectSettings.currentProject.obj_dir, chunk, projectSettings.currentProject.targetName)
 
         #First check: If the object file doesn't exist, we obviously have to create it.
         if not os.path.exists(ofile):
@@ -317,7 +317,7 @@ def should_recompile(srcFile, ofile=None, for_precompiled_header=False):
                 newmd5 = get_md5(f)
             _shared_globals.newmd5s.update({srcFile: newmd5})
 
-        md5file = "{0}/md5s/{1}.md5".format(currentProject.csbuild_dir, os.path.abspath(srcFile))
+        md5file = "{0}/md5s/{1}.md5".format(projectSettings.currentProject.csbuild_dir, os.path.abspath(srcFile))
 
         if os.path.exists(md5file):
             try:
@@ -344,7 +344,7 @@ def should_recompile(srcFile, ofile=None, for_precompiled_header=False):
     for header in headers:
         path = "{0}/{1}".format(os.path.dirname(srcFile), header)
         if not os.path.exists(path):
-            for incDir in currentProject.include_dirs:
+            for incDir in projectSettings.currentProject.include_dirs:
                 path = "{0}/{1}".format(incDir, header)
                 if os.path.exists(path):
                     break
@@ -364,7 +364,7 @@ def should_recompile(srcFile, ofile=None, for_precompiled_header=False):
             newmd5 = 0
             oldmd5 = 1
 
-            md5file = "{0}/md5s/{1}.md5".format(currentProject.csbuild_dir, os.path.abspath(path))
+            md5file = "{0}/md5s/{1}.md5".format(projectSettings.currentProject.csbuild_dir, os.path.abspath(path))
 
             if os.path.exists(md5file):
                 try:
@@ -393,8 +393,8 @@ def should_recompile(srcFile, ofile=None, for_precompiled_header=False):
         for pair in updatedheaders:
             files.append(pair[0])
             path = pair[1]
-            if path not in currentProject.allpaths:
-                currentProject.allpaths.append(path)
+            if path not in projectSettings.currentProject.allpaths:
+                projectSettings.currentProject.allpaths.append(path)
         log.LOG_INFO(
             "Going to recompile {0} because included headers {1} have been modified since the last successful build."
             .format(
@@ -554,10 +554,10 @@ def make_chunks(l):
     Each chunk represents one compilation unit in the chunked build system.
     """
     sorted_list = sorted(l, key=os.path.getsize, reverse=True)
-    if currentProject.unity or not currentProject.use_chunks:
+    if projectSettings.currentProject.unity or not projectSettings.currentProject.use_chunks:
         return [l]
     chunks = []
-    if currentProject.chunk_filesize > 0:
+    if projectSettings.currentProject.chunk_filesize > 0:
         chunksize = 0
         chunk = []
         while sorted_list:
@@ -567,7 +567,7 @@ def make_chunks(l):
             sorted_list.pop(0)
             for srcFile in reversed(sorted_list):
                 filesize = os.path.getsize(srcFile)
-                if chunksize + filesize > currentProject.chunk_filesize:
+                if chunksize + filesize > projectSettings.currentProject.chunk_filesize:
                     chunks.append(chunk)
                     log.LOG_INFO("Made chunk: {0}".format(chunk))
                     log.LOG_INFO("Chunk size: {0}".format(chunksize))
@@ -579,9 +579,9 @@ def make_chunks(l):
         chunks.append(chunk)
         log.LOG_INFO("Made chunk: {0}".format(chunk))
         log.LOG_INFO("Chunk size: {0}".format(chunksize))
-    elif currentProject.chunk_size > 0:
-        for i in range(0, len(l), currentProject.chunk_size):
-            chunks.append(l[i:i + currentProject.chunk_size])
+    elif projectSettings.currentProject.chunk_size > 0:
+        for i in range(0, len(l), projectSettings.currentProject.chunk_size):
+            chunks.append(l[i:i + projectSettings.currentProject.chunk_size])
     else:
         return [l]
     return chunks
@@ -596,9 +596,9 @@ def base_names(l):
 
 def get_chunk(srcFile):
     """Retrieves the chunk that a given file belongs to."""
-    for chunk in currentProject.chunks:
+    for chunk in projectSettings.currentProject.chunks:
         if srcFile in chunk:
-            return "{0}_chunk_{1}".format(currentProject.output_name.split('.')[0], "__".join(base_names(chunk)))
+            return "{0}_chunk_{1}".format(projectSettings.currentProject.output_name.split('.')[0], "__".join(base_names(chunk)))
 
 
 def get_size(chunk):
@@ -626,7 +626,7 @@ def chunked_build():
     for project in _shared_globals.projects.values():
         for source in project.settings.sources:
             chunk = get_chunk(source)
-            if currentProject.unity:
+            if projectSettings.currentProject.unity:
                 outFile = "{0}/{1}_unity.cpp".format(project.settings.csbuild_dir, project.settings.output_name)
             else:
                 outFile = "{0}/{1}.cpp".format(project.settings.csbuild_dir, chunk)
@@ -747,7 +747,7 @@ def save_md5(inFile):
     if platform.system() == "Windows":
         tempInFile = tempInFile[2:]
 
-    md5file = "{}{}".format(currentProject.csbuild_dir, os.path.join(os.path.sep, "md5s", tempInFile))
+    md5file = "{}{}".format(projectSettings.currentProject.csbuild_dir, os.path.join(os.path.sep, "md5s", tempInFile))
 
     md5dir = os.path.dirname(md5file)
     if not os.path.exists(md5dir):
@@ -774,7 +774,7 @@ def save_md5s(sources, headers):
     for header in headers:
         save_md5(header)
 
-    for path in currentProject.allpaths:
+    for path in projectSettings.currentProject.allpaths:
         save_md5(os.path.abspath(path))
 
 
