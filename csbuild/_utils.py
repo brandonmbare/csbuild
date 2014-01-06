@@ -414,7 +414,6 @@ def check_libraries(project):
     whether or not a project with up-to-date objects still needs to link against new libraries.
     """
     log.LOG_INFO("Checking required libraries...")
-
     def check_libraries(libraries, force_static, force_shared):
         libraries_ok = True
         for library in libraries:
@@ -441,7 +440,6 @@ def check_libraries(project):
     libraries_ok = check_libraries(project.settings.libraries, False, False)
     libraries_ok = check_libraries(project.settings.static_libraries, True, False) and libraries_ok
     libraries_ok = check_libraries(project.settings.shared_libraries, False, True) and libraries_ok
-
     if not libraries_ok:
         log.LOG_ERROR("Some dependencies are not met on your system.")
         log.LOG_ERROR("Check that all required libraries are installed.")

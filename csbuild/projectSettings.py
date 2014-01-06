@@ -55,7 +55,6 @@ class projectSettings(object):
 
         self.type = csbuild.ProjectType.Application
         self.ext = None
-
         self.profile = False
 
         self.compiler_flags = []
@@ -152,7 +151,6 @@ class projectSettings(object):
                 activeToolchain.settingsOverrides[name] = value
                 return
         object.__setattr__(self, name, value)
-
     def copy(self):
         ret = projectSettings()
         toolchains = {}

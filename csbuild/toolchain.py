@@ -147,8 +147,6 @@ class toolchainBase(object):
             self.settingsOverrides["shared_libraries"] = []
 
         self.settingsOverrides["shared_libraries"] += list(args)
-
-
     def IncludeDirs(self, *args):
         """List of directories to search for included headers. Multiple string arguments. gcc/g++ -I
         By default, this list contains /usr/include and /usr/local/include.
@@ -191,8 +189,6 @@ class toolchainBase(object):
     def ClearSharedLibraries(self):
         """Clears the list of libraries"""
         self.settingsOverrides["shared_libraries"] = []
-
-
     def ClearIncludeDirs(self):
         """Clears the include directories, including the defaults."""
         self.settingsOverrides["include_dirs"] = []
@@ -294,7 +290,6 @@ class toolchainBase(object):
             self.settingsOverrides["compiler_flags"] = []
 
         self.settingsOverrides["compiler_flags"] += list(args)
-
 
     def ClearCompilerFlags(self):
         """Clears the extra flags string"""

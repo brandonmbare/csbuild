@@ -23,7 +23,6 @@ import shlex
 import subprocess
 import re
 import sys
-
 from csbuild import _shared_globals
 from csbuild import toolchain
 import csbuild
@@ -36,7 +35,6 @@ class toolchain_gcc(toolchain.toolchainBase):
         self.settingsOverrides["warn_flags"] = []
         self.settingsOverrides["cppstandard"] = ""
         self.settingsOverrides["cstandard"] = ""
-
     def get_warnings(self, warnFlags, noWarnings):
         """Returns a string containing all of the passed warning flags, formatted to be passed to gcc/g++."""
         if noWarnings:
@@ -88,8 +86,6 @@ class toolchain_gcc(toolchain.toolchainBase):
         for lib in libraries:
             ret += "-shared -l{} ".format(lib)
         return ret
-
-
     def get_library_dirs(self, libDirs, forLinker):
         """Returns a string containing all of the passed library dirs, formatted to be passed to gcc/g++."""
         ret = ""

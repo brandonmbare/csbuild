@@ -41,13 +41,10 @@ import threading
 import time
 import platform
 
-
 class ProjectType(object):
     Application = 0
     SharedLibrary = 1
     StaticLibrary = 2
-
-
 from csbuild import _utils
 from csbuild import toolchain
 from csbuild import toolchain_msvc
@@ -73,7 +70,6 @@ signal.signal(signal.SIGINT, signal.SIG_DFL)
 
 #TODO: Support compiling assembly files
 #TODO: Change Force32 and Force64 to setting architecture
-
 #TODO: CXX and CC environment variables
 #TODO: --cxx and --cc flags
 #TODO: Move compiler-specific items to toolchain
@@ -145,8 +141,6 @@ def StaticLibraries(*args):
 def SharedLibraries(*args):
     """List of libraries to link statically against. Multiple string arguments. gcc/g++ -l."""
     projectSettings.currentProject.shared_libraries += list(args)
-
-
 def IncludeDirs(*args):
     """List of directories to search for included headers. Multiple string arguments. gcc/g++ -I
     By default, this list contains /usr/include and /usr/local/include.
@@ -183,8 +177,6 @@ def ClearStaticLibraries():
 def ClearSharedibraries():
     """Clears the list of libraries"""
     projectSettings.currentProject.shared_libraries = []
-
-
 def ClearIncludeDirs():
     """Clears the include directories, including the defaults."""
     projectSettings.currentProject.include_dirs = []
@@ -484,7 +476,6 @@ def project(name, workingDirectory, linkDepends=None, srcDepends=None):
             os.chdir(self.workingDirectory)
 
             self.settings.activeToolchain = self.settings.toolchains[self.settings.activeToolchainName]
-
             self.settings.obj_dir = os.path.abspath(self.settings.obj_dir)
             self.settings.output_dir = os.path.abspath(self.settings.output_dir)
             self.settings.csbuild_dir = os.path.abspath(self.settings.csbuild_dir)
@@ -497,7 +488,6 @@ def project(name, workingDirectory, linkDepends=None, srcDepends=None):
                 self.settings.ext = self.settings.activeToolchain.get_default_extension(self.settings.type)
 
             self.settings.output_name += self.settings.ext
-
             log.LOG_BUILD("Preparing build tasks for {}...".format(self.settings.output_name))
 
             if not os.path.exists(self.settings.csbuild_dir):
