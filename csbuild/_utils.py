@@ -413,27 +413,35 @@ def check_libraries(project):
     And then stores the library's last modified time to a global list to be used by the linker later, to determine
     whether or not a project with up-to-date objects still needs to link against new libraries.
     """
-    libraries_ok = True
     log.LOG_INFO("Checking required libraries...")
-    for library in (currentProject.libraries + currentProject.static_libraries):
-        bFound = False
-        for depend in project.linkDepends:
-            if _shared_globals.projects[depend].settings.output_name == library or \
-               _shared_globals.projects[depend].settings.output_name.startswith("lib{}".format(library)):
-                bFound = True
-                break
-        if bFound:
-            continue
 
-        log.LOG_INFO("Looking for lib{0}...".format(library))
-        lib = currentProject.activeToolchain.find_library(library, currentProject.library_dirs)
-        if lib:
-            mtime = os.path.getmtime(lib)
-            log.LOG_INFO("Found library lib{0} at {1}".format(library, lib))
-            _shared_globals.library_mtimes.append(mtime)
-        else:
-            log.LOG_ERROR("Could not locate library: {0}".format(library))
-            libraries_ok = False
+    def check_libraries(libraries, force_static, force_shared):
+        libraries_ok = True
+        for library in libraries:
+            bFound = False
+            for depend in project.linkDepends:
+                if _shared_globals.projects[depend].settings.output_name == library or \
+                        _shared_globals.projects[depend].settings.output_name.startswith("lib{}".format(library)):
+                    bFound = True
+                    break
+            if bFound:
+                continue
+
+            log.LOG_INFO("Looking for lib{0}...".format(library))
+            lib = project.settings.activeToolchain.find_library(library, project.settings.library_dirs, force_static, force_shared)
+            if lib:
+                mtime = os.path.getmtime(lib)
+                log.LOG_INFO("Found library lib{0} at {1}".format(library, lib))
+                _shared_globals.library_mtimes.append(mtime)
+            else:
+                log.LOG_ERROR("Could not locate library: {0}".format(library))
+                libraries_ok = False
+        return libraries_ok
+
+    libraries_ok = check_libraries(project.settings.libraries, False, False)
+    libraries_ok = check_libraries(project.settings.static_libraries, True, False) and libraries_ok
+    libraries_ok = check_libraries(project.settings.shared_libraries, False, True) and libraries_ok
+
     if not libraries_ok:
         log.LOG_ERROR("Some dependencies are not met on your system.")
         log.LOG_ERROR("Check that all required libraries are installed.")
@@ -507,7 +515,7 @@ class threaded_build(threading.Thread):
                 sys.stdout.write(output)
 
             if ret:
-                if str(ret) == str(self.project.tings.activeToolchain.interrupt_exit_code):
+                if str(ret) == str(self.project.tings.activeToolchain.interrupt_exit_code()):
                     _shared_globals.lock.acquire()
                     if not _shared_globals.interrupted:
                         log.LOG_ERROR("Keyboard interrupt received. Aborting build.")

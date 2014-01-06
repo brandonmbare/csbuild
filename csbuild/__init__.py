@@ -41,7 +41,15 @@ import threading
 import time
 import platform
 
+
+class ProjectType(object):
+    Application = 0
+    SharedLibrary = 1
+    StaticLibrary = 2
+
+
 from csbuild import _utils
+from csbuild import toolchain
 from csbuild import toolchain_msvc
 from csbuild import toolchain_gcc
 from csbuild import log
@@ -59,12 +67,15 @@ __credits__ = ["Jaedyn K Draper", "Brandon M Bare"]
 
 signal.signal(signal.SIGINT, signal.SIG_DFL)
 
+#TODO: Cleanup and style, comments
 #TODO: More verbose errors when paths can't be found
 #TODO: Better detection of whether or not something should be linked
 
+#TODO: Support compiling assembly files
+#TODO: Change Force32 and Force64 to setting architecture
+
 #TODO: CXX and CC environment variables
 #TODO: --cxx and --cc flags
-#TODO: Rename compiler model to toolchain
 #TODO: Move compiler-specific items to toolchain
 #TODO: Errors on nonexistent targets/projects
 #TODO: Errors on duplicate project names
@@ -76,7 +87,6 @@ signal.signal(signal.SIGINT, signal.SIG_DFL)
 #TODO: Mark scripts uncallable
 #TODO: csbuild.ScriptLocation()?
 #TODO: -stdlib
-
 
 #<editor-fold desc="Setters">
 #Setters
@@ -132,6 +142,11 @@ def StaticLibraries(*args):
     projectSettings.currentProject.static_libraries += list(args)
 
 
+def SharedLibraries(*args):
+    """List of libraries to link statically against. Multiple string arguments. gcc/g++ -l."""
+    projectSettings.currentProject.shared_libraries += list(args)
+
+
 def IncludeDirs(*args):
     """List of directories to search for included headers. Multiple string arguments. gcc/g++ -I
     By default, this list contains /usr/include and /usr/local/include.
@@ -163,6 +178,11 @@ def ClearLibraries():
 def ClearStaticLibraries():
     """Clears the list of libraries"""
     projectSettings.currentProject.static_libraries = []
+
+
+def ClearSharedibraries():
+    """Clears the list of libraries"""
+    projectSettings.currentProject.shared_libraries = []
 
 
 def ClearIncludeDirs():
@@ -217,9 +237,14 @@ def CCompiler(s):
     projectSettings.currentProject.cc = s
 
 
-def Output(s):
+def Output(name, projectType = ProjectType.Application):
     """Sets the output file for the project. If unset, the project will be compiled as "a.out"""""
-    projectSettings.currentProject.output_name = s
+    projectSettings.currentProject.output_name = name
+    projectSettings.currentProject.type = projectType
+
+
+def Extension(name):
+    projectSettings.currentProject.ext = name
 
 
 def OutDir(s):
@@ -234,61 +259,6 @@ def ObjDir(s):
     projectSettings.currentProject.obj_dir_set = True
 
 
-def WarnFlags(*args):
-    """Sets warn flags for the project. Multiple arguments. gcc/g++ -W"""
-    projectSettings.currentProject.warn_flags += list(args)
-
-
-def ClearWarnFlags():
-    """Clears the list of warning flags"""
-    projectSettings.currentProject.warn_flags = []
-
-
-def Flags(*args):
-    """Sets miscellaneous flags for the project. Multiple arguments. gcc/g++ -f"""
-    projectSettings.currentProject.flags += list(args)
-
-
-def ClearFlags():
-    """Clears the list of misc flags"""
-    projectSettings.currentProject.flags = []
-
-
-def DisableAutoMake():
-    """Disables the automatic build of the project at conclusion of the script
-    If you turn this off, you will need to explicitly call either make() to build and link,
-    or build() and link() to take each step individually
-    """
-    projectSettings.currentProject.automake = False
-
-
-def EnableAutoMake():
-    """Turns the automatic build back on after disabling it"""
-    projectSettings.currentProject.automake = True
-
-
-def Shared():
-    """Builds the project as a shared library. Enables -shared in the linker and -fPIC in the compiler."""
-    projectSettings.currentProject.shared = True
-    projectSettings.currentProject.static = False
-
-
-def NotShared():
-    """Turns shared object mode back off after it was enabled."""
-    projectSettings.currentProject.shared = False
-
-
-def Static():
-    """Builds the project as a shared library. Enables -shared in the linker and -fPIC in the compiler."""
-    projectSettings.currentProject.static = True
-    projectSettings.currentProject.shared = False
-
-
-def NotStatic():
-    """Turns shared object mode back off after it was enabled."""
-    projectSettings.currentProject.static = False
-
-
 def EnableProfile():
     """Enables profiling optimizations. gcc/g++ -pg"""
     projectSettings.currentProject.profile = True
@@ -299,34 +269,24 @@ def DisableProfile():
     projectSettings.currentProject.profile = False
 
 
-def ExtraFlags(s):
+def CompilerFlags(*args):
     """Literal string of extra flags to be passed directly to the compiler"""
-    projectSettings.currentProject.extra_flags = s
+    projectSettings.currentProject.compiler_flags += list(args)
 
 
-def ClearExtraFlags():
+def ClearCompilerFlags():
     """Clears the extra flags string"""
-    projectSettings.currentProject.extra_flags = ""
+    projectSettings.currentProject.compiler_flags = []
 
 
-def LinkerFlags(s):
+def LinkerFlags(*args):
     """Literal string of extra flags to be passed directly to the linker"""
-    projectSettings.currentProject.linker_flags = s
+    projectSettings.currentProject.linker_flags += list(args)
 
 
 def ClearLinkerFlags():
     """Clears the linker flags string"""
-    projectSettings.currentProject.linker_flags = ""
-
-
-def CppStandard(s):
-    """The C/C++ standard to be used when compiling. gcc/g++ --std"""
-    projectSettings.currentProject.cppstandard = s
-
-
-def CStandard(s):
-    """The C/C++ standard to be used when compiling. gcc/g++ --std"""
-    projectSettings.currentProject.cstandard = s
+    projectSettings.currentProject.linker_flags = []
 
 
 def DisableChunkedBuild():
@@ -463,14 +423,6 @@ def SharedRuntime():
     projectSettings.currentProject.static_runtime = False
 
 
-def DebugRuntime():
-    projectSettings.currentProject.debug_runtime = True
-
-
-def ReleaseRuntime():
-    projectSettings.currentProject.debug_runtime = False
-
-
 def Force32Bit():
     projectSettings.currentProject.force_32_bit = True
     projectSettings.currentProject.force_64_bit = False
@@ -493,13 +445,15 @@ def RegisterToolchain(name, toolchain):
     projectSettings.currentProject.toolchains[name] = toolchain()
 
 
-def Toolchain(name):
-    return projectSettings.currentProject.toolchains[name]
+def Toolchain(*args):
+    toolchains = []
+    for arg in list(args):
+        toolchains.append(projectSettings.currentProject.toolchains[arg])
+    return toolchain.combined_toolchains(toolchains)
 
 
 def SetActiveToolchain(name):
     projectSettings.currentProject.activeToolchainName = name
-    projectSettings.currentProject.activeToolchain = projectSettings.currentProject.toolchains[name]
 
 #</editor-fold>
 
@@ -529,6 +483,8 @@ def project(name, workingDirectory, linkDepends=None, srcDepends=None):
             wd = os.getcwd()
             os.chdir(self.workingDirectory)
 
+            self.settings.activeToolchain = self.settings.toolchains[self.settings.activeToolchainName]
+
             self.settings.obj_dir = os.path.abspath(self.settings.obj_dir)
             self.settings.output_dir = os.path.abspath(self.settings.output_dir)
             self.settings.csbuild_dir = os.path.abspath(self.settings.csbuild_dir)
@@ -536,6 +492,11 @@ def project(name, workingDirectory, linkDepends=None, srcDepends=None):
             self.settings.exclude_dirs.append(self.settings.csbuild_dir)
 
             projectSettings.currentProject = self.settings
+
+            if self.settings.ext is None:
+                self.settings.ext = self.settings.activeToolchain.get_default_extension(self.settings.type)
+
+            self.settings.output_name += self.settings.ext
 
             log.LOG_BUILD("Preparing build tasks for {}...".format(self.settings.output_name))
 
@@ -1109,6 +1070,8 @@ def debug():
         projectSettings.currentProject.output_dir = "Debug"
     if not projectSettings.currentProject.obj_dir_set:
         projectSettings.currentProject.obj_dir = "Debug/obj"
+    if not projectSettings.currentProject.toolchains["msvc"].settingsOverrides["debug_runtime_set"]:
+        projectSettings.currentProject.toolchains["msvc"].settingsOverrides["debug_runtime"] = True
 
 
 @target("release")
@@ -1122,6 +1085,8 @@ def release():
         projectSettings.currentProject.output_dir = "Release"
     if not projectSettings.currentProject.obj_dir_set:
         projectSettings.currentProject.obj_dir = "Release/obj"
+    if not projectSettings.currentProject.toolchains["msvc"].settingsOverrides["debug_runtime_set"]:
+        projectSettings.currentProject.toolchains["msvc"].settingsOverrides["debug_runtime"] = False
 
 
 parser = argparse.ArgumentParser(description='CSB: Build files in local directories and subdirectories.')

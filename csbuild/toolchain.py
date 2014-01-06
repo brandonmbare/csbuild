@@ -21,6 +21,23 @@
 from abc import abstractmethod
 import os
 from csbuild import log
+import csbuild
+
+
+class combined_toolchains(object):
+    def __init__(self, toolchains):
+        self.toolchains = toolchains
+
+    def __getattr__(self, name):
+        funcs = []
+        for toolchain in self.toolchains:
+            funcs.append(getattr(toolchain, name))
+
+        def combined_func(*args, **kwargs):
+            for func in funcs:
+                func(*args, **kwargs)
+
+        return combined_func
 
 
 class toolchainBase(object):
@@ -32,7 +49,7 @@ class toolchainBase(object):
         pass
 
     @abstractmethod
-    def find_library(self, library, library_dirs):
+    def find_library(self, library, library_dirs, force_static, force_shared):
         pass
 
     @abstractmethod
@@ -47,6 +64,13 @@ class toolchainBase(object):
     def get_extended_command(self, baseCmd, project, forceIncludeFile, outObj, inFile):
         pass
 
+    @abstractmethod
+    def get_default_extension(self, projectType):
+        pass
+
+    @abstractmethod
+    def interrupt_exit_code(self):
+        pass
 
     def copy(self):
         ret = self.__class__()
@@ -117,6 +141,14 @@ class toolchainBase(object):
         self.settingsOverrides["static_libraries"] += list(args)
 
 
+    def SharedLibraries(self, *args):
+        """List of libraries to link statically against. Multiple string arguments. gcc/g++ -l."""
+        if "shared_libraries" not in self.settingsOverrides:
+            self.settingsOverrides["shared_libraries"] = []
+
+        self.settingsOverrides["shared_libraries"] += list(args)
+
+
     def IncludeDirs(self, *args):
         """List of directories to search for included headers. Multiple string arguments. gcc/g++ -I
         By default, this list contains /usr/include and /usr/local/include.
@@ -154,6 +186,11 @@ class toolchainBase(object):
     def ClearStaticLibraries(self):
         """Clears the list of libraries"""
         self.settingsOverrides["static_libraries"] = []
+
+
+    def ClearSharedLibraries(self):
+        """Clears the list of libraries"""
+        self.settingsOverrides["shared_libraries"] = []
 
 
     def ClearIncludeDirs(self):
@@ -214,9 +251,14 @@ class toolchainBase(object):
         self.settingsOverrides["cc"] = s
 
 
-    def Output(self, s):
-        """Sets the output file for the project. If unset, the project will be compiled as "a.out"""""
-        self.settingsOverrides["output_name"] = s
+    def Output(self, name, projectType = csbuild.ProjectType.Application):
+        """Sets the output file for the project. If unset, the project will be compiled as "a.out" """
+        self.settingsOverrides["output_name"] = name
+        self.settingsOverrides["type"] = projectType
+
+
+    def Extension(self, name):
+        self.settingsOverrides["ext"] = name
 
 
     def OutDir(self, s):
@@ -231,52 +273,9 @@ class toolchainBase(object):
         self.settingsOverrides["obj_dir_set"] = True
 
 
-    def WarnFlags(self, *args):
-        """Sets warn flags for the project. Multiple arguments. gcc/g++ -W"""
-        if "warn_flags" not in self.settingsOverrides:
-            self.settingsOverrides["warn_flags"] = []
-
-        self.settingsOverrides["warn_flags"] += list(args)
-
-
-    def ClearWarnFlags(self):
-        """Clears the list of warning flags"""
-        self.settingsOverrides["warn_flags"] = []
-
-
-    def Flags(self, *args):
-        """Sets miscellaneous flags for the project. Multiple arguments. gcc/g++ -f"""
-        if "flags" not in self.settingsOverrides:
-            self.settingsOverrides["flags"] = []
-
-        self.settingsOverrides["flags"] += list(args)
-
-
     def ClearFlags(self):
         """Clears the list of misc flags"""
         self.settingsOverrides["flags"] = []
-
-
-    def Shared(self):
-        """Builds the project as a shared library. Enables -shared in the linker and -fPIC in the compiler."""
-        self.settingsOverrides["shared"] = True
-        self.settingsOverrides["static"] = False
-
-
-    def NotShared(self):
-        """Turns shared object mode back off after it was enabled."""
-        self.settingsOverrides["shared"] = False
-
-
-    def Static(self):
-        """Builds the project as a shared library. Enables -shared in the linker and -fPIC in the compiler."""
-        self.settingsOverrides["static"] = True
-        self.settingsOverrides["shared"] = False
-
-
-    def NotStatic(self):
-        """Turns shared object mode back off after it was enabled."""
-        self.settingsOverrides["static"] = False
 
 
     def EnableProfile(self):
@@ -289,34 +288,30 @@ class toolchainBase(object):
         self.settingsOverrides["profile"] = False
 
 
-    def ExtraFlags(self, s):
+    def CompilerFlags(self, *args):
         """Literal string of extra flags to be passed directly to the compiler"""
-        self.settingsOverrides["extra_flags"] = s
+        if "compiler_flags" not in self.settingsOverrides:
+            self.settingsOverrides["compiler_flags"] = []
+
+        self.settingsOverrides["compiler_flags"] += list(args)
 
 
-    def ClearExtraFlags(self):
+    def ClearCompilerFlags(self):
         """Clears the extra flags string"""
-        self.settingsOverrides["extra_flags"] = ""
+        self.settingsOverrides["compiler_flags"] = []
 
 
-    def LinkerFlags(self, s):
+    def LinkerFlags(self, *args):
         """Literal string of extra flags to be passed directly to the linker"""
-        self.settingsOverrides["linker_flags"] = s
+        if "linker_flags" not in self.settingsOverrides:
+            self.settingsOverrides["linker_flags"] = []
+
+        self.settingsOverrides["linker_flags"] += list(args)
 
 
     def ClearLinkerFlags(self):
         """Clears the linker flags string"""
-        self.settingsOverrides["linker_flags"] = ""
-
-
-    def CppStandard(self, s):
-        """The C/C++ standard to be used when compiling. gcc/g++ --std"""
-        self.settingsOverrides["cppstandard"] = s
-
-
-    def CStandard(self, s):
-        """The C/C++ standard to be used when compiling. gcc/g++ --std"""
-        self.settingsOverrides["cstandard"] = s
+        self.settingsOverrides["linker_flags"] = []
 
 
     def DisableChunkedBuild(self):

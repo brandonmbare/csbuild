@@ -23,6 +23,7 @@ import platform
 import subprocess
 
 from csbuild import toolchain
+import csbuild
 
 ### Reference: http://msdn.microsoft.com/en-us/library/f35ctcxw.aspx
 
@@ -38,8 +39,10 @@ class toolchain_msvc(toolchain.toolchainBase):
     def __init__(self):
         toolchain.toolchainBase.__init__(self)
 
-        self.msvc_version = 100
         self._project_settings = None
+        self.settingsOverrides["msvc_version"] = 100
+        self.settingsOverrides["debug_runtime"] = False
+        self.settingsOverrides["debug_runtime_set"] = False
 
     def SetupForProject(self, project):
         platform_architectures = {
@@ -49,7 +52,7 @@ class toolchain_msvc(toolchain.toolchainBase):
             "i386": X86}
 
         self._project_settings = project.settings
-        self._vc_env_var = r"VS{}COMNTOOLS".format(self.msvc_version)
+        self._vc_env_var = r"VS{}COMNTOOLS".format(self.settingsOverrides["msvc_version"])
         self._toolchain_path = os.path.normpath(os.path.join(os.environ[self._vc_env_var], "..", "..", "VC"))
         self._bin_path = os.path.join(self._toolchain_path, "bin")
         self._include_path = [os.path.join(self._toolchain_path, "include")]
@@ -127,7 +130,7 @@ class toolchain_msvc(toolchain.toolchainBase):
             self._get_architecture_arg(),
             "/PROFILE " if self._project_settings.profile else "",
             "/DEBUG " if self._project_settings.profile or self._project_settings.debug_level > 0 else "",
-            "/DLL " if self._project_settings.shared else "",
+            "/DLL " if self._project_settings.type == csbuild.ProjectType.SharedLibrary else "",
             self._get_library_directory_args(),
             self._get_linker_output_arg(output_file),
             self._get_library_args(),
@@ -155,19 +158,20 @@ class toolchain_msvc(toolchain.toolchainBase):
     def _get_runtime_linkage_arg(self):
         return "/{}{} ".format(
             "MT" if self._project_settings.static_runtime else "MD",
-            "d" if self._project_settings.debug_runtime else "")
+            "d" if self.settingsOverrides["debug_runtime"] else "")
 
 
     def _get_runtime_library_arg(self):
         return '/DEFAULTLIB:{}{}.lib '.format(
             "libcmt" if self._project_settings.static_runtime else "msvcrt",
-            "d" if self._project_settings.debug_runtime else "")
+            "d" if self.settingsOverrides["debug_runtime"] else "")
 
     def _get_library_args(self):
         #args = "kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib "
         args = ""
-        for lib in self._project_settings.libraries:
-            args += '"{}" '.format(lib)
+        for lib in self._project_settings.libraries + self._project_settings.static_libraries + \
+                self._project_settings.shared_libraries:
+            args += '"{}.lib" '.format(lib)
 
         return args
 
@@ -222,7 +226,7 @@ class toolchain_msvc(toolchain.toolchainBase):
         return "{}{}{}".format(
             self._get_compiler_exe(),
             self._get_compiler_args(),
-            self._project_settings.extra_flags)
+            " ".join(self._project_settings.compiler_flags))
 
 
     def getExtendedCompilerArgs(self, base_cmd, force_include_file, output_obj, input_file):
@@ -233,14 +237,16 @@ class toolchain_msvc(toolchain.toolchainBase):
 
 
     def getLinkerCommand(self, output_file, obj_list):
-        return "{}{}".format(
+        return "{}{}{}".format(
             self._get_linker_exe(),
-            self._get_linker_args(output_file, obj_list))
+            self._get_linker_args(output_file, obj_list),
+            " ".join(self._project_settings.linker_flags))
 
 
     ### Required functions ###
 
-    def find_library(self, library, library_dirs):
+    def find_library(self, library, library_dirs, force_static, force_shared):
+        library += ".lib"
 
         for lib_dir in library_dirs:
             lib_file_path = os.path.join(lib_dir, library)
@@ -273,8 +279,26 @@ class toolchain_msvc(toolchain.toolchainBase):
         return self.getExtendedCompilerArgs(baseCmd, forceIncludeFile, outObj, inFile)
 
 
-    interrupt_exit_code = -1
+    def get_default_extension(self, projectType):
+        if projectType == csbuild.ProjectType.Application:
+            return ".exe"
+        elif projectType == csbuild.ProjectType.StaticLibrary:
+            return ".lib"
+        elif projectType == csbuild.ProjectType.SharedLibrary:
+            return ".dll"
+
+    def interrupt_exit_code(self):
+        return -1
 
     def SetMsvcVersion(self, msvc_version):
-        self.msvc_version = msvc_version
+        self.settingsOverrides["msvc_version"] = msvc_version
+
+    def DebugRuntime(self):
+        self.settingsOverrides["debug_runtime"] = True
+        self.settingsOverrides["debug_runtime_set"] = True
+
+
+    def ReleaseRuntime(self):
+        self.settingsOverrides["debug_runtime"] = False
+        self.settingsOverrides["debug_runtime_set"] = True
 

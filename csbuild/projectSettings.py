@@ -17,7 +17,7 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-
+import csbuild
 
 class projectSettings(object):
     def __init__(self, setupDict=True):
@@ -26,13 +26,12 @@ class projectSettings(object):
 
         self.libraries = []
         self.static_libraries = []
+        self.shared_libraries = []
         self.include_dirs = []
         self.library_dirs = []
 
         self.opt_level = 0
         self.debug_level = 0
-        self.warn_flags = []
-        self.flags = []
         self.defines = []
         self.undefines = []
         self.cxx = "g++"
@@ -42,13 +41,11 @@ class projectSettings(object):
         self.obj_dir = "."
         self.output_dir = "."
         self.csbuild_dir = "./.csbuild"
-        self.output_name = "a.out"
+        self.output_name = ""
         self.output_install_dir = ""
         self.header_install_dir = ""
         self.header_subdir = ""
         self.automake = True
-        self.cppstandard = ""
-        self.cstandard = ""
 
         self.c_files = []
         self.headers = []
@@ -56,12 +53,13 @@ class projectSettings(object):
         self.sources = []
         self.allsources = []
 
-        self.shared = False
-        self.static = False
+        self.type = csbuild.ProjectType.Application
+        self.ext = None
+
         self.profile = False
 
-        self.extra_flags = ""
-        self.linker_flags = ""
+        self.compiler_flags = []
+        self.linker_flags = []
 
         self.exclude_dirs = []
         self.exclude_files = []
@@ -133,9 +131,27 @@ class projectSettings(object):
     def __getattribute__(self, name):
         activeToolchain = object.__getattribute__(self, "activeToolchain")
         if activeToolchain and name in activeToolchain.settingsOverrides:
-            return activeToolchain.settingsOverrides[name]
+            ret = activeToolchain.settingsOverrides[name]
+
+            if ret:
+                if isinstance(ret, dict):
+                    ret2 = object.__getattribute__(self, name)
+                    ret2.update(ret)
+                    return ret2
+                elif isinstance(ret, list):
+                    return ret + object.__getattribute__(self, name)
+
+            return ret
         return object.__getattribute__(self, name)
 
+
+    def __setattr__(self, name, value):
+        if hasattr(self, "activeToolchain"):
+            activeToolchain = object.__getattribute__(self, "activeToolchain")
+            if activeToolchain and name in activeToolchain.settingsOverrides:
+                activeToolchain.settingsOverrides[name] = value
+                return
+        object.__setattr__(self, name, value)
 
     def copy(self):
         ret = projectSettings()
@@ -146,12 +162,11 @@ class projectSettings(object):
         ret.__dict__ = {
             "libraries": list(self.libraries),
             "static_libraries": list(self.static_libraries),
+            "shared_libraries": list(self.shared_libraries),
             "include_dirs": list(self.include_dirs),
             "library_dirs": list(self.library_dirs),
             "opt_level": self.opt_level,
             "debug_level": self.debug_level,
-            "warn_flags": list(self.warn_flags),
-            "flags": list(self.flags),
             "defines": list(self.defines),
             "undefines": list(self.undefines),
             "cxx": self.cxx,
@@ -165,17 +180,15 @@ class projectSettings(object):
             "header_install_dir": self.header_install_dir,
             "header_subdir": self.header_subdir,
             "automake": self.automake,
-            "cppstandard": self.cppstandard,
-            "cstandard": self.cstandard,
             "c_files": list(self.c_files),
             "headers": list(self.headers),
             "sources": list(self.sources),
             "allsources": list(self.allsources),
-            "shared": self.shared,
-            "static": self.static,
+            "type": self.type,
+            "ext": self.ext,
             "profile": self.profile,
-            "extra_flags": self.extra_flags,
-            "linker_flags": self.linker_flags,
+            "compiler_flags": list(self.compiler_flags),
+            "linker_flags": list(self.linker_flags),
             "exclude_dirs": list(self.exclude_dirs),
             "exclude_files": list(self.exclude_files),
             "output_dir_set": self.output_dir_set,
@@ -217,7 +230,7 @@ class projectSettings(object):
             "force_32_bit": self.force_32_bit,
             "cheaders": list(self.cheaders),
             "activeToolchainName": self.activeToolchainName,
-            "activeToolchain": toolchains[self.activeToolchainName],
+            "activeToolchain": None,
             "warnings_as_errors": self.warnings_as_errors
         }
 

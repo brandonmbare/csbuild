@@ -23,11 +23,20 @@ import shlex
 import subprocess
 import re
 import sys
+
 from csbuild import _shared_globals
 from csbuild import toolchain
+import csbuild
 
 
 class toolchain_gcc(toolchain.toolchainBase):
+    def __init__(self):
+        toolchain.toolchainBase.__init__(self)
+
+        self.settingsOverrides["warn_flags"] = []
+        self.settingsOverrides["cppstandard"] = ""
+        self.settingsOverrides["cstandard"] = ""
+
     def get_warnings(self, warnFlags, noWarnings):
         """Returns a string containing all of the passed warning flags, formatted to be passed to gcc/g++."""
         if noWarnings:
@@ -73,6 +82,14 @@ class toolchain_gcc(toolchain.toolchainBase):
         return ret
 
 
+    def get_shared_libraries(self, libraries):
+        """Returns a string containing all of the passed libraries, formatted to be passed to gcc/g++."""
+        ret = ""
+        for lib in libraries:
+            ret += "-shared -l{} ".format(lib)
+        return ret
+
+
     def get_library_dirs(self, libDirs, forLinker):
         """Returns a string containing all of the passed library dirs, formatted to be passed to gcc/g++."""
         ret = ""
@@ -85,16 +102,8 @@ class toolchain_gcc(toolchain.toolchainBase):
             ret += "-Wl,-R/usr/lib -Wl,-R/usr/local/lib "
         return ret
 
-
-    def get_flags(self, flags):
-        """Returns a string containing all of the passed flags, formatted to be passed to gcc/g++."""
-        ret = ""
-        for flag in flags:
-            ret += "-f{} ".format(flag)
-        return ret
-
     def get_link_command(self, project, outputFile, objList):
-        if project.settings.static:
+        if project.settings.type == csbuild.ProjectType.StaticLibrary:
             return "ar rcs {} {}".format(outputFile, " ".join(objList))
         else:
             if project.settings.hasCppFiles:
@@ -102,7 +111,7 @@ class toolchain_gcc(toolchain.toolchainBase):
             else:
                 cmd = project.settings.cc
 
-            return "{} {}{}-o{} {} {}{}{}{}-g{} -O{} {} {}".format(
+            return "{} {}{}-o{} {} {}{}{}{}{}-g{} -O{} {} {}".format(
                 cmd,
                 "-m32 " if project.settings.force_32_bit else "-m64 " if project.settings.force_64_bit else "",
                 "-pg " if project.settings.profile else "",
@@ -111,22 +120,24 @@ class toolchain_gcc(toolchain.toolchainBase):
                 "-static-libgcc -static-libstdc++ " if project.settings.static_runtime else "",
                 self.get_libraries(project.settings.libraries),
                 self.get_static_libraries(project.settings.static_libraries),
+                self.get_shared_libraries(project.settings.shared_libraries),
                 self.get_library_dirs(project.settings.library_dirs, True),
                 project.settings.debug_level,
                 project.settings.opt_level,
-                "-shared" if project.settings.shared else "",
-                project.settings.linker_flags
+                "-shared" if project.settings.type == csbuild.ProjectType.SharedLibrary else "",
+                " ".join(project.settings.linker_flags)
             )
 
-    def find_library(self, library, library_dirs):
+    def find_library(self, library, library_dirs, force_static, force_shared):
         success = True
         out = ""
         try:
             if _shared_globals.show_commands:
-                print("ld -o /dev/null --verbose {} -l{}".format(
+                print("ld -o /dev/null --verbose {} {} -l{}".format(
                     self.get_library_dirs(library_dirs, False),
+                    "-static" if force_static else "-shared" if force_shared else "",
                     library))
-            cmd = ["ld", "-o", "/dev/null", "--verbose", "-l{}".format(library)]
+            cmd = ["ld", "-o", "/dev/null", "--verbose", "-static" if force_static else "-shared" if force_shared else "", "-l{}".format(library)]
             cmd += shlex.split(self.get_library_dirs(library_dirs, False))
             out = subprocess.check_output(cmd, stderr=subprocess.PIPE)
         except subprocess.CalledProcessError as e:
@@ -153,21 +164,20 @@ class toolchain_gcc(toolchain.toolchainBase):
             exitcodes = "-pass-exit-codes"
 
         if isCpp:
-            standard = project.settings.cppstandard
+            standard = self.settingsOverrides["cppstandard"]
         else:
-            standard = project.settings.cstandard
-        return "{} {}{} -Winvalid-pch -c {}-g{} -O{} {}{}{} {}{}".format(
+            standard = self.settingsOverrides["cstandard"]
+        return "{} {}{} -Winvalid-pch -c {}-g{} -O{} {}{}{} {}".format(
             compiler,
             "-m32 " if project.settings.force_32_bit else "-m64 " if project.settings.force_64_bit else "",
             exitcodes,
             self.get_defines(project.settings.defines, project.settings.undefines),
             project.settings.debug_level,
             project.settings.opt_level,
-            "-fPIC " if project.settings.shared else "",
+            "-fPIC " if project.settings.type == csbuild.ProjectType.SharedLibrary else "",
             "-pg " if project.settings.profile else "",
             "--std={0}".format(standard) if standard != "" else "",
-            self.get_flags(project.settings.flags),
-            project.settings.extra_flags
+            " ".join(project.settings.compiler_flags)
         )
 
 
@@ -184,9 +194,38 @@ class toolchain_gcc(toolchain.toolchainBase):
         if forceIncludeFile:
             inc = "-include {0}".format(forceIncludeFile.rsplit(".", 1)[0])
         return "{} {}{}{} -o\"{}\" \"{}\"".format(baseCmd,
-            self.get_warnings(project.settings.warn_flags, project.settings.no_warnings),
+            self.get_warnings(self.settingsOverrides["warn_flags"], project.settings.no_warnings),
             self.get_include_dirs(project.settings.include_dirs), inc, outObj,
             inFile)
 
 
-    interrupt_exit_code = 2
+    def get_default_extension(self, projectType):
+        if projectType == csbuild.ProjectType.Application:
+            return ""
+        elif projectType == csbuild.ProjectType.StaticLibrary:
+            return ".a"
+        elif projectType == csbuild.ProjectType.SharedLibrary:
+            return ".so"
+
+    def interrupt_exit_code(self):
+        return 2
+
+
+    def WarnFlags(self, *args):
+        """Sets warn flags for the project. Multiple arguments. gcc/g++ -W"""
+        self.settingsOverrides["warn_flags"] += list(args)
+
+
+    def ClearWarnFlags(self):
+        """Clears the list of warning flags"""
+        self.settingsOverrides["warn_flags"] = []
+
+
+    def CppStandard(self, s):
+        """The C/C++ standard to be used when compiling. gcc/g++ --std"""
+        self.settingsOverrides["cppstandard"] = s
+
+
+    def CStandard(self, s):
+        """The C/C++ standard to be used when compiling. gcc/g++ --std"""
+        self.settingsOverrides["cstandard"] = s
