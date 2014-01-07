@@ -1096,8 +1096,10 @@ group2.add_argument('-qq', action="store_const", const=3, dest="quiet",
 parser.add_argument("-j", "--jobs", action="store", dest="jobs", type=int)
 parser.add_argument('--show-commands', help="Show all commands sent to the system.", action="store_true")
 parser.add_argument('--no-progress', help="Turn off the progress bar.", action="store_true")
-parser.add_argument('--force-color', help="Force color on even if the terminal isn't detected as accepting it.",
-    action="store_true")
+parser.add_argument('--force-color', help="Force color on or off.",
+    action="store", choices=["on", "off"], default=None, const="on", nargs="?")
+parser.add_argument('--force-progress-bar', help="Force progress bar on or off.",
+    action="store", choices=["on", "off"], default=None, const="on", nargs="?")
 parser.add_argument('--prefix', help="install prefix (default /usr/local)", action="store")
 parser.add_argument('--toolchain', help="Toolchain to use for compiling", action="store")
 parser.add_argument("-H", "--makefile_help", action="store_true",
@@ -1114,8 +1116,16 @@ if args.project:
     _shared_globals.project_build_list = set(args.project)
 if args.no_progress:
     _shared_globals.columns = 0
-if args.force_color:
+
+if args.force_color == "on":
     _shared_globals.color_supported = True
+elif args.force_color == "off":
+    _shared_globals.color_supported = False
+
+if args.force_progress_bar == "on":
+    _shared_globals.columns = 80
+elif args.force_progress_bar == "off":
+    _shared_globals.columns = 0
 
 if args.prefix:
     _shared_globals.install_prefix = args.prefix
