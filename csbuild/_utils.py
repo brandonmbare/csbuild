@@ -29,6 +29,7 @@ import sys
 import math
 import datetime
 import platform
+import glob
 
 from csbuild import log
 from csbuild import _shared_globals
@@ -41,16 +42,26 @@ def get_files(project, sources=None, headers=None):
     Accepts two lists as arguments, which it populates. If sources or headers are excluded from the parameters, it will
     ignore files of the relevant types.
     """
+
+    exclude_files = set()
+    exclude_dirs = set()
+
+    for exclude in project.settings.exclude_files:
+        exclude_files |= set(glob.glob(exclude))
+
+    for exclude in project.settings.exclude_dirs:
+        exclude_dirs |= set(glob.glob(exclude))
+
     for root, dirnames, filenames in os.walk('.'):
         absroot = os.path.abspath(root)
-        if absroot in project.settings.exclude_dirs:
+        if absroot in exclude_dirs:
             if absroot != project.settings.csbuild_dir:
                 log.LOG_INFO("Skipping dir {0}".format(root))
             continue
         if absroot == project.settings.csbuild_dir or absroot.startswith(project.settings.csbuild_dir):
             continue
         bFound = False
-        for testDir in project.settings.exclude_dirs:
+        for testDir in exclude_dirs:
             if absroot.startswith(testDir):
                 bFound = True
                 break
@@ -62,7 +73,7 @@ def get_files(project, sources=None, headers=None):
         if sources is not None:
             for filename in fnmatch.filter(filenames, '*.cpp'):
                 path = os.path.join(absroot, filename)
-                if path not in project.settings.exclude_files:
+                if path not in exclude_files:
                     sources.append(os.path.abspath(path))
                     project.settings.hasCppFiles = True
             for filename in fnmatch.filter(filenames, '*.c'):
@@ -75,16 +86,16 @@ def get_files(project, sources=None, headers=None):
         if headers is not None:
             for filename in fnmatch.filter(filenames, '*.hpp'):
                 path = os.path.join(absroot, filename)
-                if path not in project.settings.exclude_files:
+                if path not in exclude_files:
                     headers.append(os.path.abspath(path))
                     project.settings.hasCppFiles = True
             for filename in fnmatch.filter(filenames, '*.h'):
                 path = os.path.join(absroot, filename)
-                if path not in project.settings.exclude_files:
+                if path not in exclude_files:
                     headers.append(os.path.abspath(path))
             for filename in fnmatch.filter(filenames, '*.inl'):
                 path = os.path.join(absroot, filename)
-                if path not in project.settings.exclude_files:
+                if path not in exclude_files:
                     headers.append(os.path.abspath(path))
 
             headers.sort(key=str.lower)
@@ -131,16 +142,19 @@ def follow_headers(headerFile, allheaders):
             continue
 
         #Find the header in the listed includes.
-        path = "{0}/{1}".format(os.path.dirname(headerFile), header)
-        if not os.path.exists(path):
-            for incDir in projectSettings.currentProject.include_dirs:
-                path = "{0}/{1}".format(incDir, header)
-                if os.path.exists(path):
-                    break
-                    #A lot of standard C and C++ headers will be in a compiler-specific directory that we won't check.
-                    #Just ignore them to speed things up.
-        if not os.path.exists(path):
-            continue
+        if os.path.exists(header):
+            path = header
+        else:
+            path = "{0}/{1}".format(os.path.dirname(headerFile), header)
+            if not os.path.exists(path):
+                for incDir in projectSettings.currentProject.include_dirs:
+                    path = "{0}/{1}".format(incDir, header)
+                    if os.path.exists(path):
+                        break
+                        #A lot of standard C and C++ headers will be in a compiler-specific directory that we won't check.
+                        #Just ignore them to speed things up.
+            if not os.path.exists(path):
+                continue
 
         if projectSettings.currentProject.ignore_external_headers and not path.startswith("./"):
             continue
@@ -198,16 +212,19 @@ def follow_headers2(headerFile, allheaders, n):
         if header in _shared_globals.allheaders:
             continue
 
-        path = "{0}/{1}".format(os.path.dirname(headerFile), header)
-        if not os.path.exists(path):
-            for incDir in projectSettings.currentProject.include_dirs:
-                path = "{0}/{1}".format(incDir, header)
-                if os.path.exists(path):
-                    break
-                    #A lot of standard C and C++ headers will be in a compiler-specific directory that we won't check.
-                    #Just ignore them to speed things up.
-        if not os.path.exists(path):
-            continue
+        if os.path.exists(header):
+            path = header
+        else:
+            path = "{0}/{1}".format(os.path.dirname(headerFile), header)
+            if not os.path.exists(path):
+                for incDir in projectSettings.currentProject.include_dirs:
+                    path = "{0}/{1}".format(incDir, header)
+                    if os.path.exists(path):
+                        break
+                        #A lot of standard C and C++ headers will be in a compiler-specific directory that we won't check.
+                        #Just ignore them to speed things up.
+            if not os.path.exists(path):
+                continue
 
         if projectSettings.currentProject.ignore_external_headers and not path.startswith("./"):
             continue
@@ -342,16 +359,19 @@ def should_recompile(srcFile, ofile=None, for_precompiled_header=False):
     updatedheaders = []
 
     for header in headers:
-        path = "{0}/{1}".format(os.path.dirname(srcFile), header)
-        if not os.path.exists(path):
-            for incDir in projectSettings.currentProject.include_dirs:
-                path = "{0}/{1}".format(incDir, header)
-                if os.path.exists(path):
-                    break
-                    #A lot of standard C and C++ headers will be in a compiler-specific directory that we won't check.
-                    #Just ignore them to speed things up.
-        if not os.path.exists(path):
-            continue
+        if os.path.exists(header):
+            path = header
+        else:
+            path = "{0}/{1}".format(os.path.dirname(srcFile), header)
+            if not os.path.exists(path):
+                for incDir in projectSettings.currentProject.include_dirs:
+                    path = "{0}/{1}".format(incDir, header)
+                    if os.path.exists(path):
+                        break
+                        #A lot of standard C and C++ headers will be in a compiler-specific directory that we won't check.
+                        #Just ignore them to speed things up.
+            if not os.path.exists(path):
+                continue
 
         header_mtime = os.path.getmtime(path)
 
@@ -783,6 +803,11 @@ def prepare_precompiles():
     for project in _shared_globals.projects.values():
         os.chdir(project.workingDirectory)
 
+        precompile_exclude = set()
+        for exclude in project.settings.precompile_exclude:
+            precompile_exclude |= set(glob.glob(exclude))
+
+
         def handleHeaderFile(headerfile, allheaders, forCpp):
             if forCpp:
                 obj = "{0}/{1}_{2}.hpp.gch".format(os.path.dirname(headerfile),
@@ -807,7 +832,7 @@ def prepare_precompiles():
 
             with open(headerfile, "w") as f:
                 for header in allheaders:
-                    if header in project.settings.precompile_exclude:
+                    if header in precompile_exclude:
                         continue
                     externed = False
                     if forCpp and os.path.abspath(header) in project.settings.cheaders:
