@@ -78,7 +78,7 @@ def get_files(project, sources=None, headers=None):
                     project.settings.hasCppFiles = True
             for filename in fnmatch.filter(filenames, '*.c'):
                 path = os.path.join(absroot, filename)
-                if path not in project.settings.exclude_files:
+                if path not in exclude_files:
                     sources.append(os.path.abspath(path))
 
             sources.sort(key=str.lower)
