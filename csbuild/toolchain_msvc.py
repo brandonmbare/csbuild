@@ -65,7 +65,7 @@ class toolchain_msvc(toolchain.toolchainBase):
             "x86": X86,
             "i386": X86}
 
-        self._project_settings = project.settings
+        self._project_settings = project
         self._vc_env_var = r"VS{}COMNTOOLS".format(self.settingsOverrides["msvc_version"])
         self._toolchain_path = os.path.normpath(os.path.join(os.environ[self._vc_env_var], "..", "..", "VC"))
         self._bin_path = os.path.join(self._toolchain_path, "bin")

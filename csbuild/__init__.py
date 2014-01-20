@@ -32,7 +32,6 @@ See www.github.net/ShadauxCat/csbuild for more information and documentation.
 import argparse
 import shutil
 import signal
-import itertools
 import math
 import subprocess
 import os
@@ -83,6 +82,8 @@ signal.signal(signal.SIGINT, signal.SIG_DFL)
 #TODO: Mark scripts uncallable
 #TODO: csbuild.ScriptLocation()?
 #TODO: -stdlib
+
+#TODO: Precompiled headers in msvc
 
 #<editor-fold desc="Setters">
 #Setters
@@ -149,7 +150,7 @@ def IncludeDirs(*args):
     for arg in args:
         arg = os.path.abspath(arg)
         if not os.path.exists(arg):
-            log.LOG_ERROR("Include path {0} does not exist!".format(arg))
+            log.LOG_WARN("Include path {0} does not exist!".format(arg))
         projectSettings.currentProject.include_dirs.append(arg)
 
 
@@ -160,7 +161,7 @@ def LibDirs(*args):
     for arg in args:
         arg = os.path.abspath(arg)
         if not os.path.exists(arg):
-            log.LOG_ERROR("Library path {0} does not exist!".format(arg))
+            log.LOG_WARN("Library path {0} does not exist!".format(arg))
         projectSettings.currentProject.library_dirs.append(arg)
 
 
@@ -177,6 +178,8 @@ def ClearStaticLibraries():
 def ClearSharedibraries():
     """Clears the list of libraries"""
     projectSettings.currentProject.shared_libraries = []
+
+
 def ClearIncludeDirs():
     """Clears the include directories, including the defaults."""
     projectSettings.currentProject.include_dirs = []
@@ -462,74 +465,6 @@ def project(name, workingDirectory, linkDepends=None, srcDepends=None):
     if isinstance(srcDepends, str):
         srcDepends = [srcDepends]
 
-    class projectData(object):
-        def __init__(self, name, workingDirectory, linkDepends, srcDepends, func, settings):
-            self.name = name
-            self.workingDirectory = os.path.abspath(workingDirectory)
-            self.linkDepends = linkDepends
-            self.srcDepends = srcDepends
-            self.func = func
-            self.settings = settings
-
-        def prepareBuild(self):
-            wd = os.getcwd()
-            os.chdir(self.workingDirectory)
-
-            self.settings.activeToolchain = self.settings.toolchains[self.settings.activeToolchainName]
-            self.settings.obj_dir = os.path.abspath(self.settings.obj_dir)
-            self.settings.output_dir = os.path.abspath(self.settings.output_dir)
-            self.settings.csbuild_dir = os.path.abspath(self.settings.csbuild_dir)
-
-            self.settings.exclude_dirs.append(self.settings.csbuild_dir)
-
-            projectSettings.currentProject = self.settings
-
-            if self.settings.ext is None:
-                self.settings.ext = self.settings.activeToolchain.get_default_extension(self.settings.type)
-
-            self.settings.output_name += self.settings.ext
-            log.LOG_BUILD("Preparing build tasks for {}...".format(self.settings.output_name))
-
-            if not os.path.exists(self.settings.csbuild_dir):
-                os.makedirs(self.settings.csbuild_dir)
-
-            self.settings.cccmd = self.settings.activeToolchain.get_base_cc_command(self)
-            self.settings.cxxcmd = self.settings.activeToolchain.get_base_cxx_command(self)
-
-            cmdfile = "{0}/{1}.csbuild".format(self.settings.csbuild_dir, self.settings.targetName)
-            cmd = ""
-            if os.path.exists(cmdfile):
-                with open(cmdfile, "r") as f:
-                    cmd = f.read()
-
-            if self.settings.cxxcmd + self.settings.cccmd != cmd:
-                self.settings.recompile_all = True
-                clean(True)
-                with open(cmdfile, "w") as f:
-                    f.write(self.settings.cxxcmd + self.settings.cccmd)
-
-            if not self.settings.chunks:
-                _utils.get_files(self, self.settings.allsources)
-
-                if not self.settings.allsources:
-                    return
-
-                #We'll do this even if _use_chunks is false, because it simplifies the linker logic.
-                self.settings.chunks = _utils.make_chunks(self.settings.allsources)
-            else:
-                self.settings.allsources = list(itertools.chain(*self.settings.chunks))
-
-            if not _shared_globals.CleanBuild and not _shared_globals.do_install:
-                for source in self.settings.allsources:
-                    if _utils.should_recompile(source):
-                        self.settings.sources.append(source)
-            else:
-                self.settings.sources = list(self.settings.allsources)
-
-            _shared_globals.allfiles += self.settings.sources
-
-            os.chdir(wd)
-
     def wrap(projectFunction):
         previousProject = projectSettings.currentProject.copy()
         projectFunction()
@@ -541,11 +476,15 @@ def project(name, workingDirectory, linkDepends=None, srcDepends=None):
 
         projectSettings.currentProject.targets[projectSettings.currentProject.targetName]()
 
-        #projectGlobals = type("pseudomodule", (object,), projectSettings.copy())
-        settings = projectSettings.currentProject.copy()
+        newProject = projectSettings.currentProject.copy()
 
-        _shared_globals.projects.update({name: projectData(name, workingDirectory,
-            linkDepends, srcDepends, projectFunction, settings)})
+        newProject.name = name
+        newProject.workingDirectory = os.path.abspath(workingDirectory)
+        newProject.linkDepends = linkDepends
+        newProject.srcDepends = srcDepends
+        newProject.func = projectFunction
+
+        _shared_globals.projects.update({name: newProject})
 
         projectSettings.currentProject = previousProject
         return projectFunction
@@ -581,7 +520,7 @@ def build():
     _utils.prepare_precompiles()
 
     for project in _shared_globals.sortedProjects:
-        _shared_globals.total_compiles += len(project.settings.final_chunk_set)
+        _shared_globals.total_compiles += len(project.final_chunk_set)
 
     _shared_globals.total_compiles += _shared_globals.total_precompiles
     _shared_globals.current_compile = 1
@@ -593,8 +532,8 @@ def build():
     #projects_needing_links = set()
 
     for project in _shared_globals.sortedProjects:
-        log.LOG_BUILD("Verifying libraries for {}".format(project.settings.output_name))
-        if not _utils.check_libraries(project):
+        log.LOG_BUILD("Verifying libraries for {}".format(project.output_name))
+        if not project.check_libraries():
             sys.exit(1)
         #if _utils.needs_link(project):
         #    projects_needing_links.add(project.name)
@@ -613,13 +552,13 @@ def build():
 
             os.chdir(project.workingDirectory)
 
-            projectSettings.currentProject = project.settings
+            projectSettings.currentProject = project
 
             project.starttime = time.time()
 
-            log.LOG_BUILD("Building {0} ({1})".format(projectSettings.currentProject.output_name, project.settings.targetName))
+            log.LOG_BUILD("Building {0} ({1})".format(projectSettings.currentProject.output_name, project.targetName))
 
-            if _utils.precompile_headers(project):
+            if project.precompile_headers():
                 _shared_globals.built_something = True
 
                 if not os.path.exists(projectSettings.currentProject.obj_dir):
@@ -631,7 +570,7 @@ def build():
                 for chunk in projectSettings.currentProject.final_chunk_set:
                     built = True
                     obj = "{0}/{1}_{2}.o".format(projectSettings.currentProject.obj_dir, os.path.basename(chunk).split('.')[0],
-                        project.settings.targetName)
+                        project.targetName)
                     if not _shared_globals.semaphore.acquire(False):
                         if _shared_globals.max_threads != 1:
                             log.LOG_INFO("Waiting for a build thread to become available...")
@@ -641,21 +580,21 @@ def build():
                     while LinkedSomething:
                         LinkedSomething = False
                         for otherProj in list(projects_in_flight):
-                            if otherProj.settings.compiles_completed >= len(otherProj.settings.final_chunk_set) + int(
-                                    otherProj.settings.needs_c_precompile) + int(
-                                    otherProj.settings.needs_cpp_precompile):
+                            if otherProj.compiles_completed >= len(otherProj.final_chunk_set) + int(
+                                    otherProj.needs_c_precompile) + int(
+                                    otherProj.needs_cpp_precompile):
                                 totaltime = (time.time() - otherProj.starttime)
                                 minutes = math.floor(totaltime / 60)
                                 seconds = round(totaltime % 60)
 
-                                if otherProj.settings.final_chunk_set:
+                                if otherProj.final_chunk_set:
                                     log.LOG_BUILD(
-                                        "Compile of {0} took {1}:{2:02}".format(otherProj.settings.output_name, minutes,
+                                        "Compile of {0} took {1}:{2:02}".format(otherProj.output_name, minutes,
                                             seconds))
                                 projects_in_flight.remove(otherProj)
-                                if otherProj.settings.compile_failed:
+                                if otherProj.compile_failed:
                                     log.LOG_ERROR("Build of {0} failed! Finishing up non-dependent build tasks...".format(
-                                        otherProj.settings.output_name))
+                                        otherProj.output_name))
                                     continue
 
                                 okToLink = True
@@ -665,14 +604,15 @@ def build():
                                             okToLink = False
                                             break
                                 if okToLink:
-                                    link(otherProj)
+                                    if not link(otherProj):
+                                        _shared_globals.build_success = False
                                     LinkedSomething = True
-                                    log.LOG_BUILD("Finished {0}".format(otherProj.settings.output_name))
+                                    log.LOG_BUILD("Finished {0}".format(otherProj.output_name))
                                     projects_done.add(otherProj.name)
                                 else:
                                     log.LOG_LINKER(
                                         "Linking for {0} deferred until all dependencies have finished building...".format(
-                                            otherProj.settings.output_name))
+                                            otherProj.output_name))
                                     pending_links.append(otherProj)
 
                         for otherProj in list(pending_links):
@@ -682,9 +622,10 @@ def build():
                                     okToLink = False
                                     break
                             if okToLink:
-                                link(otherProj)
+                                if not link(otherProj):
+                                    _shared_globals.build_success = False
                                 LinkedSomething = True
-                                log.LOG_BUILD("Finished {0}".format(otherProj.settings.output_name))
+                                log.LOG_BUILD("Finished {0}".format(otherProj.output_name))
                                 projects_done.add(otherProj.name)
                                 pending_links.remove(otherProj)
 
@@ -720,7 +661,7 @@ def build():
             else:
                 projects_in_flight.remove(project)
                 log.LOG_ERROR("Build of {0} failed! Finishing up non-dependent build tasks...".format(
-                    project.settings.output_name))
+                    project.output_name))
 
         #Wait until all threads are finished. Simple way to do this is acquire the semaphore until it's out of
         # resources.
@@ -763,19 +704,19 @@ def build():
         while LinkedSomething:
             LinkedSomething = False
             for otherProj in list(projects_in_flight):
-                if otherProj.settings.compiles_completed >= len(otherProj.settings.final_chunk_set) + int(
-                        otherProj.settings.needs_c_precompile) + int(
-                        otherProj.settings.needs_cpp_precompile):
+                if otherProj.compiles_completed >= len(otherProj.final_chunk_set) + int(
+                        otherProj.needs_c_precompile) + int(
+                        otherProj.needs_cpp_precompile):
                     totaltime = (time.time() - otherProj.starttime)
                     minutes = math.floor(totaltime / 60)
                     seconds = round(totaltime % 60)
 
                     log.LOG_BUILD(
-                        "Compile of {0} took {1}:{2:02}".format(otherProj.settings.output_name, minutes, seconds))
+                        "Compile of {0} took {1}:{2:02}".format(otherProj.output_name, minutes, seconds))
                     projects_in_flight.remove(otherProj)
-                    if otherProj.settings.compile_failed:
+                    if otherProj.compile_failed:
                         log.LOG_ERROR("Build of {0} failed! Finishing up non-dependent build tasks...".format(
-                            otherProj.settings.output_name))
+                            otherProj.output_name))
                         continue
 
                     okToLink = True
@@ -787,11 +728,11 @@ def build():
                     if okToLink:
                         link(otherProj)
                         LinkedSomething = True
-                        log.LOG_BUILD("Finished {0}".format(otherProj.settings.output_name))
+                        log.LOG_BUILD("Finished {0}".format(otherProj.output_name))
                         projects_done.add(otherProj.name)
                     else:
                         log.LOG_LINKER("Linking for {0} deferred until all dependencies have finished building...".format(
-                            otherProj.settings.output_name))
+                            otherProj.output_name))
                         pending_links.append(otherProj)
 
             for otherProj in list(pending_links):
@@ -803,7 +744,7 @@ def build():
                 if okToLink:
                     link(otherProj)
                     LinkedSomething = True
-                    log.LOG_BUILD("Finished {0}".format(otherProj.settings.output_name))
+                    log.LOG_BUILD("Finished {0}".format(otherProj.output_name))
                     projects_done.add(otherProj.name)
                     pending_links.remove(otherProj)
 
@@ -820,7 +761,7 @@ def build():
     log.LOG_BUILD("Compilation took {0}:{1:02}".format(int(totalmin), int(totalsec)))
 
     for proj in _shared_globals.sortedProjects:
-        _utils.save_md5s(proj.settings.allsources, proj.settings.headers)
+        proj.save_md5s(proj.allsources, proj.headers)
 
     if not built:
         log.LOG_BUILD("Nothing to build.")
@@ -838,25 +779,25 @@ def link(project, *objs):
 
     starttime = time.time()
 
-    output = "{0}/{1}".format(project.settings.output_dir, project.settings.output_name)
+    output = "{0}/{1}".format(project.output_dir, project.output_name)
 
     objs = list(objs)
     if not objs:
-        for chunk in project.settings.chunks:
-            if not project.settings.unity:
-                obj = "{0}/{1}_chunk_{2}_{3}.o".format(project.settings.obj_dir,
-                    project.settings.output_name.split('.')[0],
-                    "__".join(_utils.base_names(chunk)), project.settings.targetName)
+        for chunk in project.chunks:
+            if not project.unity:
+                obj = "{0}/{1}_chunk_{2}_{3}.o".format(project.obj_dir,
+                    project.output_name.split('.')[0],
+                    "__".join(_utils.base_names(chunk)), project.targetName)
             else:
-                obj = "{0}/{1}_unity_{2}.o".format(project.settings.obj_dir, project.settings.output_name,
-                    project.settings.targetName)
-            if project.settings.use_chunks and os.path.exists(obj):
+                obj = "{0}/{1}_unity_{2}.o".format(project.obj_dir, project.output_name,
+                    project.targetName)
+            if project.use_chunks and os.path.exists(obj):
                 objs.append(obj)
             else:
                 if type(chunk) == list:
                     for source in chunk:
-                        obj = "{0}/{1}_{2}.o".format(project.settings.obj_dir, os.path.basename(source).split('.')[0],
-                            project.settings.targetName)
+                        obj = "{0}/{1}_{2}.o".format(project.obj_dir, os.path.basename(source).split('.')[0],
+                            project.targetName)
                         if os.path.exists(obj):
                             objs.append(obj)
                         else:
@@ -864,8 +805,8 @@ def link(project, *objs):
                                 "Some object files are missing. Either the build failed, or you haven't built yet.")
                             return False
                 else:
-                    obj = "{0}/{1}_{2}.o".format(project.settings.obj_dir, os.path.basename(chunk).split('.')[0],
-                        project.settings.targetName)
+                    obj = "{0}/{1}_{2}.o".format(project.obj_dir, os.path.basename(chunk).split('.')[0],
+                        project.targetName)
                     if os.path.exists(obj):
                         objs.append(obj)
                     else:
@@ -896,7 +837,7 @@ def link(project, *objs):
                     log.LOG_LINKER(
                         "Library {0} has been modified since the last successful build. Relinking to new library."
                         .format(
-                            project.settings.libraries[i]))
+                            project.libraries[i]))
                     _shared_globals.built_something = True
 
             #Barring the two above cases, there's no point linking if the compiler did nothing.
@@ -907,15 +848,15 @@ def link(project, *objs):
 
     log.LOG_LINKER("Linking {0}...".format(os.path.abspath(output)))
 
-    if not os.path.exists(project.settings.output_dir):
-        os.makedirs(project.settings.output_dir)
+    if not os.path.exists(project.output_dir):
+        os.makedirs(project.output_dir)
 
     #Remove the output file so we're not just clobbering it
     #If it gets clobbered while running it could cause BAD THINGS (tm)
     if os.path.exists(output):
         os.remove(output)
 
-    cmd = project.settings.activeToolchain.get_link_command(project, output, objs)
+    cmd = project.activeToolchain.get_link_command(project, output, objs)
     if _shared_globals.show_commands:
         print(cmd)
     ret = subprocess.call(cmd, shell=True)
@@ -944,27 +885,27 @@ def clean(silent=False):
     for project in _shared_globals.sortedProjects:
 
         if not silent:
-            log.LOG_BUILD("Cleaning {0} ({1})...".format(project.settings.output_name, project.settings.targetName))
-        for source in project.settings.sources:
-            obj = "{0}/{1}_{2}.o".format(project.settings.obj_dir, os.path.basename(source).split('.')[0],
-                project.settings.targetName)
+            log.LOG_BUILD("Cleaning {0} ({1})...".format(project.output_name, project.targetName))
+        for source in project.sources:
+            obj = "{0}/{1}_{2}.o".format(project.obj_dir, os.path.basename(source).split('.')[0],
+                project.targetName)
             if os.path.exists(obj):
                 if not silent:
                     log.LOG_INFO("Deleting {0}".format(obj))
                 os.remove(obj)
-        headerfile = "{0}/{1}_cpp_precompiled_headers.hpp".format(project.settings.csbuild_dir,
-            project.settings.output_name.split('.')[0])
+        headerfile = "{0}/{1}_cpp_precompiled_headers.hpp".format(project.csbuild_dir,
+            project.output_name.split('.')[0])
         obj = "{0}/{1}_{2}.hpp.gch".format(os.path.dirname(headerfile), os.path.basename(headerfile).split('.')[0],
-            project.settings.targetName)
+            project.targetName)
         if os.path.exists(obj):
             if not silent:
                 log.LOG_INFO("Deleting {0}".format(obj))
             os.remove(obj)
 
-        headerfile = "{0}/{1}_c_precompiled_headers.h".format(project.settings.csbuild_dir,
-            project.settings.output_name.split('.')[0])
+        headerfile = "{0}/{1}_c_precompiled_headers.h".format(project.csbuild_dir,
+            project.output_name.split('.')[0])
         obj = "{0}/{1}_{2}.h.gch".format(os.path.dirname(headerfile), os.path.basename(headerfile).split('.')[0],
-            project.settings.targetName)
+            project.targetName)
         if os.path.exists(obj):
             if not silent:
                 log.LOG_INFO("Deleting {0}".format(obj))
@@ -981,13 +922,13 @@ def install():
     Does nothing if neither InstallHeaders() nor InstallOutput() has been called in the make script.
     """
     for project in _shared_globals.sortedProjects:
-        output = "{0}/{1}".format(project.settings.output_dir, project.settings.output_name)
+        output = "{0}/{1}".format(project.output_dir, project.output_name)
         install_something = False
 
-        if not project.settings.output_install_dir or os.path.exists(output):
+        if not project.output_install_dir or os.path.exists(output):
             #install output file
-            if project.settings.output_install_dir:
-                outputDir = "{0}/{1}".format(project.settings.install_prefix, project.settings.output_install_dir)
+            if project.output_install_dir:
+                outputDir = "{0}/{1}".format(project.install_prefix, project.output_install_dir)
                 if not os.path.exists(outputDir):
                     os.makedirs(outputDir)
                 log.LOG_INSTALL("Installing {0} to {1}...".format(output, outputDir))
@@ -995,16 +936,16 @@ def install():
                 install_something = True
 
             #install headers
-            subdir = project.settings.header_subdir
+            subdir = project.header_subdir
             if not subdir:
-                subdir = _utils.get_base_name(project.settings.output_name)
-            if project.settings.header_install_dir:
-                install_dir = "{0}/{1}/{2}".format(project.settings.install_prefix,
-                    project.settings.header_install_dir, subdir)
+                subdir = _utils.get_base_name(project.output_name)
+            if project.header_install_dir:
+                install_dir = "{0}/{1}/{2}".format(project.install_prefix,
+                    project.header_install_dir, subdir)
                 if not os.path.exists(install_dir):
                     os.makedirs(install_dir)
                 headers = []
-                _utils.get_files(project, headers=headers)
+                project.get_files(headers=headers)
                 for header in headers:
                     log.LOG_INSTALL("Installing {0} to {1}...".format(header, install_dir))
                     shutil.copy(header, install_dir)

@@ -99,29 +99,29 @@ class toolchain_gcc(toolchain.toolchainBase):
         return ret
 
     def get_link_command(self, project, outputFile, objList):
-        if project.settings.type == csbuild.ProjectType.StaticLibrary:
+        if project.type == csbuild.ProjectType.StaticLibrary:
             return "ar rcs {} {}".format(outputFile, " ".join(objList))
         else:
-            if project.settings.hasCppFiles:
-                cmd = project.settings.cxx
+            if project.hasCppFiles:
+                cmd = project.cxx
             else:
-                cmd = project.settings.cc
+                cmd = project.cc
 
             return "{} {}{}-o{} {} {}{}{}{}{}-g{} -O{} {} {}".format(
                 cmd,
-                "-m32 " if project.settings.force_32_bit else "-m64 " if project.settings.force_64_bit else "",
-                "-pg " if project.settings.profile else "",
+                "-m32 " if project.force_32_bit else "-m64 " if project.force_64_bit else "",
+                "-pg " if project.profile else "",
                 outputFile,
                 " ".join(objList),
-                "-static-libgcc -static-libstdc++ " if project.settings.static_runtime else "",
-                self.get_libraries(project.settings.libraries),
-                self.get_static_libraries(project.settings.static_libraries),
-                self.get_shared_libraries(project.settings.shared_libraries),
-                self.get_library_dirs(project.settings.library_dirs, True),
-                project.settings.debug_level,
-                project.settings.opt_level,
-                "-shared" if project.settings.type == csbuild.ProjectType.SharedLibrary else "",
-                " ".join(project.settings.linker_flags)
+                "-static-libgcc -static-libstdc++ " if project.static_runtime else "",
+                self.get_libraries(project.libraries),
+                self.get_static_libraries(project.static_libraries),
+                self.get_shared_libraries(project.shared_libraries),
+                self.get_library_dirs(project.library_dirs, True),
+                project.debug_level,
+                project.opt_level,
+                "-shared" if project.type == csbuild.ProjectType.SharedLibrary else "",
+                " ".join(project.linker_flags)
             )
 
     def find_library(self, library, library_dirs, force_static, force_shared):
@@ -135,15 +135,15 @@ class toolchain_gcc(toolchain.toolchainBase):
                     library))
             cmd = ["ld", "-o", "/dev/null", "--verbose", "-static" if force_static else "-shared" if force_shared else "", "-l{}".format(library)]
             cmd += shlex.split(self.get_library_dirs(library_dirs, False))
-            out = subprocess.check_output(cmd, stderr=subprocess.PIPE)
+            out = subprocess.check_output(cmd, stderr=subprocess.STDOUT)
         except subprocess.CalledProcessError as e:
             out = e.output
             success = False
         finally:
             if sys.version_info >= (3, 0):
-                RMatch = re.search("attempt to open (.*) succeeded".format(re.escape(library)).encode('utf-8'), out)
+                RMatch = re.search("attempt to open (.*) succeeded".encode('utf-8'), out, re.I)
             else:
-                RMatch = re.search("attempt to open (.*) succeeded".format(re.escape(library)), out)
+                RMatch = re.search("attempt to open (.*) succeeded", out, re.I)
             #Some libraries (such as -liberty) will return successful but don't have a file (internal to ld maybe?)
             #In those cases we can probably assume they haven't been modified.
             #Set the mtime to 0 and return success as long as ld didn't return an error code.
@@ -165,24 +165,24 @@ class toolchain_gcc(toolchain.toolchainBase):
             standard = self.settingsOverrides["cstandard"]
         return "{} {}{} -Winvalid-pch -c {}-g{} -O{} {}{}{} {}".format(
             compiler,
-            "-m32 " if project.settings.force_32_bit else "-m64 " if project.settings.force_64_bit else "",
+            "-m32 " if project.force_32_bit else "-m64 " if project.force_64_bit else "",
             exitcodes,
-            self.get_defines(project.settings.defines, project.settings.undefines),
-            project.settings.debug_level,
-            project.settings.opt_level,
-            "-fPIC " if project.settings.type == csbuild.ProjectType.SharedLibrary else "",
-            "-pg " if project.settings.profile else "",
+            self.get_defines(project.defines, project.undefines),
+            project.debug_level,
+            project.opt_level,
+            "-fPIC " if project.type == csbuild.ProjectType.SharedLibrary else "",
+            "-pg " if project.profile else "",
             "--std={0}".format(standard) if standard != "" else "",
-            " ".join(project.settings.compiler_flags)
+            " ".join(project.compiler_flags)
         )
 
 
     def get_base_cxx_command(self, project):
-        return self.get_base_command(project.settings.cxx, project, True)
+        return self.get_base_command(project.cxx, project, True)
 
 
     def get_base_cc_command(self, project):
-        return self.get_base_command(project.settings.cc, project, False)
+        return self.get_base_command(project.cc, project, False)
 
 
     def get_extended_command(self, baseCmd, project, forceIncludeFile, outObj, inFile):
@@ -190,8 +190,8 @@ class toolchain_gcc(toolchain.toolchainBase):
         if forceIncludeFile:
             inc = "-include {0}".format(forceIncludeFile.rsplit(".", 1)[0])
         return "{} {}{}{} -o\"{}\" \"{}\"".format(baseCmd,
-            self.get_warnings(self.settingsOverrides["warn_flags"], project.settings.no_warnings),
-            self.get_include_dirs(project.settings.include_dirs), inc, outObj,
+            self.get_warnings(self.settingsOverrides["warn_flags"], project.no_warnings),
+            self.get_include_dirs(project.include_dirs), inc, outObj,
             inFile)
 
 
