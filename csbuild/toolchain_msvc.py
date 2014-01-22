@@ -114,7 +114,7 @@ class toolchain_msvc(toolchain.toolchainBase):
 
 
     def _get_linker_exe(self):
-        return '"{}" '.format(os.path.join(self._bin_path, "lib" if self._project_settings.static else "link"))
+        return '"{}" '.format(os.path.join(self._bin_path, "lib" if self._project_settings.type == csbuild.ProjectType.StaticLibrary else "link"))
 
 
     def _get_default_compiler_args(self):
@@ -139,7 +139,7 @@ class toolchain_msvc(toolchain.toolchainBase):
 
     def _get_non_static_library_linker_args(self):
         # The following arguments should only be specified for dynamic libraries and executables (being used with link.exe, not lib.exe).
-        return "" if self._project_settings.static else "{}{}{}{}".format(
+        return "" if self._project_settings.type == csbuild.ProjectType.StaticLibrary else "{}{}{}{}".format(
             self._get_runtime_library_arg(),
             "/PROFILE " if self._project_settings.profile else "",
             "/DEBUG " if self._project_settings.profile or self._project_settings.debug_level > 0 else "",
@@ -268,7 +268,7 @@ class toolchain_msvc(toolchain.toolchainBase):
     def _get_linker_obj_file_args(self, obj_file_list):
         args = ""
         for obj_file in obj_file_list:
-            args += '"{} "'.format(obj_file)
+            args += '"{}" '.format(obj_file)
 
         return args
 
@@ -283,10 +283,28 @@ class toolchain_msvc(toolchain.toolchainBase):
 
 
     def getExtendedCompilerArgs(self, base_cmd, force_include_file, output_obj, input_file):
-        return '{}/Fo"{}" "{}"'.format(
+        pch = self.get_pch_file(force_include_file)
+        if os.path.exists(pch):
+            pch = '/Fp"{0}"'.format(pch)
+        else:
+            pch = ""
+
+        return '{}/Fo"{}" "{}" {} {} {}'.format(
             base_cmd,
             output_obj,
-            input_file)
+            input_file,
+            '/FI"{}"'.format(force_include_file) if force_include_file else "",
+			'/Yu"{}"'.format(force_include_file) if force_include_file else "",
+            pch)
+
+
+    def getExtendedPrecompilerArgs(self, base_cmd, force_include_file, output_obj, input_file):
+        return '{}/Yc"{}" /Fp"{}" /FI"{}" "{}"'.format(
+            base_cmd,
+            input_file,
+            output_obj,
+            input_file,
+            '" "'.join(self._project_settings.allsources))
 
 
     def getLinkerCommand(self, output_file, obj_list):
@@ -332,6 +350,19 @@ class toolchain_msvc(toolchain.toolchainBase):
         return self.getExtendedCompilerArgs(baseCmd, forceIncludeFile, outObj, inFile)
 
 
+    def get_base_cxx_precompile_command(self, project):
+        return self.get_base_cxx_command(project)
+
+
+    def get_base_cc_precompile_command(self, project):
+        return self.get_base_cc_command(project)
+
+
+    def get_extended_precompile_command(self, baseCmd, project, forceIncludeFile, outObj, inFile):
+        self.SetupForProject(project)
+        return self.getExtendedPrecompilerArgs(baseCmd, forceIncludeFile, outObj, inFile)
+
+
     def get_default_extension(self, projectType):
         if projectType == csbuild.ProjectType.Application:
             return ".exe"
@@ -342,6 +373,9 @@ class toolchain_msvc(toolchain.toolchainBase):
 
     def interrupt_exit_code(self):
         return -1
+
+    def get_pch_file(self, fileName):
+        return fileName.rsplit(".",1)[0]+".pch"
 
     def SetMsvcVersion(self, msvc_version):
         self.settingsOverrides["msvc_version"] = msvc_version

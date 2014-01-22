@@ -188,11 +188,23 @@ class toolchain_gcc(toolchain.toolchainBase):
     def get_extended_command(self, baseCmd, project, forceIncludeFile, outObj, inFile):
         inc = ""
         if forceIncludeFile:
-            inc = "-include {0}".format(forceIncludeFile.rsplit(".", 1)[0])
+            inc = "-include {0}".format(forceIncludeFile)
         return "{} {}{}{} -o\"{}\" \"{}\"".format(baseCmd,
             self.get_warnings(self.settingsOverrides["warn_flags"], project.no_warnings),
             self.get_include_dirs(project.include_dirs), inc, outObj,
             inFile)
+
+
+    def get_base_cxx_precompile_command(self, project):
+        return self.get_base_cxx_command(project)
+
+
+    def get_base_cc_precompile_command(self, project):
+        return self.get_base_cc_command(project)
+
+
+    def get_extended_precompile_command(self, baseCmd, project, forceIncludeFile, outObj, inFile):
+        return self.get_extended_command(baseCmd, project, forceIncludeFile, outObj, inFile)
 
 
     def get_default_extension(self, projectType):
@@ -205,6 +217,9 @@ class toolchain_gcc(toolchain.toolchainBase):
 
     def interrupt_exit_code(self):
         return 2
+
+    def get_pch_file(self, fileName):
+        return fileName+".gch"
 
 
     def WarnFlags(self, *args):

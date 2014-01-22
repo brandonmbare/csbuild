@@ -63,27 +63,29 @@ __credits__ = ["Jaedyn K Draper", "Brandon M Bare"]
 
 signal.signal(signal.SIGINT, signal.SIG_DFL)
 
-#TODO: Cleanup and style, comments
-#TODO: More verbose errors when paths can't be found
-#TODO: Better detection of whether or not something should be linked
-
-#TODO: Support compiling assembly files
+##REQUIRED FOR 1.0##
 #TODO: Change Force32 and Force64 to setting architecture
-#TODO: CXX and CC environment variables
-#TODO: --cxx and --cc flags
-#TODO: Move compiler-specific items to toolchain
+#TODO: Project generation with plugin model
+#TODO: Support compiling assembly files
+#TODO: Better detection of whether or not something should be linked
+#TODO: csbuild.NoMotherFuckingExceptionsFucker().IHateThoseThings().ReallyGiveMeNoExceptionsTheySuck()
+
+##IDEAL FOR 1.0##
 #TODO: Errors on nonexistent targets/projects
 #TODO: Errors on duplicate project names
 #TODO: Errors on nonexistent dependencies
+#TODO: More verbose errors when paths can't be found
 
-#TODO: Project generation with plugin model
+##AS TIME PERMITS##
+#TODO: Cleanup and style, comments
+#TODO: CXX and CC environment variables
+#TODO: --cxx and --cc flags
 #TODO: *Import* existing projects
 #TODO: Verify compiler features
 #TODO: Mark scripts uncallable
 #TODO: csbuild.ScriptLocation()?
 #TODO: -stdlib
 
-#TODO: Precompiled headers in msvc
 
 #<editor-fold desc="Setters">
 #Setters
@@ -893,19 +895,17 @@ def clean(silent=False):
                 if not silent:
                     log.LOG_INFO("Deleting {0}".format(obj))
                 os.remove(obj)
-        headerfile = "{0}/{1}_cpp_precompiled_headers.hpp".format(project.csbuild_dir,
-            project.output_name.split('.')[0])
-        obj = "{0}/{1}_{2}.hpp.gch".format(os.path.dirname(headerfile), os.path.basename(headerfile).split('.')[0],
+        headerfile = "{0}/{1}_cpp_precompiled_headers_{2}.hpp".format(project.csbuild_dir, project.output_name.split('.')[0],
             project.targetName)
+        obj = project.activeToolchain.get_pch_file(headerfile)
         if os.path.exists(obj):
             if not silent:
                 log.LOG_INFO("Deleting {0}".format(obj))
             os.remove(obj)
 
-        headerfile = "{0}/{1}_c_precompiled_headers.h".format(project.csbuild_dir,
-            project.output_name.split('.')[0])
-        obj = "{0}/{1}_{2}.h.gch".format(os.path.dirname(headerfile), os.path.basename(headerfile).split('.')[0],
+        headerfile = "{0}/{1}_c_precompiled_headers_{2}.h".format(project.csbuild_dir, project.output_name.split('.')[0],
             project.targetName)
+        obj = project.activeToolchain.get_pch_file(headerfile)
         if os.path.exists(obj):
             if not silent:
                 log.LOG_INFO("Deleting {0}".format(obj))

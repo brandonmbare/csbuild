@@ -114,8 +114,12 @@ class threaded_build(threading.Thread):
 
             if headerfile:
                 inc += headerfile
-            cmd = self.project.activeToolchain.get_extended_command(baseCommand,
-                self.project, inc, self.obj, os.path.abspath(self.file))
+            if self.forPrecompiledHeader:
+                cmd = self.project.activeToolchain.get_extended_precompile_command(baseCommand,
+                    self.project, inc, self.obj, os.path.abspath(self.file))
+            else:
+                cmd = self.project.activeToolchain.get_extended_command(baseCommand,
+                    self.project, inc, self.obj, os.path.abspath(self.file))
 
             if _shared_globals.show_commands:
                 print(cmd)
@@ -268,14 +272,7 @@ def prepare_precompiles():
 
 
         def handleHeaderFile(headerfile, allheaders, forCpp):
-            if forCpp:
-                obj = "{0}/{1}_{2}.hpp.gch".format(os.path.dirname(headerfile),
-                    os.path.basename(headerfile).split('.')[0],
-                    project.targetName)
-            else:
-                obj = "{0}/{1}_{2}.h.gch".format(os.path.dirname(headerfile),
-                    os.path.basename(headerfile).split('.')[0],
-                    project.targetName)
+            obj = project.activeToolchain.get_pch_file(headerfile)
 
             precompile = False
             if not os.path.exists(headerfile) or project.should_recompile(headerfile, obj, True):
@@ -287,7 +284,7 @@ def prepare_precompiles():
                         break
 
             if not precompile:
-                return False, obj
+                return False, headerfile
 
             with open(headerfile, "w") as f:
                 for header in allheaders:
@@ -319,19 +316,21 @@ def prepare_precompiles():
             if not project.precompile and not project.chunk_precompile:
                 project.needs_cpp_precompile = False
                 continue
-
-            project.cppheaderfile = "{0}/{1}_cpp_precompiled_headers.hpp".format(
-                project.csbuild_dir,
-                project.output_name.split('.')[0])
+                
+            project.cppheaderfile = "{0}/{1}_cpp_precompiled_headers_{2}.hpp".format(project.csbuild_dir,
+                project.output_name.split('.')[0],
+                project.targetName)
+                
             project.needs_cpp_precompile, project.cppheaderfile = \
                 handleHeaderFile(project.cppheaderfile, allheaders, True)
 
             _shared_globals.total_precompiles += int(project.needs_cpp_precompile)
 
         if project.cheaders:
-            project.cheaderfile = "{0}/{1}_c_precompiled_headers.h".format(
-                project.csbuild_dir,
-                project.output_name.split('.')[0])
+            project.cheaderfile = "{0}/{1}_c_precompiled_headers_{2}.h".format(project.csbuild_dir,
+                project.output_name.split('.')[0],
+                project.targetName)
+                
             project.needs_c_precompile, project.cheaderfile = \
                 handleHeaderFile(project.cheaderfile, project.cheaders, False)
 

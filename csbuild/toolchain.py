@@ -65,11 +65,27 @@ class toolchainBase(object):
         pass
 
     @abstractmethod
+    def get_base_cxx_precompile_command(self, project):
+        pass
+
+    @abstractmethod
+    def get_base_cc_precompile_command(self, project):
+        pass
+
+    @abstractmethod
+    def get_extended_precompile_command(self, baseCmd, project, forceIncludeFile, outObj, inFile):
+        pass
+
+    @abstractmethod
     def get_default_extension(self, projectType):
         pass
 
     @abstractmethod
     def interrupt_exit_code(self):
+        pass
+
+    @abstractmethod
+    def get_pch_file(self, fileName):
         pass
 
     def copy(self):

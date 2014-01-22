@@ -124,6 +124,8 @@ class projectSettings(object):
 
         self.cxxcmd = ""  # return value of get_base_cxx_command
         self.cccmd = ""  # return value of get_base_cc_command
+        self.cxxpccmd = ""  # return value of get_base_cxx_precompile_command
+        self.ccpccmd = ""  # return value of get_base_cc_precompile_command
 
         self.recompile_all = False
 
@@ -174,6 +176,8 @@ class projectSettings(object):
 
         self.cccmd = self.activeToolchain.get_base_cc_command(self)
         self.cxxcmd = self.activeToolchain.get_base_cxx_command(self)
+        self.ccpccmd = self.activeToolchain.get_base_cc_precompile_command(self)
+        self.cxxpccmd = self.activeToolchain.get_base_cxx_precompile_command(self)
 
         cmdfile = "{0}/{1}.csbuild".format(self.csbuild_dir, self.targetName)
         cmd = ""
@@ -845,9 +849,7 @@ class projectSettings(object):
 
             _shared_globals.current_compile += 1
 
-            cppobj = "{0}/{1}_{2}.hpp.gch".format(os.path.dirname(self.cppheaderfile),
-                os.path.basename(self.cppheaderfile).split('.')[0],
-                self.targetName)
+            cppobj = self.activeToolchain.get_pch_file(self.cppheaderfile)
 
             #precompiled headers block on current thread - run runs on current thread rather than starting a new one
             thread = _utils.threaded_build(self.cppheaderfile, cppobj, self, True)
@@ -869,9 +871,7 @@ class projectSettings(object):
 
             _shared_globals.current_compile += 1
 
-            cobj = "{0}/{1}_{2}.h.gch".format(os.path.dirname(self.cheaderfile),
-                os.path.basename(self.cheaderfile).split('.')[0],
-                self.targetName)
+            cobj = self.activeToolchain.get_pch_file(self.cheaderfile)
 
             #precompiled headers block on current thread - run runs on current thread rather than starting a new one
             cthread = _utils.threaded_build(self.cheaderfile, cobj, self, True)
@@ -883,9 +883,6 @@ class projectSettings(object):
         if cthread:
             cthread.join()
             _shared_globals.precompiles_done += 1
-
-        self.cppheaderfile = cppobj
-        self.cheaderfile = cobj
 
         totaltime = time.time() - starttime
         totalmin = math.floor(totaltime / 60)
