@@ -566,9 +566,6 @@ def build():
                 if not os.path.exists(projectSettings.currentProject.obj_dir):
                     os.makedirs(projectSettings.currentProject.obj_dir)
 
-                if projectSettings.currentProject.precompile_done:
-                    _shared_globals.current_compile += 1
-
                 for chunk in projectSettings.currentProject.final_chunk_set:
                     built = True
                     obj = "{0}/{1}_{2}.o".format(projectSettings.currentProject.obj_dir, os.path.basename(chunk).split('.')[0],
@@ -1043,6 +1040,8 @@ parser.add_argument('--force-progress-bar', help="Force progress bar on or off."
     action="store", choices=["on", "off"], default=None, const="on", nargs="?")
 parser.add_argument('--prefix', help="install prefix (default /usr/local)", action="store")
 parser.add_argument('--toolchain', help="Toolchain to use for compiling", action="store")
+parser.add_argument('--no-precompile', help="Disable precompiling globally, affects all projects", action="store_true")
+parser.add_argument('--no-chunks', help="Disable chunking globally, affects all projects", action="store_true")
 parser.add_argument("-H", "--makefile_help", action="store_true",
     help="Displays specific help for your makefile (if any)")
 args, remainder = parser.parse_known_args()
@@ -1077,6 +1076,9 @@ if args.toolchain:
 if args.jobs:
     _shared_globals.max_threads = args.jobs
     _shared_globals.semaphore = threading.BoundedSemaphore(value=_shared_globals.max_threads)
+
+_shared_globals.disable_chunks = args.no_chunks
+_shared_globals.disable_precompile = args.no_precompile
 
 makefile_help = args.makefile_help
 

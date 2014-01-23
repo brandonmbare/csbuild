@@ -393,11 +393,11 @@ class projectSettings(object):
                 headers.sort(key=str.lower)
 
 
-    def get_full_path(self, headerFile):
+    def get_full_path(self, headerFile, relativeDir):
         if os.path.exists(headerFile):
             path = headerFile
         else:
-            path = "{0}/{1}".format(os.path.dirname(headerFile), headerFile)
+            path = "{0}/{1}".format(relativeDir, headerFile)
             if not os.path.exists(path):
                 for incDir in self.include_dirs:
                     path = "{0}/{1}".format(incDir, headerFile)
@@ -447,7 +447,7 @@ class projectSettings(object):
         if not headerFile:
             return
 
-        path = self.get_full_path(headerFile)
+        path = self.get_full_path(headerFile, self.workingDirectory)
 
         if not path:
             return
@@ -461,39 +461,34 @@ class projectSettings(object):
         for header in headers:
 
             #Find the header in the listed includes.
-            path = self.get_full_path(header)
+            subpath = self.get_full_path(header, os.path.dirname(headerFile))
 
-            if self.ignore_external_headers and not path.startswith(self.workingDirectory):
+            if self.ignore_external_headers and not subpath.startswith(self.workingDirectory):
                 continue
 
             #If we've already looked at this header (i.e., it was included twice) just ignore it
-            if path in allheaders:
+            if subpath in allheaders:
                 continue
 
-            if path in _shared_globals.allheaders:
+            if subpath in _shared_globals.allheaders:
+                allheaders += _shared_globals.allheaders[subpath]
                 continue
 
-            allheaders.append(path)
+            allheaders.append(subpath)
 
             theseheaders = set()
 
             if self.header_recursion != 1:
-                #Check to see if we've already followed this header.
-                #If we have, the list we created from it is already stored in _allheaders under this header's key.
-                try:
-                    allheaders += _shared_globals.allheaders[path]
-                except KeyError:
-                    pass
-                else:
-                    continue
 
-                self.follow_headers2(path, theseheaders, 1)
+                self.follow_headers2(subpath, theseheaders, 1, headerFile)
 
-            _shared_globals.allheaders.update({path: theseheaders})
+            _shared_globals.allheaders.update({subpath: theseheaders})
             allheaders += theseheaders
 
+        _shared_globals.allheaders.update({path: set(allheaders)})
 
-    def follow_headers2(self, headerFile, allheaders, n):
+
+    def follow_headers2(self, headerFile, allheaders, n, parent):
         """More intensive, recursive, and cpu-hogging function to follow a header.
         Only executed the first time we see a given header; after that the information is cached."""
         headers = []
@@ -501,7 +496,7 @@ class projectSettings(object):
         if not headerFile:
             return
 
-        path = self.get_full_path(headerFile)
+        path = self.get_full_path(headerFile, os.path.dirname(parent))
 
         if not path:
             return
@@ -513,36 +508,29 @@ class projectSettings(object):
         headers = self.get_included_files(path)
 
         for header in headers:
-            path = self.get_full_path(header)
+            subpath = self.get_full_path(header, os.path.dirname(headerFile))
 
-            if self.ignore_external_headers and not path.startswith(self.workingDirectory):
+            if self.ignore_external_headers and not subpath.startswith(self.workingDirectory):
                 continue
 
                 #Check to see if we've already followed this header.
             #If we have, the list we created from it is already stored in _allheaders under this header's key.
-            if path in allheaders:
+            if subpath in allheaders:
                 continue
 
-            if path in _shared_globals.allheaders:
+            if subpath in _shared_globals.allheaders:
+                allheaders |= _shared_globals.allheaders[subpath]
                 continue
 
-            allheaders.add(path)
+            allheaders.add(subpath)
 
             theseheaders = set(allheaders)
 
             if self.header_recursion == 0 or n < self.header_recursion:
-                #Check to see if we've already followed this header.
-                #If we have, the list we created from it is already stored in _allheaders under this header's key.
-                try:
-                    allheaders |= _shared_globals.allheaders[path]
-                except KeyError:
-                    pass
-                else:
-                    continue
 
-                self.follow_headers2(path, theseheaders, n + 1)
+                self.follow_headers2(subpath, theseheaders, n + 1, headerFile)
 
-            _shared_globals.allheaders.update({path: theseheaders})
+            _shared_globals.allheaders.update({subpath: theseheaders})
             allheaders |= theseheaders
 
     def should_recompile(self, srcFile, ofile=None, for_precompiled_header=False):
@@ -736,6 +724,9 @@ class projectSettings(object):
         """ Converts the list into a list of lists - i.e., "chunks"
         Each chunk represents one compilation unit in the chunked build system.
         """
+        if _shared_globals.disable_chunks:
+            return l
+
         sorted_list = sorted(l, key=os.path.getsize, reverse=True)
         if self.unity or not self.use_chunks:
             return [l]

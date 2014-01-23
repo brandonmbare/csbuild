@@ -262,6 +262,9 @@ def sortProjects():
 
 
 def prepare_precompiles():
+    if _shared_globals.disable_precompile:
+        return
+
     wd = os.getcwd()
     for project in _shared_globals.projects.values():
         os.chdir(project.workingDirectory)
