@@ -76,6 +76,7 @@ class projectSettings(object):
 
         self.sources = []
         self.allsources = []
+        self.allheaders = []
 
         self.type = csbuild.ProjectType.Application
         self.ext = None
@@ -152,6 +153,10 @@ class projectSettings(object):
 
         self.warnings_as_errors = False
 
+        self.built_something = False
+
+        self.outputArchitecture = None
+
     def prepareBuild(self):
         wd = os.getcwd()
         os.chdir(self.workingDirectory)
@@ -169,7 +174,7 @@ class projectSettings(object):
             self.ext = self.activeToolchain.get_default_extension(self.type)
 
         self.output_name += self.ext
-        log.LOG_BUILD("Preparing build tasks for {}...".format(self.output_name))
+        log.LOG_BUILD("Preparing tasks for {}...".format(self.output_name))
 
         if not os.path.exists(self.csbuild_dir):
             os.makedirs(self.csbuild_dir)
@@ -191,7 +196,7 @@ class projectSettings(object):
                 f.write(self.cxxcmd + self.cccmd)
 
         if not self.chunks:
-            self.get_files(self.allsources)
+            self.get_files(self.allsources, self.allheaders)
 
             if not self.allsources:
                 return
@@ -201,7 +206,7 @@ class projectSettings(object):
         else:
             self.allsources = list(itertools.chain(*self.chunks))
 
-        if not _shared_globals.CleanBuild and not _shared_globals.do_install:
+        if not _shared_globals.CleanBuild and not _shared_globals.do_install and csbuild.get_option("generate_solution") is None:
             for source in self.allsources:
                 if self.should_recompile(source):
                     self.sources.append(source)
@@ -275,6 +280,7 @@ class projectSettings(object):
             "headers": list(self.headers),
             "sources": list(self.sources),
             "allsources": list(self.allsources),
+            "allheaders": list(self.allheaders),
             "type": self.type,
             "ext": self.ext,
             "profile": self.profile,
@@ -322,7 +328,9 @@ class projectSettings(object):
             "cheaders": list(self.cheaders),
             "activeToolchainName": self.activeToolchainName,
             "activeToolchain": None,
-            "warnings_as_errors": self.warnings_as_errors
+            "warnings_as_errors": self.warnings_as_errors,
+            "built_something": self.built_something,
+            "outputArchitecture": self.outputArchitecture
         }
 
         return ret
@@ -815,7 +823,7 @@ class projectSettings(object):
         starttime = time.time()
         log.LOG_BUILD("Precompiling headers...")
 
-        _shared_globals.built_something = True
+        self.built_something = True
 
         if not os.path.exists(self.obj_dir):
             os.makedirs(self.obj_dir)
@@ -886,3 +894,13 @@ class projectSettings(object):
 
 
 currentProject = projectSettings()
+
+class ProjectGroup(object):
+    def __init__(self, name, parentGroup):
+        self.projects = {}
+        self.subgroups = {}
+        self.name = name
+        self.parentGroup = parentGroup
+
+rootProject = ProjectGroup("", None)
+currentGroup = rootProject

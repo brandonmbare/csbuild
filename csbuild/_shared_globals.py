@@ -44,7 +44,6 @@ max_threads = multiprocessing.cpu_count()
 semaphore = threading.BoundedSemaphore(value=max_threads)
 lock = threading.Lock()
 
-built_something = False
 build_success = True
 called_something = False
 overrides = ""
@@ -98,6 +97,12 @@ warnings = []
 
 disable_precompile = False
 disable_chunks = False
+
+project_generators = {}
+
+alltargets = set()
+alltoolchains = {}
+allgenerators = {}
 
 class dummy_block(object):
     """Some versions of python have a bug in threading where a dummy thread will try and use a value that it deleted.

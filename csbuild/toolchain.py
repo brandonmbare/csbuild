@@ -44,6 +44,10 @@ class toolchainBase(object):
     def __init__(self):
         self.settingsOverrides = {}
 
+    @staticmethod
+    def additional_args(parser):
+        pass
+
     @abstractmethod
     def get_link_command(self, project, outputFile, objList):
         pass
@@ -483,3 +487,6 @@ class toolchainBase(object):
     def Force64Bit(self):
         self.settingsOverrides["force_64_bit"] = True
         self.settingsOverrides["force_32_bit"] = False
+
+    def OutputArchitecture(self, arch):
+        self.settingsOverrides["outputArchitecture"] = arch

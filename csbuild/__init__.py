@@ -51,6 +51,8 @@ from csbuild import toolchain_gcc
 from csbuild import log
 from csbuild import _shared_globals
 from csbuild import projectSettings
+from csbuild import project_generator_qtcreator
+from csbuild import project_generator
 
 __author__ = 'Jaedyn K Draper'
 __copyright__ = 'Copyright (C) 2013 Jaedyn K Draper'
@@ -64,8 +66,10 @@ __credits__ = ["Jaedyn K Draper", "Brandon M Bare"]
 signal.signal(signal.SIGINT, signal.SIG_DFL)
 
 ##REQUIRED FOR 1.0##
-#TODO: Change Force32 and Force64 to setting architecture
-#TODO: Project generation with plugin model
+#TODO: Implement architecture on msvc
+#TODO: MSVC project generator
+#TODO: Pre- and Post-compile steps
+#TODO: assert
 #TODO: Support compiling assembly files
 #TODO: Better detection of whether or not something should be linked
 #TODO: csbuild.NoMotherFuckingExceptionsFucker().IHateThoseThings().ReallyGiveMeNoExceptionsTheySuck()
@@ -86,6 +90,31 @@ signal.signal(signal.SIGINT, signal.SIG_DFL)
 #TODO: csbuild.ScriptLocation()?
 #TODO: -stdlib
 
+
+class ArchitectureType(object):
+    def __init__(self, archString, vendor="unknown", sys="unknown", abi="unknown"):
+        self.archString = archString
+        self.clangTriple = "{}-{}-{}-{}".format(archString, vendor, sys, abi)
+
+    def __eq__(self, other):
+        return self.archString == other.archString
+
+ArchitectureX86 = ArchitectureType("i386")
+ArchitectureWIN32 = ArchitectureType("i386", "pc", "win32")
+
+ArchitectureX64 = ArchitectureType("x86_64")
+ArchitectureAMD64 = ArchitectureX64
+ArchitectureWIN64 = ArchitectureType("x86_64", "pc", "win32")
+
+ArchitectureARM = ArchitectureType("arm")
+ArchitectureXScale = ArchitectureARM
+ArchitectureAARCH64 = ArchitectureType("aarch64")
+
+
+ArchitecturePowerPC = ArchitectureType("powerpc")
+ArchitecturePowerPC64 = ArchitectureType("powerpc64")
+ArchitecturePPU = ArchitecturePowerPC64
+#TODO: More of these?
 
 #<editor-fold desc="Setters">
 #Setters
@@ -430,6 +459,10 @@ def Force64Bit():
     projectSettings.currentProject.force_32_bit = False
 
 
+def OutputArchitecture(arch):
+    projectSettings.currentProject.outputArchitecture = arch
+
+
 def EnableWarningsAsErrors():
     projectSettings.currentProject.warnings_as_errors = True
 
@@ -439,7 +472,13 @@ def DisableWarningsAsErrors():
 
 
 def RegisterToolchain(name, toolchain):
+    _shared_globals.alltoolchains[name] = toolchain
     projectSettings.currentProject.toolchains[name] = toolchain()
+
+
+def RegisterProjectGenerator(name, generator):
+    _shared_globals.allgenerators[name] = generator
+    _shared_globals.project_generators[name] = generator
 
 
 def Toolchain(*args):
@@ -468,6 +507,8 @@ def project(name, workingDirectory, linkDepends=None, srcDepends=None):
         srcDepends = [srcDepends]
 
     def wrap(projectFunction):
+        if name in _shared_globals.projects:
+            raise RuntimeError("Multiple projects with the same name: {}".format(name))
         previousProject = projectSettings.currentProject.copy()
         projectFunction()
 
@@ -487,18 +528,34 @@ def project(name, workingDirectory, linkDepends=None, srcDepends=None):
         newProject.func = projectFunction
 
         _shared_globals.projects.update({name: newProject})
+        projectSettings.currentGroup.projects.update({name: newProject})
 
         projectSettings.currentProject = previousProject
         return projectFunction
 
     return wrap
 
+def projectGroup(name):
+    def wrap(groupFunction):
+        if name in projectSettings.currentGroup.subgroups:
+            projectSettings.currentGroup = projectSettings.currentGroup.subgroups[name]
+        else:
+            newGroup = projectSettings.ProjectGroup(name, projectSettings.currentGroup)
+            projectSettings.currentGroup.subgroups.update({name: newGroup})
+            projectSettings.currentGroup = newGroup
+
+        groupFunction()
+
+        projectSettings.currentGroup = projectSettings.currentGroup.parentGroup
+
+    return wrap
 
 def target(name):
     def wrap(targetFunction):
         projectSettings.currentProject.targets.update({name: targetFunction})
         return targetFunction
 
+    _shared_globals.alltargets.add(name)
     return wrap
 
 #</editor-fold>
@@ -561,12 +618,13 @@ def build():
             log.LOG_BUILD("Building {0} ({1})".format(projectSettings.currentProject.output_name, project.targetName))
 
             if project.precompile_headers():
-                _shared_globals.built_something = True
-
                 if not os.path.exists(projectSettings.currentProject.obj_dir):
                     os.makedirs(projectSettings.currentProject.obj_dir)
 
                 for chunk in projectSettings.currentProject.final_chunk_set:
+                    #not set until here because final_chunk_set may be empty.
+                    project.built_something = True
+
                     built = True
                     obj = "{0}/{1}_{2}.o".format(projectSettings.currentProject.obj_dir, os.path.basename(chunk).split('.')[0],
                         project.targetName)
@@ -816,7 +874,7 @@ def link(project, *objs):
     if not objs:
         return True
 
-    if not _shared_globals.built_something:
+    if not project.built_something:
         if os.path.exists(output):
             mtime = os.path.getmtime(output)
             for obj in objs:
@@ -826,7 +884,7 @@ def link(project, *objs):
                     #We should count that as having built something, because we do need to link.
                     #Otherwise, if the object time is earlier, there's a good chance that the existing
                     #output file was linked using a different target, so let's link it again to be safe.
-                    _shared_globals.built_something = True
+                    project.built_something = True
                     break
 
             #Even though we didn't build anything, we should verify all our libraries are up to date too.
@@ -837,10 +895,10 @@ def link(project, *objs):
                         "Library {0} has been modified since the last successful build. Relinking to new library."
                         .format(
                             project.libraries[i]))
-                    _shared_globals.built_something = True
+                    project.built_something = True
 
             #Barring the two above cases, there's no point linking if the compiler did nothing.
-            if not _shared_globals.built_something:
+            if not project.built_something:
                 if not _shared_globals.called_something:
                     log.LOG_LINKER("Nothing to link.")
                 return True
@@ -925,7 +983,7 @@ def install():
         if not project.output_install_dir or os.path.exists(output):
             #install output file
             if project.output_install_dir:
-                outputDir = "{0}/{1}".format(project.install_prefix, project.output_install_dir)
+                outputDir = "{0}/{1}".format(_shared_globals.install_prefix, project.output_install_dir)
                 if not os.path.exists(outputDir):
                     os.makedirs(outputDir)
                 log.LOG_INSTALL("Installing {0} to {1}...".format(output, outputDir))
@@ -937,7 +995,7 @@ def install():
             if not subdir:
                 subdir = _utils.get_base_name(project.output_name)
             if project.header_install_dir:
-                install_dir = "{0}/{1}/{2}".format(project.install_prefix,
+                install_dir = "{0}/{1}/{2}".format(_shared_globals.install_prefix,
                     project.header_install_dir, subdir)
                 if not os.path.exists(install_dir):
                     os.makedirs(install_dir)
@@ -972,22 +1030,9 @@ def AddScript(incFile):
     incFile = os.path.abspath(incFile)
     wd = os.getcwd()
     os.chdir(path)
-    if sys.version_info >= (3, 0):
-        with open(incFile, "r") as f:
-            exec(f.read(), _shared_globals.makefile_dict, _shared_globals.makefile_dict)
-    else:
-        execfile(incFile, _shared_globals.makefile_dict, _shared_globals.makefile_dict)
+    _execfile(incFile, _shared_globals.makefile_dict, _shared_globals.makefile_dict)
     os.chdir(wd)
 
-
-RegisterToolchain("gcc", toolchain_gcc.toolchain_gcc)
-RegisterToolchain("msvc", toolchain_msvc.toolchain_msvc)
-if platform.system() == "Windows":
-    SetActiveToolchain("msvc")
-else:
-    SetActiveToolchain("gcc")
-
-@target("debug")
 def debug():
     """Default debug target."""
     if not projectSettings.currentProject.opt_set:
@@ -1001,8 +1046,6 @@ def debug():
     if not projectSettings.currentProject.toolchains["msvc"].settingsOverrides["debug_runtime_set"]:
         projectSettings.currentProject.toolchains["msvc"].settingsOverrides["debug_runtime"] = True
 
-
-@target("release")
 def release():
     """Default release target."""
     if not projectSettings.currentProject.opt_set:
@@ -1017,156 +1060,255 @@ def release():
         projectSettings.currentProject.toolchains["msvc"].settingsOverrides["debug_runtime"] = False
 
 
-parser = argparse.ArgumentParser(description='CSB: Build files in local directories and subdirectories.')
-parser.add_argument('target', nargs="?", help='Target for build')
-parser.add_argument("--project", action="append",
-    help="Build only the specified project. May be specified multiple times.")
-group = parser.add_mutually_exclusive_group()
-group.add_argument('--clean', action="store_true", help='Clean the target build')
-group.add_argument('--install', action="store_true", help='Install the target build')
-group2 = parser.add_mutually_exclusive_group()
-group2.add_argument('-v', action="store_const", const=0, dest="quiet",
-    help="Verbose. Enables additional INFO-level logging.", default=1)
-group2.add_argument('-q', action="store_const", const=2, dest="quiet",
-    help="Quiet. Disables all logging except for WARN and ERROR.", default=1)
-group2.add_argument('-qq', action="store_const", const=3, dest="quiet",
-    help="Very quiet. Disables all csb-specific logging.", default=1)
-parser.add_argument("-j", "--jobs", action="store", dest="jobs", type=int)
-parser.add_argument('--show-commands', help="Show all commands sent to the system.", action="store_true")
-parser.add_argument('--no-progress', help="Turn off the progress bar.", action="store_true")
-parser.add_argument('--force-color', help="Force color on or off.",
-    action="store", choices=["on", "off"], default=None, const="on", nargs="?")
-parser.add_argument('--force-progress-bar', help="Force progress bar on or off.",
-    action="store", choices=["on", "off"], default=None, const="on", nargs="?")
-parser.add_argument('--prefix', help="install prefix (default /usr/local)", action="store")
-parser.add_argument('--toolchain', help="Toolchain to use for compiling", action="store")
-parser.add_argument('--no-precompile', help="Disable precompiling globally, affects all projects", action="store_true")
-parser.add_argument('--no-chunks', help="Disable chunking globally, affects all projects", action="store_true")
-parser.add_argument("-H", "--makefile_help", action="store_true",
-    help="Displays specific help for your makefile (if any)")
-args, remainder = parser.parse_known_args()
+def _setupdefaults():
+    RegisterToolchain("gcc", toolchain_gcc.toolchain_gcc)
+    RegisterToolchain("msvc", toolchain_msvc.toolchain_msvc)
 
-if args.target is not None:
-    _shared_globals.target = args.target.lower()
-_shared_globals.CleanBuild = args.clean
-_shared_globals.do_install = args.install
-_shared_globals.quiet = args.quiet
-_shared_globals.show_commands = args.show_commands
-if args.project:
-    _shared_globals.project_build_list = set(args.project)
-if args.no_progress:
-    _shared_globals.columns = 0
+    RegisterProjectGenerator("qtcreator", project_generator_qtcreator.project_generator_qtcreator)
 
-if args.force_color == "on":
-    _shared_globals.color_supported = True
-elif args.force_color == "off":
-    _shared_globals.color_supported = False
-
-if args.force_progress_bar == "on":
-    _shared_globals.columns = 80
-elif args.force_progress_bar == "off":
-    _shared_globals.columns = 0
-
-if args.prefix:
-    _shared_globals.install_prefix = args.prefix
-
-if args.toolchain:
-    SetActiveToolchain(args.toolchain)
-
-if args.jobs:
-    _shared_globals.max_threads = args.jobs
-    _shared_globals.semaphore = threading.BoundedSemaphore(value=_shared_globals.max_threads)
-
-_shared_globals.disable_chunks = args.no_chunks
-_shared_globals.disable_precompile = args.no_precompile
-
-makefile_help = args.makefile_help
-
-if makefile_help:
-    remainder.append("-h")
-
-args = remainder
-
-mainfile = sys.modules['__main__'].__file__
-if mainfile is not None:
-    mainfile = os.path.basename(os.path.abspath(mainfile))
-else:
-    mainfile = "<makefile>"
-
-if mainfile != "<makefile>":
-    if sys.version_info >= (3, 0):
-        with open(mainfile, "r") as f:
-            exec(f.read(), _shared_globals.makefile_dict, _shared_globals.makefile_dict)
+    if platform.system() == "Windows":
+        SetActiveToolchain("msvc")
     else:
-        execfile(mainfile, _shared_globals.makefile_dict, _shared_globals.makefile_dict)
-else:
-    log.LOG_ERROR("CSB cannot be run from the interactive console.")
-    sys.exit(1)
+        SetActiveToolchain("gcc")
 
-if makefile_help:
-    sys.exit(0)
-
-def insert_depends(proj, projList, already_inserted=set()):
-    already_inserted.add(proj.name)
-    for depend in proj.linkDepends:
-        projData = _shared_globals.projects[depend]
-        projList[depend] = projData
-        if depend in already_inserted:
-            log.LOG_ERROR("Circular dependencies detected: {0} and {1} in linkDepends".format(depend, proj.name))
-            sys.exit(1)
-        insert_depends(projData, projList)
-    for depend in proj.srcDepends:
-        projData = _shared_globals.projects[depend]
-        projList[depend] = projData
-        if depend in already_inserted:
-            log.LOG_ERROR("Circular dependencies detected: {0} and {1} in linkDepends".format(depend, proj.name))
-            sys.exit(1)
-        insert_depends(projData, projList)
-    already_inserted.remove(proj.name)
+    target("debug")(debug)
+    target("release")(release)
 
 
-if _shared_globals.project_build_list:
-    newProjList = {}
-    for proj in _shared_globals.project_build_list:
-        projData = _shared_globals.projects[proj]
-        newProjList[proj] = projData
-        insert_depends(projData, newProjList)
-    _shared_globals.projects = newProjList
+def get_option(option):
+    option = option.replace("-", "_")
+    global args
+    if hasattr(args, option):
+        return getattr(args, option)
+    else:
+        return None
 
-_shared_globals.sortedProjects = _utils.sortProjects()
+_options = []
 
-for proj in _shared_globals.sortedProjects:
-    proj.prepareBuild()
+def add_option(*args, **kwargs):
+    _options.append([args, kwargs])
 
-_utils.check_version()
+def get_args():
+    global args
+    return vars(args)
 
-totaltime = time.time() - _shared_globals.starttime
-totalmin = math.floor(totaltime / 60)
-totalsec = round(totaltime % 60)
-log.LOG_BUILD("Build preparation took {0}:{1:02}".format(int(totalmin), int(totalsec)))
+def get_default_arg(argname):
+    global parser
+    return parser.get_default(argname)
 
-if _shared_globals.CleanBuild:
-    clean()
-elif _shared_globals.do_install:
-    install()
-else:
-    make()
 
-#Print out any errors or warnings incurred so the user doesn't have to scroll to see what went wrong
-if _shared_globals.warnings:
-    print("\n")
-    log.LOG_WARN("Warnings encountered during build:")
-    for warn in _shared_globals.warnings[0:-1]:
-        log.LOG_WARN(warn)
-if _shared_globals.errors:
-    print("\n")
-    log.LOG_ERROR("Errors encountered during build:")
-    for error in _shared_globals.errors[0:-1]:
-        log.LOG_ERROR(error)
+class dummy(object):
+    def __setattr__(self, key, value):
+        pass
 
-_barWriter.stop()
+    def __getattribute__(self, item):
+        return ""
 
-if not _shared_globals.build_success:
-    sys.exit(1)
-else:
-    sys.exit(0)
+
+def _execfile(file, glob, loc):
+    if sys.version_info >= (3, 0):
+        with open(file, "r") as f:
+            exec(f.read(), glob, loc)
+    else:
+        execfile(file, glob, loc)
+
+mainfile = ""
+
+def _run():
+    _setupdefaults()
+
+    global args
+    args = dummy()
+
+    global mainfile
+    mainfile = sys.modules['__main__'].__file__
+    if mainfile is not None:
+        os.chdir(os.path.dirname(mainfile))
+        mainfile = os.path.basename(os.path.abspath(mainfile))
+        if "-h" in sys.argv or "--help" in sys.argv:
+            _execfile(mainfile, _shared_globals.makefile_dict, _shared_globals.makefile_dict)
+    else:
+        log.LOG_ERROR("CSB cannot be run from the interactive console.")
+        sys.exit(1)
+
+    global parser
+    parser = argparse.ArgumentParser(description='CSB: Build files in local directories and subdirectories.',
+        prog="csbuild", usage="{} [options] target".format(mainfile))
+
+    parser.add_argument('target', nargs="?", help='Target for build (default is {})'.format(projectSettings.currentProject.default_target))
+    parser.add_argument("--project", action="append",
+        help="Build only the specified project. May be specified multiple times.")
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument('--clean', action="store_true", help='Clean the target build')
+    group.add_argument('--install', action="store_true", help='Install the target build')
+    group2 = parser.add_mutually_exclusive_group()
+    group2.add_argument('-v', action="store_const", const=0, dest="quiet",
+        help="Verbose. Enables additional INFO-level logging.", default=1)
+    group2.add_argument('-q', action="store_const", const=2, dest="quiet",
+        help="Quiet. Disables all logging except for WARN and ERROR.", default=1)
+    group2.add_argument('-qq', action="store_const", const=3, dest="quiet",
+        help="Very quiet. Disables all csb-specific logging.", default=1)
+    parser.add_argument("-j", "--jobs", action="store", dest="jobs", type=int)
+    parser.add_argument('--show-commands', help="Show all commands sent to the system.", action="store_true")
+    parser.add_argument('--no-progress', help="Turn off the progress bar.", action="store_true")
+    parser.add_argument('--force-color', help="Force color on or off.",
+        action="store", choices=["on", "off"], default=None, const="on", nargs="?")
+    parser.add_argument('--force-progress-bar', help="Force progress bar on or off.",
+        action="store", choices=["on", "off"], default=None, const="on", nargs="?")
+    parser.add_argument('--prefix', help="install prefix (default /usr/local)", action="store")
+    parser.add_argument('--toolchain', help="Toolchain to use for compiling", action="store")
+    parser.add_argument('--no-precompile', help="Disable precompiling globally, affects all projects", action="store_true")
+    parser.add_argument('--no-chunks', help="Disable chunking globally, affects all projects", action="store_true")
+
+    group = parser.add_argument_group("Solution generation", "Commands to generate a solution")
+    group.add_argument('--generate-solution', help="Generate a solution file for use with the given IDE", action="store", metavar="SOLUTION_TYPE")
+    group.add_argument('--solution-path', help="Path to output the solution file (default is ./Solutions/<solutiontype>)", action="store", default="")
+    group.add_argument('--solution-name', help="Name of solution output file (default is csbuild)", action = "store", default="csbuild")
+
+    group = parser.add_argument_group("Projects in this makefile")
+    for proj in _shared_globals.projects:
+        group.add_argument("fakearg_"+proj, metavar=proj, nargs="?")
+
+    group = parser.add_argument_group("Targets in this makefile")
+    for targ in _shared_globals.alltargets:
+        group.add_argument("fakearg_"+targ, metavar=targ, nargs="?")
+
+    group = parser.add_argument_group("Available toolchains")
+    for chain in _shared_globals.alltoolchains:
+        group.add_argument("fakearg_"+chain, metavar=chain, nargs="?")
+
+    for chain in _shared_globals.alltoolchains.items():
+        if chain[1].additional_args != toolchain.toolchainBase.additional_args:
+            group = parser.add_argument_group("Options for toolchain {}".format(chain[0]))
+            chain[1].additional_args(group)
+
+    group = parser.add_argument_group("Available project generators")
+    for gen in _shared_globals.allgenerators:
+        group.add_argument("fakearg_"+gen, metavar=gen, nargs="?")
+
+    for gen in _shared_globals.allgenerators.items():
+        if gen[1].additional_args != project_generator.project_generator.additional_args:
+            group = parser.add_argument_group("Options for solution generator {}".format(gen[0]))
+            gen[1].additional_args(group)
+
+    if _options:
+        group = parser.add_argument_group("Local makefile options")
+        for option in _options:
+            group.add_argument(*option[0], **option[1])
+
+    args = parser.parse_args()
+
+    if args.target is not None:
+        _shared_globals.target = args.target.lower()
+    _shared_globals.CleanBuild = args.clean
+    _shared_globals.do_install = args.install
+    _shared_globals.quiet = args.quiet
+    _shared_globals.show_commands = args.show_commands
+    if args.project:
+        _shared_globals.project_build_list = set(args.project)
+    if args.no_progress:
+        _shared_globals.columns = 0
+
+    if args.force_color == "on":
+        _shared_globals.color_supported = True
+    elif args.force_color == "off":
+        _shared_globals.color_supported = False
+
+    if args.force_progress_bar == "on":
+        _shared_globals.columns = 80
+    elif args.force_progress_bar == "off":
+        _shared_globals.columns = 0
+
+    if args.prefix:
+        _shared_globals.install_prefix = args.prefix
+
+    if args.toolchain:
+        SetActiveToolchain(args.toolchain)
+
+    if args.jobs:
+        _shared_globals.max_threads = args.jobs
+        _shared_globals.semaphore = threading.BoundedSemaphore(value=_shared_globals.max_threads)
+
+    _shared_globals.disable_chunks = args.no_chunks
+    _shared_globals.disable_precompile = args.no_precompile
+
+    #there's an execfile on this up above, but if we got this far we didn't pass --help or -h, so we need to do this here instead
+    _execfile(mainfile, _shared_globals.makefile_dict, _shared_globals.makefile_dict)
+
+    def insert_depends(proj, projList, already_inserted=set()):
+        already_inserted.add(proj.name)
+        for depend in proj.linkDepends:
+            projData = _shared_globals.projects[depend]
+            projList[depend] = projData
+            if depend in already_inserted:
+                log.LOG_ERROR("Circular dependencies detected: {0} and {1} in linkDepends".format(depend, proj.name))
+                sys.exit(1)
+            insert_depends(projData, projList)
+        for depend in proj.srcDepends:
+            projData = _shared_globals.projects[depend]
+            projList[depend] = projData
+            if depend in already_inserted:
+                log.LOG_ERROR("Circular dependencies detected: {0} and {1} in linkDepends".format(depend, proj.name))
+                sys.exit(1)
+            insert_depends(projData, projList)
+        already_inserted.remove(proj.name)
+
+
+    if _shared_globals.project_build_list:
+        newProjList = {}
+        for proj in _shared_globals.project_build_list:
+            projData = _shared_globals.projects[proj]
+            newProjList[proj] = projData
+            insert_depends(projData, newProjList)
+        _shared_globals.projects = newProjList
+
+    _shared_globals.sortedProjects = _utils.sortProjects()
+
+    for proj in _shared_globals.sortedProjects:
+        proj.prepareBuild()
+
+    _utils.check_version()
+
+    totaltime = time.time() - _shared_globals.starttime
+    totalmin = math.floor(totaltime / 60)
+    totalsec = round(totaltime % 60)
+    log.LOG_BUILD("Task preparation took {0}:{1:02}".format(int(totalmin), int(totalsec)))
+
+    if args.generate_solution is not None:
+        if not args.solution_path:
+            args.solution_path = os.path.join(".", "Solutions", args.generate_solution)
+        if args.generate_solution not in _shared_globals.project_generators:
+            log.LOG_ERROR("No solution generator present for solution of type {}".format(args.generate_solution))
+            sys.exit(0)
+        generator = _shared_globals.project_generators[args.generate_solution](args.solution_path, args.solution_name)
+
+        generator.write_solution()
+        log.LOG_BUILD("Done")
+
+    elif _shared_globals.CleanBuild:
+        clean()
+    elif _shared_globals.do_install:
+        install()
+    else:
+        make()
+
+    #Print out any errors or warnings incurred so the user doesn't have to scroll to see what went wrong
+    if _shared_globals.warnings:
+        print("\n")
+        log.LOG_WARN("Warnings encountered during build:")
+        for warn in _shared_globals.warnings[0:-1]:
+            log.LOG_WARN(warn)
+    if _shared_globals.errors:
+        print("\n")
+        log.LOG_ERROR("Errors encountered during build:")
+        for error in _shared_globals.errors[0:-1]:
+            log.LOG_ERROR(error)
+
+    _barWriter.stop()
+
+    if not _shared_globals.build_success:
+        sys.exit(1)
+    else:
+        sys.exit(0)
+
+_run()

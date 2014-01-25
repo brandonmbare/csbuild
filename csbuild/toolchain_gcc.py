@@ -25,6 +25,7 @@ import re
 import sys
 from csbuild import _shared_globals
 from csbuild import toolchain
+from csbuild import log
 import csbuild
 
 
@@ -35,6 +36,7 @@ class toolchain_gcc(toolchain.toolchainBase):
         self.settingsOverrides["warn_flags"] = []
         self.settingsOverrides["cppstandard"] = ""
         self.settingsOverrides["cstandard"] = ""
+
     def get_warnings(self, warnFlags, noWarnings):
         """Returns a string containing all of the passed warning flags, formatted to be passed to gcc/g++."""
         if noWarnings:
@@ -153,6 +155,14 @@ class toolchain_gcc(toolchain.toolchainBase):
             elif not success:
                 return None
 
+    def _get_cross_compile_flag(self, compiler, project):
+        if not project.outputArchitecture:
+            return ""
+        if "clang" in compiler.lower():
+            return "-target {}".format(project.outputArchitecture.clangTriple)
+        else:
+            return "-b {}".format(project.outputArchitecture.archString)
+
 
     def get_base_command(self, compiler, project, isCpp):
         exitcodes = ""
@@ -163,7 +173,7 @@ class toolchain_gcc(toolchain.toolchainBase):
             standard = self.settingsOverrides["cppstandard"]
         else:
             standard = self.settingsOverrides["cstandard"]
-        return "{} {}{} -Winvalid-pch -c {}-g{} -O{} {}{}{} {}".format(
+        return "{} {}{} -Winvalid-pch -c {}-g{} -O{} {}{}{} {} {}".format(
             compiler,
             "-m32 " if project.force_32_bit else "-m64 " if project.force_64_bit else "",
             exitcodes,
@@ -173,7 +183,8 @@ class toolchain_gcc(toolchain.toolchainBase):
             "-fPIC " if project.type == csbuild.ProjectType.SharedLibrary else "",
             "-pg " if project.profile else "",
             "--std={0}".format(standard) if standard != "" else "",
-            " ".join(project.compiler_flags)
+            " ".join(project.compiler_flags),
+            self._get_cross_compile_flag(compiler, project)
         )
 
 
