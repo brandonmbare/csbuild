@@ -57,6 +57,8 @@ class toolchain_msvc(toolchain.toolchainBase):
         self.settingsOverrides["debug_runtime"] = False
         self.settingsOverrides["debug_runtime_set"] = False
         self._subsystem = SubSystem.DEFAULT
+        
+        self._acutal_library_names = {}
 
     def SetupForProject(self, project):
         platform_architectures = {
@@ -219,7 +221,7 @@ class toolchain_msvc(toolchain.toolchainBase):
         args = ""
         for lib in self._project_settings.libraries + self._project_settings.static_libraries + \
                 self._project_settings.shared_libraries:
-            args += '"{}.lib" '.format(lib)
+            args += '{} '.format(self._actual_library_names[lib])
 
         return args
 
@@ -317,13 +319,20 @@ class toolchain_msvc(toolchain.toolchainBase):
     ### Required functions ###
 
     def find_library(self, library, library_dirs, force_static, force_shared):
-        library += ".lib"
+        libfile = "{}.lib".format(library)
 
         for lib_dir in library_dirs:
-            lib_file_path = os.path.join(lib_dir, library)
-
+            lib_file_path = os.path.join(lib_dir, libfile)
             # Do a simple check to see if the file exists.
             if os.path.exists(lib_file_path):
+                self._actual_library_names.update({library, libfile})
+                return lib_file_path
+            
+            #Compatibility with Linux's way of adding lib- to the front of its libraries
+            libfile = "lib{}".format(libfile)
+            lib_file_path = os.path.join(lib_dir, libfile)
+            if os.path.exists(lib_file_path):
+                self._actual_library_names.update({library, libfile})
                 return lib_file_path
 
         # The library wasn't found.

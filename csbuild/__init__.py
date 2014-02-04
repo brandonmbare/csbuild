@@ -1123,8 +1123,10 @@ def _run():
     global mainfile
     mainfile = sys.modules['__main__'].__file__
     if mainfile is not None:
-        os.chdir(os.path.dirname(mainfile))
-        mainfile = os.path.basename(os.path.abspath(mainfile))
+        dir = os.path.dirname(mainfile)
+        if dir:
+            os.chdir(dir)
+            mainfile = os.path.basename(os.path.abspath(mainfile))
         if "-h" in sys.argv or "--help" in sys.argv:
             _execfile(mainfile, _shared_globals.makefile_dict, _shared_globals.makefile_dict)
     else:

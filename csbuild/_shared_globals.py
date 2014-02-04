@@ -20,22 +20,10 @@
 
 import threading
 import multiprocessing
+from csbuild import terminfo
 
-columns = 0
-color_supported = False
-
-try:
-    import curses
-except:
-    pass
-else:
-    try:
-        curses.setupterm()
-    except:
-        pass
-    else:
-        columns = curses.tigetnum('cols')
-        color_supported = (curses.tigetnum("colors") >= 8)
+columns = terminfo.TermInfo.GetNumColumns()
+color_supported = terminfo.TermInfo.SupportsColor()
 
 printmutex = threading.Lock()
 
