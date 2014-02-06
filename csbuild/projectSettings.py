@@ -704,7 +704,7 @@ class projectSettings(object):
                     continue
 
                 log.LOG_INFO("Looking for lib{0}...".format(library))
-                lib = self.activeToolchain.find_library(library, self.library_dirs,
+                lib = self.activeToolchain.find_library(self, library, self.library_dirs,
                     force_static, force_shared)
                 if lib:
                     mtime = os.path.getmtime(lib)

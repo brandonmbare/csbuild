@@ -51,12 +51,12 @@ class toolchain_gcc(toolchain.toolchainBase):
         ]
         is_64bit_platform = True if platform.machine().lower() in valid_x64_archs else False
 
-        self._include_lib64 = False;
+        self._include_lib64 = False
 
         # Only include lib64 if we're on a 64-bit platform and we haven't specified whether to build a 64bit or 32bit
         # binary or if we're explicitly told to build a 64bit binary.
         if (is_64bit_platform and not project.force_64_bit and not project.force_32_bit) or project.force_64_bit:
-            self._include_lib64 = True;
+            self._include_lib64 = True
 
 
     def get_warnings(self, warnFlags, noWarnings):
@@ -127,7 +127,7 @@ class toolchain_gcc(toolchain.toolchainBase):
         return ret
 
     def get_link_command(self, project, outputFile, objList):
-        SetupForProject(project)
+        self.SetupForProject(project)
         if project.type == csbuild.ProjectType.StaticLibrary:
             return "ar rcs {} {}".format(outputFile, " ".join(objList))
         else:
@@ -153,9 +153,10 @@ class toolchain_gcc(toolchain.toolchainBase):
                 " ".join(project.linker_flags)
             )
 
-    def find_library(self, library, library_dirs, force_static, force_shared):
+    def find_library(self, project, library, library_dirs, force_static, force_shared):
         success = True
         out = ""
+        self.SetupForProject(project)
         try:
             if _shared_globals.show_commands:
                 print("ld -o /dev/null --verbose {} {} -l{}".format(
