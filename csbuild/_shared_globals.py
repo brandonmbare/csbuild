@@ -22,8 +22,8 @@ import threading
 import multiprocessing
 from csbuild import terminfo
 
-columns = terminfo.TermInfo.GetNumColumns()
 color_supported = terminfo.TermInfo.SupportsColor()
+columns = terminfo.TermInfo.GetNumColumns() if color_supported else 0
 
 printmutex = threading.Lock()
 

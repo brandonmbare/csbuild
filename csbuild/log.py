@@ -135,8 +135,6 @@ class bar_writer(threading.Thread):
             top += _shared_globals.total_precompiles
             cur += _shared_globals.precompiles_done
 
-            _shared_globals.columns = curses.tigetnum('cols')
-
             if _shared_globals.columns > 0 and top > 0:
                 minutes = math.floor(curtime / 60)
                 seconds = round(curtime % 60)
