@@ -27,6 +27,7 @@ from csbuild import _shared_globals
 from csbuild import toolchain
 from csbuild import log
 import csbuild
+import platform
 
 
 class toolchain_gcc(toolchain.toolchainBase):
@@ -36,6 +37,27 @@ class toolchain_gcc(toolchain.toolchainBase):
         self.settingsOverrides["warn_flags"] = []
         self.settingsOverrides["cppstandard"] = ""
         self.settingsOverrides["cstandard"] = ""
+
+
+    def SetupForProject(self, project):
+        valid_x64_archs= [
+            "amd64",
+            "ia64",
+            "x64",
+            "x86_64",
+            "sparc64",
+            "ppc64",
+            "i686-64",
+        ]
+        is_64bit_platform = True if platform.machine().lower() in valid_x64_archs else False
+
+        self._include_lib64 = False
+
+        # Only include lib64 if we're on a 64-bit platform and we haven't specified whether to build a 64bit or 32bit
+        # binary or if we're explicitly told to build a 64bit binary.
+        if (is_64bit_platform and not project.force_64_bit and not project.force_32_bit) or project.force_64_bit:
+            self._include_lib64 = True
+
 
     def get_warnings(self, warnFlags, noWarnings):
         """Returns a string containing all of the passed warning flags, formatted to be passed to gcc/g++."""
@@ -94,13 +116,18 @@ class toolchain_gcc(toolchain.toolchainBase):
         for lib in libDirs:
             ret += "-L{} ".format(lib)
         ret += "-L/usr/lib -L/usr/local/lib "
+        if self._include_lib64:
+            ret += "-L/usr/lib64 -L/usr/local/lib64 "
         if forLinker:
             for lib in libDirs:
                 ret += "-Wl,-R{} ".format(os.path.abspath(lib))
             ret += "-Wl,-R/usr/lib -Wl,-R/usr/local/lib "
+            if self._include_lib64:
+                ret += "-Wl,-R/usr/lib64 -Wl,-R/usr/local/lib64 "
         return ret
 
     def get_link_command(self, project, outputFile, objList):
+        self.SetupForProject(project)
         if project.type == csbuild.ProjectType.StaticLibrary:
             return "ar rcs {} {}".format(outputFile, " ".join(objList))
         else:
@@ -126,9 +153,10 @@ class toolchain_gcc(toolchain.toolchainBase):
                 " ".join(project.linker_flags)
             )
 
-    def find_library(self, library, library_dirs, force_static, force_shared):
+    def find_library(self, project, library, library_dirs, force_static, force_shared):
         success = True
         out = ""
+        self.SetupForProject(project)
         try:
             if _shared_globals.show_commands:
                 print("ld -o /dev/null --verbose {} {} -l{}".format(

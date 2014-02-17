@@ -318,7 +318,7 @@ class toolchain_msvc(toolchain.toolchainBase):
 
     ### Required functions ###
 
-    def find_library(self, library, library_dirs, force_static, force_shared):
+    def find_library(self, project, library, library_dirs, force_static, force_shared):
         libfile = "{}.lib".format(library)
 
         for lib_dir in library_dirs:

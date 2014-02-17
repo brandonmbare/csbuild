@@ -78,7 +78,7 @@ class TermInfo(object):
     @staticmethod
     def SupportsColor():
         if platform.system() == "Windows":
-            return True
+            return TermInfo._color_supported
         else:
             if TermInfo.cursesValid:
                 return (curses.tigetnum("colors") >= 8)
@@ -103,8 +103,13 @@ class TermInfo(object):
 
 if platform.system() == "Windows":
     # -11 = STD_OUTPUT_HANDLE
-    TermInfo._handle = ctypes.windll.kernel32.GetStdHandle(-11)
-    TermInfo._reset = TermInfo.GetDefaultColor()
+    try:
+        TermInfo._handle = ctypes.windll.kernel32.GetStdHandle(-11)
+        TermInfo._reset = TermInfo.GetDefaultColor()
+    except:
+        TermInfo._color_supported = False
+    else:
+        TermInfo._color_supported = True
 else:
     try:
         curses.setupterm()
