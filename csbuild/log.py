@@ -22,16 +22,9 @@ import threading
 import time
 import math
 import sys
+import platform
 from csbuild import _shared_globals
-
-try:
-    import curses
-except:
-    class notreallycurses(object):
-        def tigetnum(self, var):
-            return 0
-
-
+from csbuild import terminfo
 
 #<editor-fold desc="Logging">
 
@@ -39,7 +32,11 @@ def LOG_MSG(color, level, msg):
     """Print a message to stdout"""
     with _shared_globals.printmutex:
         if _shared_globals.color_supported:
-            print(" \033[{0};1m{1}:\033[0m {2}".format(color, level, msg))
+            terminfo.TermInfo.SetColor(color)
+            sys.stdout.write("{}: ".format(level))
+            terminfo.TermInfo.ResetColor()
+            sys.stdout.write(msg)
+            sys.stdout.write("\n")
         else:
             print(" {0}: {1}".format(level, msg))
         sys.stdout.flush()
@@ -52,7 +49,7 @@ def LOG_ERROR(msg):
     """
     if _shared_globals.quiet >= 3:
         return
-    LOG_MSG(31, "ERROR", msg)
+    LOG_MSG(terminfo.TermColor.RED, "ERROR", msg)
     _shared_globals.errors.append(msg)
 
 
@@ -68,42 +65,42 @@ def LOG_WARN_NOPUSH(msg):
     """Log a warning"""
     if _shared_globals.quiet >= 3:
         return
-    LOG_MSG(33, "WARN", msg)
+    LOG_MSG(terminfo.TermColor.YELLOW, "WARN", msg)
 
 
 def LOG_INFO(msg):
     """Log general info"""
     if _shared_globals.quiet >= 1:
         return
-    LOG_MSG(36, "INFO", msg)
+    LOG_MSG(terminfo.TermColor.CYAN, "INFO", msg)
 
 
 def LOG_BUILD(msg):
     """Log info related to building"""
     if _shared_globals.quiet >= 2:
         return
-    LOG_MSG(35, "BUILD", msg)
+    LOG_MSG(terminfo.TermColor.MAGENTA, "BUILD", msg)
 
 
 def LOG_LINKER(msg):
     """Log info related to linking"""
     if _shared_globals.quiet >= 2:
         return
-    LOG_MSG(32, "LINKER", msg)
+    LOG_MSG(terminfo.TermColor.GREEN, "LINKER", msg)
 
 
 def LOG_THREAD(msg):
     """Log info related to threads, particularly stalls caused by waiting on another thread to finish"""
     if _shared_globals.quiet >= 2:
         return
-    LOG_MSG(34, "THREAD", msg)
+    LOG_MSG(terminfo.TermColor.BLUE, "THREAD", msg)
 
 
 def LOG_INSTALL(msg):
     """Log info related to the installer"""
     if _shared_globals.quiet >= 2:
         return
-    LOG_MSG(37, "INSTALL", msg)
+    LOG_MSG(terminfo.TermColor.WHITE, "INSTALL", msg)
 
 #</editor-fold>
 
@@ -135,7 +132,7 @@ class bar_writer(threading.Thread):
             top += _shared_globals.total_precompiles
             cur += _shared_globals.precompiles_done
 
-            _shared_globals.columns = curses.tigetnum('cols')
+            _shared_globals.columns = terminfo.TermInfo.GetNumColumns()
 
             if _shared_globals.columns > 0 and top > 0:
                 minutes = math.floor(curtime / 60)

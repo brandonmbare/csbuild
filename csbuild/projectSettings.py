@@ -82,7 +82,8 @@ class projectSettings(object):
         self.ext = None
         self.profile = False
 
-        self.compiler_flags = []
+        self.cpp_compiler_flags = []
+        self.c_compiler_flags = []
         self.linker_flags = []
 
         self.exclude_dirs = []
@@ -284,7 +285,8 @@ class projectSettings(object):
             "type": self.type,
             "ext": self.ext,
             "profile": self.profile,
-            "compiler_flags": list(self.compiler_flags),
+            "cpp_compiler_flags": list(self.cpp_compiler_flags),
+            "c_compiler_flags": list(self.c_compiler_flags),
             "linker_flags": list(self.linker_flags),
             "exclude_dirs": list(self.exclude_dirs),
             "exclude_files": list(self.exclude_files),
@@ -669,7 +671,7 @@ class projectSettings(object):
                 files.append(pair[0])
                 path = pair[1]
                 if path not in self.allpaths:
-                    self.allpaths.append(path)
+                    self.allpaths.append(os.path.abspath(path))
             log.LOG_INFO(
                 "Going to recompile {0} because included headers {1} have been modified since the last successful build."
                 .format(
@@ -778,14 +780,12 @@ class projectSettings(object):
 
 
     def save_md5(self, inFile):
-        tempInFile = os.path.abspath(inFile)
-
         # If we're running on Windows, we need to remove the drive letter from the input file path.
         if platform.system() == "Windows":
-            tempInFile = tempInFile[2:]
+            inFile = inFile[2:]
 
         md5file = "{}{}".format(self.csbuild_dir,
-            os.path.join(os.path.sep, "md5s", tempInFile))
+            os.path.join(os.path.sep, "md5s", inFile))
 
         md5dir = os.path.dirname(md5file)
         if not os.path.exists(md5dir):
@@ -813,7 +813,7 @@ class projectSettings(object):
             self.save_md5(header)
 
         for path in self.allpaths:
-            self.save_md5(os.path.abspath(path))
+            self.save_md5(path)
 
 
     def precompile_headers(self):

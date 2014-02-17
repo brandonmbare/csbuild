@@ -183,7 +183,7 @@ class toolchain_gcc(toolchain.toolchainBase):
             "-fPIC " if project.type == csbuild.ProjectType.SharedLibrary else "",
             "-pg " if project.profile else "",
             "--std={0}".format(standard) if standard != "" else "",
-            " ".join(project.compiler_flags),
+            " ".join(project.cpp_compiler_flags) if isCpp else " ".join(project.c_compiler_flags),
             self._get_cross_compile_flag(compiler, project)
         )
 

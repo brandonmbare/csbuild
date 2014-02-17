@@ -304,16 +304,39 @@ class toolchainBase(object):
         self.settingsOverrides["profile"] = False
 
 
+    def CppCompilerFlags(self, *args):
+        """Literal string of extra flags to be passed directly to the compiler"""
+        if "cpp_compiler_flags" not in self.settingsOverrides:
+            self.settingsOverrides["cpp_compiler_flags"] = []
+
+        self.settingsOverrides["cpp_compiler_flags"] += list(args)
+
+    def ClearCppCompilerFlags(self):
+        """Clears the extra flags string"""
+        self.settingsOverrides["cpp_compiler_flags"] = []
+
+
+    def CCompilerFlags(self, *args):
+        """Literal string of extra flags to be passed directly to the compiler"""
+        if "c_compiler_flags" not in self.settingsOverrides:
+            self.settingsOverrides["c_compiler_flags"] = []
+
+        self.settingsOverrides["c_compiler_flags"] += list(args)
+
+    def ClearCCompilerFlags(self):
+        """Clears the extra flags string"""
+        self.settingsOverrides["c_compiler_flags"] = []
+
     def CompilerFlags(self, *args):
         """Literal string of extra flags to be passed directly to the compiler"""
-        if "compiler_flags" not in self.settingsOverrides:
-            self.settingsOverrides["compiler_flags"] = []
+        self.CCompilerFlags(*args)
+        self.CppCompilerFlags(*args)
 
-        self.settingsOverrides["compiler_flags"] += list(args)
 
     def ClearCompilerFlags(self):
         """Clears the extra flags string"""
-        self.settingsOverrides["compiler_flags"] = []
+        self.ClearCCompilerFlags()
+        self.ClearCppCompilerFlags()
 
 
     def LinkerFlags(self, *args):

@@ -58,6 +58,24 @@ class project_generator_qtcreator(project_generator.project_generator):
             for incdir in project.include_dirs:
                 f.write("\t{} \\\n".format(incdir))
 
+            if project.cpp_compiler_flags:
+                f.write("\nQMAKE_CXXFLAGS += {}\n".format(" ".join(project.cpp_compiler_flags)))
+
+            try:
+                if project.cppstandard:
+                    f.write("\nQMAKE_CXXFLAGS += -std={}\n".format(project.cppstandard))
+            except:
+                pass
+
+            if project.c_compiler_flags:
+                f.write("\nQMAKE_CFLAGS += {}\n".format(" ".join(project.c_compiler_flags)))
+
+            try:
+                if project.cstandard:
+                    f.write("\nQMAKE_CXXFLAGS += -std={}\n".format(project.cstandard))
+            except:
+                pass
+
         with open(os.path.join(projectpath, "Makefile"), "w") as f:
             projstr =" --project {}".format(project.name)
             make_dir = os.getcwd()

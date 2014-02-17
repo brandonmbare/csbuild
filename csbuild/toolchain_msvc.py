@@ -277,11 +277,11 @@ class toolchain_msvc(toolchain.toolchainBase):
 
     ### Public methods ###
 
-    def getCompilerCommand(self):
+    def getCompilerCommand(self, isCpp):
         return "{}{}{}".format(
             self._get_compiler_exe(),
             self._get_compiler_args(),
-            " ".join(self._project_settings.compiler_flags))
+            " ".join(self._project_settings.cpp_compiler_flags) if isCpp else " ".join(self._project_settings.c_compiler_flags))
 
 
     def getExtendedCompilerArgs(self, base_cmd, force_include_file, output_obj, input_file):
@@ -341,12 +341,12 @@ class toolchain_msvc(toolchain.toolchainBase):
 
     def get_base_cxx_command(self, project):
         self.SetupForProject(project)
-        return self.getCompilerCommand()
+        return self.getCompilerCommand(True)
 
 
     def get_base_cc_command(self, project):
         self.SetupForProject(project)
-        return self.getCompilerCommand()
+        return self.getCompilerCommand(False)
 
 
     def get_link_command(self, project, outputFile, objList):

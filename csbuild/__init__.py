@@ -295,15 +295,35 @@ def DisableProfile():
     projectSettings.currentProject.profile = False
 
 
+def CppCompilerFlags(*args):
+    """Literal string of extra flags to be passed directly to the compiler"""
+    projectSettings.currentProject.cpp_compiler_flags += list(args)
+
+
+def ClearCppCompilerFlags():
+    """Clears the extra flags string"""
+    projectSettings.currentProject.cpp_compiler_flags = []
+
+
+def CCompilerFlags(*args):
+    """Literal string of extra flags to be passed directly to the compiler"""
+    projectSettings.currentProject.c_compiler_flags += list(args)
+
+
+def ClearCCompilerFlags():
+    """Clears the extra flags string"""
+    projectSettings.currentProject.c_compiler_flags = []
+
 def CompilerFlags(*args):
     """Literal string of extra flags to be passed directly to the compiler"""
-    projectSettings.currentProject.compiler_flags += list(args)
+    CCompilerFlags(*args)
+    CppCompilerFlags(*args)
 
 
 def ClearCompilerFlags():
     """Clears the extra flags string"""
-    projectSettings.currentProject.compiler_flags = []
-
+    ClearCCompilerFlags()
+    ClearCppCompilerFlags()
 
 def LinkerFlags(*args):
     """Literal string of extra flags to be passed directly to the linker"""
@@ -818,7 +838,7 @@ def build():
     log.LOG_BUILD("Compilation took {0}:{1:02}".format(int(totalmin), int(totalsec)))
 
     for proj in _shared_globals.sortedProjects:
-        proj.save_md5s(proj.allsources, proj.headers)
+        proj.save_md5s(proj.allsources, proj.allheaders)
 
     if not built:
         log.LOG_BUILD("Nothing to build.")
@@ -977,6 +997,7 @@ def install():
     Does nothing if neither InstallHeaders() nor InstallOutput() has been called in the make script.
     """
     for project in _shared_globals.sortedProjects:
+	os.chdir(project.workingDirectory)
         output = "{0}/{1}".format(project.output_dir, project.output_name)
         install_something = False
 
