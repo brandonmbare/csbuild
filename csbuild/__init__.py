@@ -39,6 +39,7 @@ import sys
 import threading
 import time
 import platform
+import hashlib
 
 class ProjectType(object):
     Application = 0
@@ -862,9 +863,16 @@ def link(project, *objs):
     if not objs:
         for chunk in project.chunks:
             if not project.unity:
-                obj = "{0}/{1}_chunk_{2}_{3}.o".format(project.obj_dir,
-                    project.output_name.split('.')[0],
-                    "__".join(_utils.base_names(chunk)), project.targetName)
+                obj = "{}/{}_{}.o".format(
+                    project.obj_dir,
+                    hashlib.md5(
+                        "{}_chunk_{}".format(
+                            project.output_name.split('.')[0],
+                            "__".join(_utils.base_names(chunk))
+                        )
+                    ).hexdigest(),
+                    project.targetName
+                )
             else:
                 obj = "{0}/{1}_unity_{2}.o".format(project.obj_dir, project.output_name,
                     project.targetName)
@@ -909,8 +917,8 @@ def link(project, *objs):
 
             #Even though we didn't build anything, we should verify all our libraries are up to date too.
             #If they're not, we need to relink.
-            for i in range(len(_shared_globals.library_mtimes)):
-                if _shared_globals.library_mtimes[i] > mtime:
+            for i in range(len(project.library_mtimes)):
+                if project.library_mtimes[i] > mtime:
                     log.LOG_LINKER(
                         "Library {0} has been modified since the last successful build. Relinking to new library."
                         .format(

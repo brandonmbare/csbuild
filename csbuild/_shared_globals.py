@@ -36,8 +36,6 @@ build_success = True
 called_something = False
 overrides = ""
 
-library_mtimes = []
-
 quiet = 1
 
 interrupted = False

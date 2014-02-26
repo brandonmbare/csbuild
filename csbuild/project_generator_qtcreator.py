@@ -6,6 +6,7 @@ import sys
 from csbuild import project_generator
 from csbuild import _shared_globals
 from csbuild import projectSettings
+from csbuild import log
 import csbuild
 
 class project_generator_qtcreator(project_generator.project_generator):
@@ -34,6 +35,8 @@ class project_generator_qtcreator(project_generator.project_generator):
         projectpath = os.path.join(self.rootpath, parentPath, project.name)
         if not os.path.exists(projectpath):
             os.makedirs(projectpath)
+
+        log.LOG_INFO("Creating project {}.pro".format(projectpath))
 
         with open(os.path.join(projectpath, "{}.pro".format(project.name)), "w") as f:
             f.write("SOURCES += \\\n")
@@ -105,7 +108,10 @@ class project_generator_qtcreator(project_generator.project_generator):
 
         allsubprojects = set()
 
-        with open(os.path.join(grouppath, "{}.pro".format(solutionname)), "w") as f:
+        solutionpath = os.path.join(grouppath, "{}.pro".format(solutionname))
+        log.LOG_INFO("Creating subdirs project {}.pro".format(solutionpath))
+
+        with open(solutionpath, "w") as f:
             f.write("TEMPLATE = subdirs\n\n")
             f.write("SUBDIRS += \\\n")
 
@@ -220,6 +226,7 @@ class project_generator_qtcreator(project_generator.project_generator):
 
 
     def write_solution(self):
+        log.LOG_BUILD("Writing QtCreator solution {}".format(self.solutionname))
         parentNames = []
         projlist = set()
         self._writeSubdirsProject(projectSettings.rootProject, parentNames, projlist)
@@ -270,6 +277,8 @@ class project_generator_qtcreator(project_generator.project_generator):
 
         if not needsadd:
             return
+
+        log.LOG_INFO("Creating csbuild kit entry in {}".format(profilespath))
 
         data = ET.Element("data")
 

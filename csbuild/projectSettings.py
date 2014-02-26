@@ -158,6 +158,8 @@ class projectSettings(object):
 
         self.outputArchitecture = None
 
+        self.library_mtimes = []
+
     def prepareBuild(self):
         wd = os.getcwd()
         os.chdir(self.workingDirectory)
@@ -200,6 +202,7 @@ class projectSettings(object):
             self.get_files(self.allsources, self.allheaders)
 
             if not self.allsources:
+                os.chdir(wd)
                 return
 
             #We'll do this even if _use_chunks is false, because it simplifies the linker logic.
@@ -332,7 +335,8 @@ class projectSettings(object):
             "activeToolchain": None,
             "warnings_as_errors": self.warnings_as_errors,
             "built_something": self.built_something,
-            "outputArchitecture": self.outputArchitecture
+            "outputArchitecture": self.outputArchitecture,
+            "library_mtimes" : list(self.library_mtimes),
         }
 
         return ret
@@ -711,7 +715,7 @@ class projectSettings(object):
                 if lib:
                     mtime = os.path.getmtime(lib)
                     log.LOG_INFO("Found library lib{0} at {1}".format(library, lib))
-                    _shared_globals.library_mtimes.append(mtime)
+                    self.library_mtimes.append(mtime)
                 else:
                     log.LOG_ERROR("Could not locate library: {0}".format(library))
                     libraries_ok = False
@@ -775,8 +779,8 @@ class projectSettings(object):
         """Retrieves the chunk that a given file belongs to."""
         for chunk in self.chunks:
             if srcFile in chunk:
-                return "{0}_chunk_{1}".format(self.output_name.split('.')[0],
-                    "__".join(_utils.base_names(chunk)))
+                return hashlib.md5("{0}_chunk_{1}".format(self.output_name.split('.')[0],
+                    "__".join(_utils.base_names(chunk)))).hexdigest()
 
 
     def save_md5(self, inFile):

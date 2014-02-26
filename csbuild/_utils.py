@@ -377,8 +377,8 @@ def chunked_build():
         return
 
     if totalChunks == 1 and not owningProject.unity:
-        chunkname = "{0}_chunk_{1}".format(owningProject.output_name.split('.')[0],
-            "__".join(base_names(owningProject.chunks[0])))
+        chunkname = hashlib.md5("{0}_chunk_{1}".format(owningProject.output_name.split('.')[0],
+            "__".join(base_names(owningProject.chunks[0])))).hexdigest()
         obj = "{0}/{1}_{2}.o".format(owningProject.obj_dir, chunkname,
             owningProject.targetName)
         if os.path.exists(obj):
@@ -413,9 +413,15 @@ def chunked_build():
                 outFile = "{0}/{1}_unity.cpp".format(project.csbuild_dir,
                     project.output_name)
             else:
-                outFile = "{0}/{1}_chunk_{2}.cpp".format(project.csbuild_dir,
-                    project.output_name.split('.')[0],
-                    "__".join(base_names(chunk)))
+                outFile = "{}/{}.cpp".format(
+                    project.csbuild_dir,
+                    hashlib.md5(
+                        "{}_chunk_{}".format(
+                            project.output_name.split( '.' )[0],
+                            "__".join( base_names( chunk ) )
+                        )
+                    ).hexdigest()
+                )
 
             #If only one or two sources in this chunk need to be built, we get no benefit from building it as a unit.
             # Split unless we're told not to.
@@ -442,8 +448,8 @@ def chunked_build():
 
                 project.final_chunk_set.append(outFile)
             elif len(sources_in_this_chunk) > 0:
-                chunkname = "{0}_chunk_{1}".format(project.output_name.split('.')[0],
-                    "__".join(base_names(chunk)))
+                chunkname = hashlib.md5("{0}_chunk_{1}".format(project.output_name.split('.')[0],
+                    "__".join(base_names(chunk))))
                 obj = "{0}/{1}_{2}.o".format(project.obj_dir, chunkname,
                     project.targetName)
                 if os.path.exists(obj):
