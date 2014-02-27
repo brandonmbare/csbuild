@@ -508,14 +508,20 @@ def project(name, workingDirectory, linkDepends=None, srcDepends=None):
 
     def wrap(projectFunction):
         if name in _shared_globals.projects:
-            raise RuntimeError("Multiple projects with the same name: {}".format(name))
+            log.LOG_ERROR("Multiple projects with the same name: {}. Ignoring.".format(name))
+            return
         previousProject = projectSettings.currentProject.copy()
         projectFunction()
 
         if _shared_globals.target:
             projectSettings.currentProject.targetName = _shared_globals.target
         else:
-            projectSettings.currentProject.targetName = previousProject.default_target
+            projectSettings.currentProject.targetName = projectSettings.currentProject.default_target
+
+        if projectSettings.currentProject.targetName not in projectSettings.currentProject.targets:
+            log.LOG_INFO("Project {} has no rules specified for target {}. Skipping.".format(projectSettings.currentProject.name, projectSettings.currentProject.targetName))
+            projectSettings.currentProject = previousProject
+            return
 
         projectSettings.currentProject.targets[projectSettings.currentProject.targetName]()
 
@@ -562,8 +568,6 @@ def target(name):
 
 _barWriter = log.bar_writer()
 
-_shared_globals.starttime = time.time()
-
 def build():
     """Build the project.
     This step handles:
@@ -572,6 +576,7 @@ def build():
     And spawning a build thread for each one that does.
     """
 
+    global _barWriter
     _barWriter.start()
 
     built = False
@@ -646,8 +651,8 @@ def build():
 
                                 if otherProj.final_chunk_set:
                                     log.LOG_BUILD(
-                                        "Compile of {0} took {1}:{2:02}".format(otherProj.output_name, minutes,
-                                            seconds))
+                                        "Compile of {0} took {1}:{2:02}".format(otherProj.output_name, int(minutes),
+                                            int(seconds)))
                                 projects_in_flight.remove(otherProj)
                                 if otherProj.compile_failed:
                                     log.LOG_ERROR("Build of {0} failed! Finishing up non-dependent build tasks...".format(
@@ -769,7 +774,7 @@ def build():
                     seconds = round(totaltime % 60)
 
                     log.LOG_BUILD(
-                        "Compile of {0} took {1}:{2:02}".format(otherProj.output_name, minutes, seconds))
+                        "Compile of {0} took {1}:{2:02}".format(otherProj.output_name, int(minutes), int(seconds)))
                     projects_in_flight.remove(otherProj)
                     if otherProj.compile_failed:
                         log.LOG_ERROR("Build of {0} failed! Finishing up non-dependent build tasks...".format(
@@ -1130,24 +1135,103 @@ def _run():
 
     global mainfile
     mainfile = sys.modules['__main__'].__file__
+    mainfileDir = None
     if mainfile is not None:
-        dir = os.path.dirname(mainfile)
-        if dir:
-            os.chdir(dir)
+        mainfileDir = os.path.abspath(os.path.dirname(mainfile))
+        if mainfileDir:
+            os.chdir(mainfileDir)
             mainfile = os.path.basename(os.path.abspath(mainfile))
+        else:
+            mainfileDir = os.path.abspath(os.getcwd())
         if "-h" in sys.argv or "--help" in sys.argv:
             _execfile(mainfile, _shared_globals.makefile_dict, _shared_globals.makefile_dict)
+            _shared_globals.sortedProjects = _utils.sortProjects()
+
     else:
         log.LOG_ERROR("CSB cannot be run from the interactive console.")
         sys.exit(1)
 
-    global parser
-    parser = argparse.ArgumentParser(description='CSB: Build files in local directories and subdirectories.',
-        prog="csbuild", usage="{} [options] target".format(mainfile))
+    epilog = "    ------------------------------------------------------------    \n\nProjects available in this makefile (listed in build order):\n\n"
 
-    parser.add_argument('target', nargs="?", help='Target for build (default is {})'.format(projectSettings.currentProject.default_target))
-    parser.add_argument("--project", action="append",
-        help="Build only the specified project. May be specified multiple times.")
+    projtable = [[]]
+    i = 1
+    j = 0
+
+    maxcols = min(math.floor(len(_shared_globals.sortedProjects) / 4), 4)
+
+    for proj in _shared_globals.sortedProjects:
+        projtable[j].append(proj.name)
+        if i < maxcols:
+            i += 1
+        else:
+            projtable.append([])
+            i = 1
+            j += 1
+
+    if projtable:
+        maxlens = [15] * len(projtable[0])
+        for index in range(len(projtable)):
+            col = projtable[index]
+            for subindex in range(len(col)):
+                maxlens[subindex] = max(maxlens[subindex], len(col[subindex]))
+
+        for index in range(len(projtable)):
+            col = projtable[index]
+            for subindex in range(len(col)):
+                item = col[subindex]
+                epilog += "  "
+                epilog += item
+                for space in range(maxlens[subindex] - len(item)):
+                    epilog += " "
+                epilog += "  "
+            epilog += "\n"
+
+    epilog += "\nTargets available in this makefile:\n\n"
+
+    targtable = [[]]
+    i = 1
+    j = 0
+
+    maxcols = min(math.floor(len(_shared_globals.alltargets) / 4), 4)
+
+    for targ in _shared_globals.alltargets:
+        targtable[j].append(targ)
+        if i < maxcols:
+            i += 1
+        else:
+            targtable.append([])
+            i = 1
+            j += 1
+
+    if targtable:
+        maxlens = [15] * len(targtable[0])
+        for index in range(len(targtable)):
+            col = targtable[index]
+            for subindex in range(len(col)):
+                maxlens[subindex] = max(maxlens[subindex], len(col[subindex]))
+
+        for index in range(len(targtable)):
+            col = targtable[index]
+            for subindex in range(len(col)):
+                item = col[subindex]
+                epilog += "  "
+                epilog += item
+                for space in range(maxlens[subindex] - len(item)):
+                    epilog += " "
+                epilog += "  "
+            epilog += "\n"
+
+    global parser
+    parser = argparse.ArgumentParser(
+        prog=mainfile, epilog=epilog, formatter_class=argparse.RawDescriptionHelpFormatter)
+
+    parser.add_argument('target', nargs="*", help='Target(s) for build', metavar="target")
+    parser.add_argument("--all-targets", action="store_true", help="Build all targets")
+    parser.add_argument(
+        "--project",
+        action="append",
+        help="Build only the specified project. May be specified multiple times."
+    )
     group = parser.add_mutually_exclusive_group()
     group.add_argument('--clean', action="store_true", help='Clean the target build')
     group.add_argument('--install', action="store_true", help='Install the target build')
@@ -1167,35 +1251,19 @@ def _run():
     parser.add_argument('--force-progress-bar', help="Force progress bar on or off.",
         action="store", choices=["on", "off"], default=None, const="on", nargs="?")
     parser.add_argument('--prefix', help="install prefix (default /usr/local)", action="store")
-    parser.add_argument('--toolchain', help="Toolchain to use for compiling", action="store")
+    parser.add_argument('--toolchain', help="Toolchain to use for compiling.", choices=_shared_globals.alltoolchains, action="store")
     parser.add_argument('--no-precompile', help="Disable precompiling globally, affects all projects", action="store_true")
     parser.add_argument('--no-chunks', help="Disable chunking globally, affects all projects", action="store_true")
 
     group = parser.add_argument_group("Solution generation", "Commands to generate a solution")
-    group.add_argument('--generate-solution', help="Generate a solution file for use with the given IDE", action="store", metavar="SOLUTION_TYPE")
+    group.add_argument('--generate-solution', help="Generate a solution file for use with the given IDE.", choices=_shared_globals.allgenerators.keys(), action="store")
     group.add_argument('--solution-path', help="Path to output the solution file (default is ./Solutions/<solutiontype>)", action="store", default="")
     group.add_argument('--solution-name', help="Name of solution output file (default is csbuild)", action = "store", default="csbuild")
-
-    group = parser.add_argument_group("Projects in this makefile")
-    for proj in _shared_globals.projects:
-        group.add_argument("fakearg_"+proj, metavar=proj, nargs="?")
-
-    group = parser.add_argument_group("Targets in this makefile")
-    for targ in _shared_globals.alltargets:
-        group.add_argument("fakearg_"+targ, metavar=targ, nargs="?")
-
-    group = parser.add_argument_group("Available toolchains")
-    for chain in _shared_globals.alltoolchains:
-        group.add_argument("fakearg_"+chain, metavar=chain, nargs="?")
 
     for chain in _shared_globals.alltoolchains.items():
         if chain[1].additional_args != toolchain.toolchainBase.additional_args:
             group = parser.add_argument_group("Options for toolchain {}".format(chain[0]))
             chain[1].additional_args(group)
-
-    group = parser.add_argument_group("Available project generators")
-    for gen in _shared_globals.allgenerators:
-        group.add_argument("fakearg_"+gen, metavar=gen, nargs="?")
 
     for gen in _shared_globals.allgenerators.items():
         if gen[1].additional_args != project_generator.project_generator.additional_args:
@@ -1219,8 +1287,6 @@ def _run():
         print("\nMaintainer: {} - {}".format(__maintainer__, __email__))
         return
 
-    if args.target is not None:
-        _shared_globals.target = args.target.lower()
     _shared_globals.CleanBuild = args.clean
     _shared_globals.do_install = args.install
     _shared_globals.quiet = args.quiet
@@ -1253,79 +1319,144 @@ def _run():
     _shared_globals.disable_chunks = args.no_chunks
     _shared_globals.disable_precompile = args.no_precompile
 
-    #there's an execfile on this up above, but if we got this far we didn't pass --help or -h, so we need to do this here instead
-    _execfile(mainfile, _shared_globals.makefile_dict, _shared_globals.makefile_dict)
+    def BuildWithTarget(target):
+        global _barWriter
+        _barWriter = log.bar_writer()
 
-    def insert_depends(proj, projList, already_inserted=set()):
-        already_inserted.add(proj.name)
-        for depend in proj.linkDepends:
-            projData = _shared_globals.projects[depend]
-            projList[depend] = projData
-            if depend in already_inserted:
-                log.LOG_ERROR("Circular dependencies detected: {0} and {1} in linkDepends".format(depend, proj.name))
-                sys.exit(1)
-            insert_depends(projData, projList)
-        for depend in proj.srcDepends:
-            projData = _shared_globals.projects[depend]
-            projList[depend] = projData
-            if depend in already_inserted:
-                log.LOG_ERROR("Circular dependencies detected: {0} and {1} in linkDepends".format(depend, proj.name))
-                sys.exit(1)
-            insert_depends(projData, projList)
-        already_inserted.remove(proj.name)
+        os.chdir(mainfileDir)
+
+        _shared_globals.times = []
+
+        _shared_globals.starttime = time.time()
+        _shared_globals.esttime = 0
+        _shared_globals.lastupdate = -1
+
+        _shared_globals.buildtime = -1
+
+        _shared_globals.projects = {}
+        _shared_globals.finished_projects = set()
+        _shared_globals.built_files = set()
+
+        _shared_globals.allfiles = []
+        _shared_globals.total_precompiles = 0
+        _shared_globals.precompiles_done = 0
+        _shared_globals.total_compiles = 0
+
+        _shared_globals.makefile_dict = {}
+
+        _shared_globals.allheaders = {}
+
+        _shared_globals.current_compile = 1
+
+        _shared_globals.project_build_list = set()
+
+        _shared_globals.sortedProjects = []
+
+        projectSettings.currentProject = projectSettings.projectSettings()
+
+        projectSettings.rootProject = projectSettings.ProjectGroup("", None)
+        projectSettings.currentGroup = projectSettings.rootProject
+
+        _setupdefaults()
+
+        if target is not None:
+            _shared_globals.target = target.lower()
+
+        #there's an execfile on this up above, but if we got this far we didn't pass --help or -h, so we need to do this here instead
+        _execfile(mainfile, _shared_globals.makefile_dict, _shared_globals.makefile_dict)
+
+        def insert_depends(proj, projList, already_inserted=set()):
+            already_inserted.add(proj.name)
+            for depend in proj.linkDepends:
+                projData = _shared_globals.projects[depend]
+                projList[depend] = projData
+                if depend in already_inserted:
+                    log.LOG_ERROR("Circular dependencies detected: {0} and {1} in linkDepends".format(depend, proj.name))
+                    sys.exit(1)
+                insert_depends(projData, projList)
+            for depend in proj.srcDepends:
+                projData = _shared_globals.projects[depend]
+                projList[depend] = projData
+                if depend in already_inserted:
+                    log.LOG_ERROR("Circular dependencies detected: {0} and {1} in linkDepends".format(depend, proj.name))
+                    sys.exit(1)
+                insert_depends(projData, projList)
+            already_inserted.remove(proj.name)
 
 
-    if _shared_globals.project_build_list:
-        newProjList = {}
-        for proj in _shared_globals.project_build_list:
-            projData = _shared_globals.projects[proj]
-            newProjList[proj] = projData
-            insert_depends(projData, newProjList)
-        _shared_globals.projects = newProjList
+        if _shared_globals.project_build_list:
+            newProjList = {}
+            for proj in _shared_globals.project_build_list:
+                projData = _shared_globals.projects[proj]
+                newProjList[proj] = projData
+                insert_depends(projData, newProjList)
+            _shared_globals.projects = newProjList
 
-    _shared_globals.sortedProjects = _utils.sortProjects()
+        _shared_globals.sortedProjects = _utils.sortProjects()
 
-    for proj in _shared_globals.sortedProjects:
-        proj.prepareBuild()
+        for proj in _shared_globals.sortedProjects:
+            proj.prepareBuild()
 
-    _utils.check_version()
+        _utils.check_version()
 
-    totaltime = time.time() - _shared_globals.starttime
-    totalmin = math.floor(totaltime / 60)
-    totalsec = round(totaltime % 60)
-    log.LOG_BUILD("Task preparation took {0}:{1:02}".format(int(totalmin), int(totalsec)))
+        totaltime = time.time() - _shared_globals.starttime
+        totalmin = math.floor(totaltime / 60)
+        totalsec = round(totaltime % 60)
+        log.LOG_BUILD("Task preparation took {0}:{1:02}".format(int(totalmin), int(totalsec)))
 
-    if args.generate_solution is not None:
-        if not args.solution_path:
-            args.solution_path = os.path.join(".", "Solutions", args.generate_solution)
-        if args.generate_solution not in _shared_globals.project_generators:
-            log.LOG_ERROR("No solution generator present for solution of type {}".format(args.generate_solution))
-            sys.exit(0)
-        generator = _shared_globals.project_generators[args.generate_solution](args.solution_path, args.solution_name)
+        if args.generate_solution is not None:
+            if not args.solution_path:
+                args.solution_path = os.path.join(".", "Solutions", args.generate_solution)
+            if args.generate_solution not in _shared_globals.project_generators:
+                log.LOG_ERROR("No solution generator present for solution of type {}".format(args.generate_solution))
+                sys.exit(0)
+            generator = _shared_globals.project_generators[args.generate_solution](args.solution_path, args.solution_name)
 
-        generator.write_solution()
-        log.LOG_BUILD("Done")
+            generator.write_solution()
+            log.LOG_BUILD("Done")
 
-    elif _shared_globals.CleanBuild:
-        clean()
-    elif _shared_globals.do_install:
-        install()
+        elif _shared_globals.CleanBuild:
+            clean()
+        elif _shared_globals.do_install:
+            install()
+        else:
+            make()
+
+        #Print out any errors or warnings incurred so the user doesn't have to scroll to see what went wrong
+        if _shared_globals.warnings:
+            print("\n")
+            log.LOG_WARN("Warnings encountered during build:")
+            for warn in _shared_globals.warnings[0:-1]:
+                log.LOG_WARN(warn)
+        if _shared_globals.errors:
+            print("\n")
+            log.LOG_ERROR("Errors encountered during build:")
+            for error in _shared_globals.errors[0:-1]:
+                log.LOG_ERROR(error)
+
+        global _barWriter
+        _barWriter.stop()
+
+    verystart = time.time()
+
+    if args.all_targets:
+        for target in _shared_globals.alltargets:
+            BuildWithTarget(target)
+    elif args.target:
+        for target in args.target:
+            if target not in _shared_globals.alltargets:
+                log.LOG_ERROR("Unknown target: {}".format(target))
+                return
+        for target in args.target:
+            BuildWithTarget(target)
     else:
-        make()
+        BuildWithTarget(None)
 
-    #Print out any errors or warnings incurred so the user doesn't have to scroll to see what went wrong
-    if _shared_globals.warnings:
-        print("\n")
-        log.LOG_WARN("Warnings encountered during build:")
-        for warn in _shared_globals.warnings[0:-1]:
-            log.LOG_WARN(warn)
-    if _shared_globals.errors:
-        print("\n")
-        log.LOG_ERROR("Errors encountered during build:")
-        for error in _shared_globals.errors[0:-1]:
-            log.LOG_ERROR(error)
-
-    _barWriter.stop()
+    if args.all_targets or len(args.target) > 1:
+        totaltime = time.time() - verystart
+        totalmin = math.floor(totaltime / 60)
+        totalsec = round(totaltime % 60)
+        log.LOG_LINKER("Build of all targets took: {0}:{1:02}".format(int(totalmin), int(totalsec)))
 
     if not _shared_globals.build_success:
         sys.exit(1)
@@ -1335,5 +1466,6 @@ def _run():
 try:
     _run()
 except:
+    global _barWriter
     _barWriter.stop()
     raise

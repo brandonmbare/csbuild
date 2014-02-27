@@ -177,7 +177,7 @@ class projectSettings(object):
             self.ext = self.activeToolchain.get_default_extension(self.type)
 
         self.output_name += self.ext
-        log.LOG_BUILD("Preparing tasks for {}...".format(self.output_name))
+        log.LOG_BUILD("Preparing tasks for {} ({})...".format(self.output_name, self.targetName))
 
         if not os.path.exists(self.csbuild_dir):
             os.makedirs(self.csbuild_dir)
