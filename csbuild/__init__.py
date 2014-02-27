@@ -586,7 +586,6 @@ def build():
     And spawning a build thread for each one that does.
     """
 
-    global _barWriter
     _barWriter.start()
 
     built = False
@@ -1464,7 +1463,6 @@ def _run():
         for error in _shared_globals.errors[0:-1]:
             log.LOG_ERROR(error)
 
-    global _barWriter
     _barWriter.stop()
 
     if not _shared_globals.build_success:
@@ -1475,6 +1473,5 @@ def _run():
 try:
     _run()
 except:
-    global _barWriter
     _barWriter.stop()
     raise
