@@ -1173,7 +1173,7 @@ def _run():
     maxcols = min(math.floor(len(_shared_globals.sortedProjects) / 4), 4)
 
     for proj in _shared_globals.sortedProjects:
-        projtable[j].append(proj.name)
+        projtable[j].append(proj.name.rsplit("@", 1)[0])
         if i < maxcols:
             i += 1
         else:
