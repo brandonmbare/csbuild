@@ -241,17 +241,38 @@ def check_version():
 def sortProjects():
     ret = []
 
+    already_errored_link = {}
+    already_errored_source = {}
     def insert_depends(project, already_inserted=set()):
         already_inserted.add(project.name)
-        for depend in project.linkDepends:
+        if project not in already_errored_link:
+            already_errored_link[project] = set()
+            already_errored_source[project] = set()
+
+        for index in range(len(project.linkDepends)):
+            depend = project.linkDepends[index]
             if depend in already_inserted:
                 log.LOG_ERROR("Circular dependencies detected: {0} and {1} in linkDepends".format(depend, project.name))
                 sys.exit(1)
+            if depend not in _shared_globals.projects:
+                if depend not in already_errored_link[project]:
+                    log.LOG_ERROR("Project {} references non-existent link dependency {}".format(project.name, depend))
+                    already_errored_link[project].add(depend)
+                    del project.linkDepends[index]
+                continue
             insert_depends(_shared_globals.projects[depend], already_inserted)
-        for depend in project.srcDepends:
+
+        for index in range(len(project.srcDepends)):
+            depend = project.srcDepends[index]
             if depend in already_inserted:
                 log.LOG_ERROR("Circular dependencies detected: {0} and {1} in srcDepends".format(depend, project.name))
                 sys.exit(1)
+            if depend not in _shared_globals.projects:
+                if depend not in already_errored_source[project]:
+                    log.LOG_ERROR("Project {} references non-existent source dependency {}".format(project.name, depend))
+                    already_errored_source[project].add(depend)
+                    del project.srcDepends[index]
+                continue
             insert_depends(_shared_globals.projects[depend], already_inserted)
         if project not in ret:
             ret.append(project)
