@@ -55,14 +55,18 @@ from csbuild import projectSettings
 from csbuild import project_generator_qtcreator
 from csbuild import project_generator
 
-__author__ = 'Jaedyn K Draper'
-__copyright__ = 'Copyright (C) 2013 Jaedyn K Draper'
+
+__author__ = "Jaedyn K. Draper, Brandon M. Bare"
+__copyright__ = 'Copyright (C) 2012-2014 Jaedyn K. Draper'
+__credits__ = ["Jaedyn K. Draper", "Brandon M. Bare", "Jeff Grills", "Randy Culley"]
 __license__ = 'MIT'
-__version__ = '1.0.0'
+
+__maintainer__ = "Jaedyn K. Draper"
+__email__ = "jaedyn.csbuild-contact@jaedyn.co"
+__status__ = "Development"
 
 __all__ = []
 
-__credits__ = ["Jaedyn K Draper", "Brandon M Bare"]
 
 signal.signal(signal.SIGINT, signal.SIG_DFL)
 
@@ -1147,6 +1151,7 @@ def _run():
     group = parser.add_mutually_exclusive_group()
     group.add_argument('--clean', action="store_true", help='Clean the target build')
     group.add_argument('--install', action="store_true", help='Install the target build')
+    group.add_argument('--version', action="store_true", help="Print version information and exit")
     group2 = parser.add_mutually_exclusive_group()
     group2.add_argument('-v', action="store_const", const=0, dest="quiet",
         help="Verbose. Enables additional INFO-level logging.", default=1)
@@ -1203,6 +1208,16 @@ def _run():
             group.add_argument(*option[0], **option[1])
 
     args = parser.parse_args()
+
+    if args.version:
+        with open(os.path.dirname(__file__) + "/version", "r") as f:
+            csbuild_version = f.read()
+        print("CSBuild version {}".format(csbuild_version))
+        print(__copyright__)
+        print("Code by {}".format(__author__))
+        print("Additional credits: {}".format(", ".join(__credits__)))
+        print("\nMaintainer: {} - {}".format(__maintainer__, __email__))
+        return
 
     if args.target is not None:
         _shared_globals.target = args.target.lower()

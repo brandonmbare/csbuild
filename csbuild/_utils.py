@@ -201,6 +201,10 @@ def check_version():
     is out of date."""
     with open(os.path.dirname(__file__) + "/version", "r") as f:
         csbuild_version = f.read()
+
+    if "-Dev-" in csbuild_version:
+        return
+
     if not os.path.exists(os.path.expanduser("~/.csbuild/check")):
         csbuild_date = ""
     else:
