@@ -1239,23 +1239,26 @@ def _run():
         prog=mainfile, epilog=epilog, formatter_class=argparse.RawDescriptionHelpFormatter)
 
     parser.add_argument('target', nargs="*", help='Target(s) for build', metavar="target")
-    parser.add_argument("--all-targets", action="store_true", help="Build all targets")
+    parser.add_argument('-a', "--all-targets", action="store_true", help="Build all targets")
+
     parser.add_argument(
+        "-p",
         "--project",
         action="append",
         help="Build only the specified project. May be specified multiple times."
     )
+
     group = parser.add_mutually_exclusive_group()
-    group.add_argument('--clean', action="store_true", help='Clean the target build')
+    group.add_argument('-c', '--clean', action="store_true", help='Clean the target build')
     group.add_argument('--install', action="store_true", help='Install the target build')
     group.add_argument('--version', action="store_true", help="Print version information and exit")
-    group.add_argument('--rebuild', action="store_true", help='Clean the target build and then build it')
+    group.add_argument('-r', '--rebuild', action="store_true", help='Clean the target build and then build it')
     group2 = parser.add_mutually_exclusive_group()
-    group2.add_argument('-v', action="store_const", const=0, dest="quiet",
+    group2.add_argument('-v', '--verbose', action="store_const", const=0, dest="quiet",
         help="Verbose. Enables additional INFO-level logging.", default=1)
-    group2.add_argument('-q', action="store_const", const=2, dest="quiet",
+    group2.add_argument('-q', '--quiet', action="store_const", const=2, dest="quiet",
         help="Quiet. Disables all logging except for WARN and ERROR.", default=1)
-    group2.add_argument('-qq', action="store_const", const=3, dest="quiet",
+    group2.add_argument('-qq', '--very-quiet', action="store_const", const=3, dest="quiet",
         help="Very quiet. Disables all csb-specific logging.", default=1)
     parser.add_argument("-j", "--jobs", action="store", dest="jobs", type=int)
     parser.add_argument('--show-commands', help="Show all commands sent to the system.", action="store_true")
@@ -1265,7 +1268,7 @@ def _run():
     parser.add_argument('--force-progress-bar', help="Force progress bar on or off.",
         action="store", choices=["on", "off"], default=None, const="on", nargs="?")
     parser.add_argument('--prefix', help="install prefix (default /usr/local)", action="store")
-    parser.add_argument('--toolchain', help="Toolchain to use for compiling.", choices=_shared_globals.alltoolchains, action="store")
+    parser.add_argument('-t', '--toolchain', help="Toolchain to use for compiling.", choices=_shared_globals.alltoolchains, action="store")
     parser.add_argument('--no-precompile', help="Disable precompiling globally, affects all projects", action="store_true")
     parser.add_argument('--no-chunks', help="Disable chunking globally, affects all projects", action="store_true")
 
