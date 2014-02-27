@@ -37,6 +37,7 @@ class toolchain_gcc(toolchain.toolchainBase):
         self.settingsOverrides["warn_flags"] = []
         self.settingsOverrides["cppstandard"] = ""
         self.settingsOverrides["cstandard"] = ""
+        self.settingsOverrides["strictOrdering"] = False
 
 
     def SetupForProject(self, project):
@@ -136,16 +137,18 @@ class toolchain_gcc(toolchain.toolchainBase):
             else:
                 cmd = project.cc
 
-            return "{} {}{}-o{} {} {}{}{}{}{}-g{} -O{} {} {}".format(
+            return "{} {}{}-o{} {} {} {} {}{}{} {} {}-g{} -O{} {} {}".format(
                 cmd,
                 "-m32 " if project.force_32_bit else "-m64 " if project.force_64_bit else "",
                 "-pg " if project.profile else "",
                 outputFile,
                 " ".join(objList),
                 "-static-libgcc -static-libstdc++ " if project.static_runtime else "",
+                "-Wl,--start-group" if not project.strictOrdering else "",
                 self.get_libraries(project.libraries),
                 self.get_static_libraries(project.static_libraries),
                 self.get_shared_libraries(project.shared_libraries),
+                "-Wl,--end-group" if not project.strictOrdering else "",
                 self.get_library_dirs(project.library_dirs, True),
                 project.debug_level,
                 project.opt_level,
@@ -279,3 +282,9 @@ class toolchain_gcc(toolchain.toolchainBase):
     def CStandard(self, s):
         """The C/C++ standard to be used when compiling. gcc/g++ --std"""
         self.settingsOverrides["cstandard"] = s
+
+    def EnableStrictOrdering(self):
+        self.settingsOverrides["strictOrdering"] = True
+
+    def DisableStrictOrdering(self):
+        self.settingsOverrides["strictOrdering"] = False
