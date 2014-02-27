@@ -703,7 +703,7 @@ class projectSettings(object):
                 for depend in self.linkDepends:
                     if _shared_globals.projects[depend].output_name == library or \
                             _shared_globals.projects[depend].output_name.startswith(
-                                    "lib{}".format(library)):
+                                    "lib{}.".format(library)):
                         bFound = True
                         break
                 if bFound:
