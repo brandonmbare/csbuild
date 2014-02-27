@@ -1347,11 +1347,11 @@ def _run():
             BuildWithTarget(target)
     elif args.target:
         for target in args.target:
-            if target not in _shared_globals.alltargets:
+            BuildWithTarget(target)
+        for target in args.target:
+            if target.lower() not in _shared_globals.alltargets:
                 log.LOG_ERROR("Unknown target: {}".format(target))
                 return
-        for target in args.target:
-            BuildWithTarget(target)
     else:
         BuildWithTarget(None)
 
