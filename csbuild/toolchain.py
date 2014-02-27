@@ -53,7 +53,7 @@ class toolchainBase(object):
         pass
 
     @abstractmethod
-    def find_library(self, library, library_dirs, force_static, force_shared):
+    def find_library(self, project, library, library_dirs, force_static, force_shared):
         pass
 
     @abstractmethod
