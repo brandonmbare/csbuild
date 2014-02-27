@@ -90,6 +90,8 @@ alltargets = set()
 alltoolchains = {}
 allgenerators = {}
 
+rebuild = False
+
 class dummy_block(object):
     """Some versions of python have a bug in threading where a dummy thread will try and use a value that it deleted.
     To keep that from erroring on systems with those versions of python, this is a dummy object with the required

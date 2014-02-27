@@ -527,13 +527,21 @@ def project(name, workingDirectory, linkDepends=None, srcDepends=None):
 
         newProject = projectSettings.currentProject.copy()
 
-        newProject.name = name
+        newProject.name = "{}@{}".format(name, projectSettings.currentProject.targetName)
         newProject.workingDirectory = os.path.abspath(workingDirectory)
-        newProject.linkDepends = linkDepends
-        newProject.srcDepends = srcDepends
+
+        alteredLinkDepends = []
+        alteredSrcDepends = []
+        for depend in linkDepends:
+            alteredLinkDepends.append("{}@{}".format(depend, projectSettings.currentProject.targetName))
+        for depend in srcDepends:
+            alteredSrcDepends.append("{}@{}".format(depend, projectSettings.currentProject.targetName))
+
+        newProject.linkDepends = alteredLinkDepends
+        newProject.srcDepends = alteredSrcDepends
         newProject.func = projectFunction
 
-        _shared_globals.projects.update({name: newProject})
+        _shared_globals.projects.update({"{}@{}".format(name, projectSettings.currentProject.targetName): newProject})
         projectSettings.currentGroup.projects.update({name: newProject})
 
         projectSettings.currentProject = previousProject
@@ -566,6 +574,8 @@ def target(name):
 
 #</editor-fold>
 
+_shared_globals.starttime = time.time()
+
 _barWriter = log.bar_writer()
 
 def build():
@@ -596,7 +606,7 @@ def build():
     #projects_needing_links = set()
 
     for project in _shared_globals.sortedProjects:
-        log.LOG_BUILD("Verifying libraries for {}".format(project.output_name))
+        log.LOG_BUILD("Verifying libraries for {} ({})".format(project.output_name, project.targetName))
         if not project.check_libraries():
             sys.exit(1)
         #if _utils.needs_link(project):
@@ -620,7 +630,7 @@ def build():
 
             project.starttime = time.time()
 
-            log.LOG_BUILD("Building {0} ({1})".format(projectSettings.currentProject.output_name, project.targetName))
+            log.LOG_BUILD("Building {0} ({1})".format(project.output_name, project.targetName))
 
             if project.precompile_headers():
                 if not os.path.exists(projectSettings.currentProject.obj_dir):
@@ -651,12 +661,12 @@ def build():
 
                                 if otherProj.final_chunk_set:
                                     log.LOG_BUILD(
-                                        "Compile of {0} took {1}:{2:02}".format(otherProj.output_name, int(minutes),
-                                            int(seconds)))
+                                        "Compile of {0} ({3}) took {1}:{2:02}".format(otherProj.output_name, int(minutes),
+                                            int(seconds), otherProj.targetName))
                                 projects_in_flight.remove(otherProj)
                                 if otherProj.compile_failed:
-                                    log.LOG_ERROR("Build of {0} failed! Finishing up non-dependent build tasks...".format(
-                                        otherProj.output_name))
+                                    log.LOG_ERROR("Build of {} ({}) failed! Finishing up non-dependent build tasks...".format(
+                                        otherProj.output_name, otherProj.targetName))
                                     continue
 
                                 okToLink = True
@@ -669,12 +679,12 @@ def build():
                                     if not link(otherProj):
                                         _shared_globals.build_success = False
                                     LinkedSomething = True
-                                    log.LOG_BUILD("Finished {0}".format(otherProj.output_name))
+                                    log.LOG_BUILD("Finished {} ({})".format(otherProj.output_name, otherProj.targetName))
                                     projects_done.add(otherProj.name)
                                 else:
                                     log.LOG_LINKER(
-                                        "Linking for {0} deferred until all dependencies have finished building...".format(
-                                            otherProj.output_name))
+                                        "Linking for {} ({}) deferred until all dependencies have finished building...".format(
+                                            otherProj.output_name, otherProj.targetName))
                                     pending_links.append(otherProj)
 
                         for otherProj in list(pending_links):
@@ -687,7 +697,7 @@ def build():
                                 if not link(otherProj):
                                     _shared_globals.build_success = False
                                 LinkedSomething = True
-                                log.LOG_BUILD("Finished {0}".format(otherProj.output_name))
+                                log.LOG_BUILD("Finished {} ({})".format(otherProj.output_name, otherProj.targetName))
                                 projects_done.add(otherProj.name)
                                 pending_links.remove(otherProj)
 
@@ -722,8 +732,8 @@ def build():
                     _shared_globals.current_compile += 1
             else:
                 projects_in_flight.remove(project)
-                log.LOG_ERROR("Build of {0} failed! Finishing up non-dependent build tasks...".format(
-                    project.output_name))
+                log.LOG_ERROR("Build of {} ({}) failed! Finishing up non-dependent build tasks...".format(
+                    project.output_name, project.targetName))
 
         #Wait until all threads are finished. Simple way to do this is acquire the semaphore until it's out of
         # resources.
@@ -774,11 +784,11 @@ def build():
                     seconds = round(totaltime % 60)
 
                     log.LOG_BUILD(
-                        "Compile of {0} took {1}:{2:02}".format(otherProj.output_name, int(minutes), int(seconds)))
+                        "Compile of {0} ({3}) took {1}:{2:02}".format(otherProj.output_name, int(minutes), int(seconds), otherProj.targetName))
                     projects_in_flight.remove(otherProj)
                     if otherProj.compile_failed:
-                        log.LOG_ERROR("Build of {0} failed! Finishing up non-dependent build tasks...".format(
-                            otherProj.output_name))
+                        log.LOG_ERROR("Build of {} ({}) failed! Finishing up non-dependent build tasks...".format(
+                            otherProj.output_name, otherProj.targetName))
                         continue
 
                     okToLink = True
@@ -790,11 +800,11 @@ def build():
                     if okToLink:
                         link(otherProj)
                         LinkedSomething = True
-                        log.LOG_BUILD("Finished {0}".format(otherProj.output_name))
+                        log.LOG_BUILD("Finished {} ({})".format(otherProj.output_name, otherProj.targetName))
                         projects_done.add(otherProj.name)
                     else:
-                        log.LOG_LINKER("Linking for {0} deferred until all dependencies have finished building...".format(
-                            otherProj.output_name))
+                        log.LOG_LINKER("Linking for {} ({}) deferred until all dependencies have finished building...".format(
+                            otherProj.output_name, otherProj.targetName))
                         pending_links.append(otherProj)
 
             for otherProj in list(pending_links):
@@ -806,7 +816,7 @@ def build():
                 if okToLink:
                     link(otherProj)
                     LinkedSomething = True
-                    log.LOG_BUILD("Finished {0}".format(otherProj.output_name))
+                    log.LOG_BUILD("Finished {} ({})".format(otherProj.output_name, otherProj.targetName))
                     projects_done.add(otherProj.name)
                     pending_links.remove(otherProj)
 
@@ -1236,6 +1246,7 @@ def _run():
     group.add_argument('--clean', action="store_true", help='Clean the target build')
     group.add_argument('--install', action="store_true", help='Install the target build')
     group.add_argument('--version', action="store_true", help="Print version information and exit")
+    group.add_argument('--rebuild', action="store_true", help='Clean the target build and then build it')
     group2 = parser.add_mutually_exclusive_group()
     group2.add_argument('-v', action="store_const", const=0, dest="quiet",
         help="Verbose. Enables additional INFO-level logging.", default=1)
@@ -1291,8 +1302,10 @@ def _run():
     _shared_globals.do_install = args.install
     _shared_globals.quiet = args.quiet
     _shared_globals.show_commands = args.show_commands
+    _shared_globals.rebuild = args.rebuild
+    project_build_list = None
     if args.project:
-        _shared_globals.project_build_list = set(args.project)
+        project_build_list = set(args.project)
     if args.no_progress:
         _shared_globals.columns = 0
 
@@ -1320,124 +1333,11 @@ def _run():
     _shared_globals.disable_precompile = args.no_precompile
 
     def BuildWithTarget(target):
-        global _barWriter
-        _barWriter = log.bar_writer()
-
-        os.chdir(mainfileDir)
-
-        _shared_globals.times = []
-
-        _shared_globals.starttime = time.time()
-        _shared_globals.esttime = 0
-        _shared_globals.lastupdate = -1
-
-        _shared_globals.buildtime = -1
-
-        _shared_globals.projects = {}
-        _shared_globals.finished_projects = set()
-        _shared_globals.built_files = set()
-
-        _shared_globals.allfiles = []
-        _shared_globals.total_precompiles = 0
-        _shared_globals.precompiles_done = 0
-        _shared_globals.total_compiles = 0
-
-        _shared_globals.makefile_dict = {}
-
-        _shared_globals.allheaders = {}
-
-        _shared_globals.current_compile = 1
-
-        _shared_globals.project_build_list = set()
-
-        _shared_globals.sortedProjects = []
-
-        projectSettings.currentProject = projectSettings.projectSettings()
-
-        projectSettings.rootProject = projectSettings.ProjectGroup("", None)
-        projectSettings.currentGroup = projectSettings.rootProject
-
-        _setupdefaults()
-
         if target is not None:
             _shared_globals.target = target.lower()
 
         #there's an execfile on this up above, but if we got this far we didn't pass --help or -h, so we need to do this here instead
         _execfile(mainfile, _shared_globals.makefile_dict, _shared_globals.makefile_dict)
-
-        def insert_depends(proj, projList, already_inserted=set()):
-            already_inserted.add(proj.name)
-            for depend in proj.linkDepends:
-                projData = _shared_globals.projects[depend]
-                projList[depend] = projData
-                if depend in already_inserted:
-                    log.LOG_ERROR("Circular dependencies detected: {0} and {1} in linkDepends".format(depend, proj.name))
-                    sys.exit(1)
-                insert_depends(projData, projList)
-            for depend in proj.srcDepends:
-                projData = _shared_globals.projects[depend]
-                projList[depend] = projData
-                if depend in already_inserted:
-                    log.LOG_ERROR("Circular dependencies detected: {0} and {1} in linkDepends".format(depend, proj.name))
-                    sys.exit(1)
-                insert_depends(projData, projList)
-            already_inserted.remove(proj.name)
-
-
-        if _shared_globals.project_build_list:
-            newProjList = {}
-            for proj in _shared_globals.project_build_list:
-                projData = _shared_globals.projects[proj]
-                newProjList[proj] = projData
-                insert_depends(projData, newProjList)
-            _shared_globals.projects = newProjList
-
-        _shared_globals.sortedProjects = _utils.sortProjects()
-
-        for proj in _shared_globals.sortedProjects:
-            proj.prepareBuild()
-
-        _utils.check_version()
-
-        totaltime = time.time() - _shared_globals.starttime
-        totalmin = math.floor(totaltime / 60)
-        totalsec = round(totaltime % 60)
-        log.LOG_BUILD("Task preparation took {0}:{1:02}".format(int(totalmin), int(totalsec)))
-
-        if args.generate_solution is not None:
-            if not args.solution_path:
-                args.solution_path = os.path.join(".", "Solutions", args.generate_solution)
-            if args.generate_solution not in _shared_globals.project_generators:
-                log.LOG_ERROR("No solution generator present for solution of type {}".format(args.generate_solution))
-                sys.exit(0)
-            generator = _shared_globals.project_generators[args.generate_solution](args.solution_path, args.solution_name)
-
-            generator.write_solution()
-            log.LOG_BUILD("Done")
-
-        elif _shared_globals.CleanBuild:
-            clean()
-        elif _shared_globals.do_install:
-            install()
-        else:
-            make()
-
-        #Print out any errors or warnings incurred so the user doesn't have to scroll to see what went wrong
-        if _shared_globals.warnings:
-            print("\n")
-            log.LOG_WARN("Warnings encountered during build:")
-            for warn in _shared_globals.warnings[0:-1]:
-                log.LOG_WARN(warn)
-        if _shared_globals.errors:
-            print("\n")
-            log.LOG_ERROR("Errors encountered during build:")
-            for error in _shared_globals.errors[0:-1]:
-                log.LOG_ERROR(error)
-
-        global _barWriter
-        _barWriter.stop()
-
-    verystart = time.time()
 
     if args.all_targets:
         for target in _shared_globals.alltargets:
@@ -1452,11 +1352,114 @@ def _run():
     else:
         BuildWithTarget(None)
 
-    if args.all_targets or len(args.target) > 1:
-        totaltime = time.time() - verystart
-        totalmin = math.floor(totaltime / 60)
-        totalsec = round(totaltime % 60)
-        log.LOG_BUILD("Build of all targets took: {0}:{1:02}".format(int(totalmin), int(totalsec)))
+    if project_build_list:
+        for proj in _shared_globals.projects.keys():
+            if proj.rsplit("@", 1)[0] in project_build_list:
+                _shared_globals.project_build_list.add(proj)
+
+    already_errored_link = {}
+    already_errored_source = {}
+    def insert_depends(proj, projList, already_inserted=set()):
+        already_inserted.add(proj.name)
+        if project not in already_errored_link:
+            already_errored_link[project] = set()
+            already_errored_source[project] = set()
+        for index in range(len(proj.linkDepends)):
+            depend = proj.linkDepends[index]
+
+            if depend in already_inserted:
+                log.LOG_ERROR("Circular dependencies detected: {0} and {1} in linkDepends".format(depend.rsplit("@", 1)[0], proj.name.rsplit("@", 1)[0]))
+                sys.exit(1)
+
+            if depend not in _shared_globals.projects:
+                if depend not in already_errored_link[project]:
+                    log.LOG_ERROR("Project {} references non-existent link dependency {}".format(proj.name.rsplit("@", 1)[0], depend.rsplit("@", 1)[0]))
+                    already_errored_link[project].add(depend)
+                    del proj.linkDepends[index]
+                continue
+
+            projData = _shared_globals.projects[depend]
+            projList[depend] = projData
+
+            insert_depends(projData, projList)
+
+        for index in range(len(proj.srcDepends)):
+            depend = proj.srcDepends[index]
+
+            if depend in already_inserted:
+                log.LOG_ERROR("Circular dependencies detected: {0} and {1} in linkDepends".format(depend.rsplit("@", 1)[0], proj.name.rsplit("@", 1)[0]))
+                sys.exit(1)
+
+
+            if depend not in _shared_globals.projects:
+                if depend not in already_errored_link[project]:
+                    log.LOG_ERROR("Project {} references non-existent link dependency {}".format(proj.name.rsplit("@", 1)[0], depend.rsplit("@", 1)[0]))
+                    already_errored_link[project].add(depend)
+                    del proj.linkDepends[index]
+                continue
+
+            projData = _shared_globals.projects[depend]
+            projList[depend] = projData
+
+            insert_depends(projData, projList)
+        already_inserted.remove(proj.name)
+
+
+    if _shared_globals.project_build_list:
+        newProjList = {}
+        for proj in _shared_globals.project_build_list:
+            projData = _shared_globals.projects[proj]
+            newProjList[proj] = projData
+            insert_depends(projData, newProjList)
+        _shared_globals.projects = newProjList
+
+    _shared_globals.sortedProjects = _utils.sortProjects()
+
+    for proj in _shared_globals.sortedProjects:
+        proj.prepareBuild()
+
+    _utils.check_version()
+
+    totaltime = time.time() - _shared_globals.starttime
+    totalmin = math.floor(totaltime / 60)
+    totalsec = round(totaltime % 60)
+    log.LOG_BUILD("Task preparation took {0}:{1:02}".format(int(totalmin), int(totalsec)))
+
+    if args.generate_solution is not None:
+        if not args.solution_path:
+            args.solution_path = os.path.join(".", "Solutions", args.generate_solution)
+        if args.generate_solution not in _shared_globals.project_generators:
+            log.LOG_ERROR("No solution generator present for solution of type {}".format(args.generate_solution))
+            sys.exit(0)
+        generator = _shared_globals.project_generators[args.generate_solution](args.solution_path, args.solution_name)
+
+        generator.write_solution()
+        log.LOG_BUILD("Done")
+
+    elif _shared_globals.CleanBuild:
+        clean()
+    elif _shared_globals.do_install:
+        install()
+    elif _shared_globals.rebuild:
+        clean()
+        make()
+    else:
+        make()
+
+    #Print out any errors or warnings incurred so the user doesn't have to scroll to see what went wrong
+    if _shared_globals.warnings:
+        print("\n")
+        log.LOG_WARN("Warnings encountered during build:")
+        for warn in _shared_globals.warnings[0:-1]:
+            log.LOG_WARN(warn)
+    if _shared_globals.errors:
+        print("\n")
+        log.LOG_ERROR("Errors encountered during build:")
+        for error in _shared_globals.errors[0:-1]:
+            log.LOG_ERROR(error)
+
+    global _barWriter
+    _barWriter.stop()
 
     if not _shared_globals.build_success:
         sys.exit(1)

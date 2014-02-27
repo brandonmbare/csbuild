@@ -193,7 +193,7 @@ class projectSettings(object):
             with open(cmdfile, "r") as f:
                 cmd = f.read()
 
-        if self.cxxcmd + self.cccmd != cmd:
+        if self.cxxcmd + self.cccmd != cmd or _shared_globals.rebuild:
             self.recompile_all = True
             with open(cmdfile, "w") as f:
                 f.write(self.cxxcmd + self.cccmd)

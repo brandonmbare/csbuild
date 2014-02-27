@@ -252,11 +252,11 @@ def sortProjects():
         for index in range(len(project.linkDepends)):
             depend = project.linkDepends[index]
             if depend in already_inserted:
-                log.LOG_ERROR("Circular dependencies detected: {0} and {1} in linkDepends".format(depend, project.name))
+                log.LOG_ERROR("Circular dependencies detected: {0} and {1} in linkDepends".format(depend.rsplit("@", 1)[0], project.name.rsplit("@", 1)[0]))
                 sys.exit(1)
             if depend not in _shared_globals.projects:
                 if depend not in already_errored_link[project]:
-                    log.LOG_ERROR("Project {} references non-existent link dependency {}".format(project.name, depend))
+                    log.LOG_ERROR("Project {} references non-existent link dependency {}".format(project.name.rsplit("@", 1)[0], depend.rsplit("@", 1)[0]))
                     already_errored_link[project].add(depend)
                     del project.linkDepends[index]
                 continue
@@ -265,11 +265,11 @@ def sortProjects():
         for index in range(len(project.srcDepends)):
             depend = project.srcDepends[index]
             if depend in already_inserted:
-                log.LOG_ERROR("Circular dependencies detected: {0} and {1} in srcDepends".format(depend, project.name))
+                log.LOG_ERROR("Circular dependencies detected: {0} and {1} in srcDepends".format(depend.rsplit("@", 1)[0], project.name.rsplit("@", 1)[0]))
                 sys.exit(1)
             if depend not in _shared_globals.projects:
                 if depend not in already_errored_source[project]:
-                    log.LOG_ERROR("Project {} references non-existent source dependency {}".format(project.name, depend))
+                    log.LOG_ERROR("Project {} references non-existent source dependency {}".format(project.name.rsplit("@", 1)[0], depend.rsplit("@", 1)[0]))
                     already_errored_source[project].add(depend)
                     del project.srcDepends[index]
                 continue
