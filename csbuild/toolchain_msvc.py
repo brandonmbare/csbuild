@@ -58,7 +58,7 @@ class toolchain_msvc(toolchain.toolchainBase):
         self.settingsOverrides["debug_runtime_set"] = False
         self._subsystem = SubSystem.DEFAULT
         
-        self._acutal_library_names = {}
+        self._actual_library_names = {}
 
     def SetupForProject(self, project):
         platform_architectures = {
