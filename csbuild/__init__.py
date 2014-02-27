@@ -1456,7 +1456,7 @@ def _run():
         totaltime = time.time() - verystart
         totalmin = math.floor(totaltime / 60)
         totalsec = round(totaltime % 60)
-        log.LOG_LINKER("Build of all targets took: {0}:{1:02}".format(int(totalmin), int(totalsec)))
+        log.LOG_BUILD("Build of all targets took: {0}:{1:02}".format(int(totalmin), int(totalsec)))
 
     if not _shared_globals.build_success:
         sys.exit(1)
