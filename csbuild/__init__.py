@@ -959,7 +959,6 @@ def clean(silent=False):
     """Cleans the project.
     Invoked with --clean.
     Deletes all of the object files to make sure they're rebuilt cleanly next run.
-    Does NOT delete the actual compiled file.
     """
     for project in _shared_globals.sortedProjects:
 
@@ -987,6 +986,10 @@ def clean(silent=False):
             if not silent:
                 log.LOG_INFO("Deleting {0}".format(obj))
             os.remove(obj)
+
+        outpath = os.path.join(project.output_dir, project.output_name)
+        if os.path.exists(outpath):
+            log.LOG_INFO("Deleting {}".format(outpath))
 
         if not silent:
             log.LOG_BUILD("Done.")
