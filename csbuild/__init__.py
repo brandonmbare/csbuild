@@ -66,31 +66,6 @@ __credits__ = ["Jaedyn K Draper", "Brandon M Bare"]
 
 signal.signal(signal.SIGINT, signal.SIG_DFL)
 
-##REQUIRED FOR 1.0##
-#TODO: Implement architecture on msvc
-#TODO: MSVC project generator
-#TODO: Pre- and Post-compile steps
-#TODO: assert
-#TODO: Support compiling assembly files
-#TODO: Better detection of whether or not something should be linked
-#TODO: csbuild.NoMotherFuckingExceptionsFucker().IHateThoseThings().ReallyGiveMeNoExceptionsTheySuck()
-
-##IDEAL FOR 1.0##
-#TODO: Errors on nonexistent targets/projects
-#TODO: Errors on duplicate project names
-#TODO: Errors on nonexistent dependencies
-#TODO: More verbose errors when paths can't be found
-
-##AS TIME PERMITS##
-#TODO: Cleanup and style, comments
-#TODO: CXX and CC environment variables
-#TODO: --cxx and --cc flags
-#TODO: *Import* existing projects
-#TODO: Verify compiler features
-#TODO: Mark scripts uncallable
-#TODO: csbuild.ScriptLocation()?
-#TODO: -stdlib
-
 
 class ArchitectureType(object):
     def __init__(self, archString, vendor="unknown", sys="unknown", abi="unknown"):
@@ -1005,7 +980,7 @@ def install():
     Does nothing if neither InstallHeaders() nor InstallOutput() has been called in the make script.
     """
     for project in _shared_globals.sortedProjects:
-	os.chdir(project.workingDirectory)
+        os.chdir(project.workingDirectory)
         output = "{0}/{1}".format(project.output_dir, project.output_name)
         install_something = False
 
@@ -1342,4 +1317,8 @@ def _run():
     else:
         sys.exit(0)
 
-_run()
+try:
+    _run()
+except:
+    _barWriter.stop()
+    raise
