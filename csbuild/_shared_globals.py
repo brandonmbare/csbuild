@@ -57,6 +57,7 @@ target = ""
 CleanBuild = False
 do_install = False
 
+tempprojects = {}
 projects = {}
 finished_projects = set()
 built_files = set()
@@ -91,6 +92,8 @@ alltoolchains = {}
 allgenerators = {}
 
 rebuild = False
+
+sgmutex = threading.Lock()
 
 class dummy_block(object):
     """Some versions of python have a bug in threading where a dummy thread will try and use a value that it deleted.

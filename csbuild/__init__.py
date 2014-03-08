@@ -99,10 +99,12 @@ ArchitecturePPU = ArchitecturePowerPC64
 #<editor-fold desc="Setters">
 #Setters
 def NoBuiltinTargets():
-    if projectSettings.currentProject.targets["debug"] == debug:
-        del projectSettings.currentProject.targets["debug"]
-    if projectSettings.currentProject.targets["release"] == release:
-        del projectSettings.currentProject.targets["release"]
+    if debug in projectSettings.currentProject.targets["debug"]:
+        arr = projectSettings.currentProject.targets["debug"]
+        del arr[arr.index(debug)]
+    if release in projectSettings.currentProject.targets["release"]:
+        arr = projectSettings.currentProject.targets["release"]
+        del arr[arr.index(release)]
 
 def InstallOutput(s="lib"):
     """Enables installation of the compiled output file. Default target is /usr/local/lib."""
@@ -507,41 +509,23 @@ def project(name, workingDirectory, linkDepends=None, srcDepends=None):
         srcDepends = [srcDepends]
 
     def wrap(projectFunction):
-        if name in _shared_globals.projects:
+        if name in _shared_globals.tempprojects:
             log.LOG_ERROR("Multiple projects with the same name: {}. Ignoring.".format(name))
             return
         previousProject = projectSettings.currentProject.copy()
         projectFunction()
 
-        if _shared_globals.target:
-            projectSettings.currentProject.targetName = _shared_globals.target
-        else:
-            projectSettings.currentProject.targetName = projectSettings.currentProject.default_target
-
-        if projectSettings.currentProject.targetName not in projectSettings.currentProject.targets:
-            log.LOG_INFO("Project {} has no rules specified for target {}. Skipping.".format(projectSettings.currentProject.name, projectSettings.currentProject.targetName))
-            projectSettings.currentProject = previousProject
-            return
-
-        projectSettings.currentProject.targets[projectSettings.currentProject.targetName]()
-
         newProject = projectSettings.currentProject.copy()
 
-        newProject.name = "{}@{}".format(name, projectSettings.currentProject.targetName)
+        newProject.name = name
         newProject.workingDirectory = os.path.abspath(workingDirectory)
+        newProject.scriptPath = os.getcwd()
 
-        alteredLinkDepends = []
-        alteredSrcDepends = []
-        for depend in linkDepends:
-            alteredLinkDepends.append("{}@{}".format(depend, projectSettings.currentProject.targetName))
-        for depend in srcDepends:
-            alteredSrcDepends.append("{}@{}".format(depend, projectSettings.currentProject.targetName))
-
-        newProject.linkDepends = alteredLinkDepends
-        newProject.srcDepends = alteredSrcDepends
+        newProject.linkDepends = linkDepends
+        newProject.srcDepends = srcDepends
         newProject.func = projectFunction
 
-        _shared_globals.projects.update({"{}@{}".format(name, projectSettings.currentProject.targetName): newProject})
+        _shared_globals.tempprojects.update({name: newProject})
         projectSettings.currentGroup.projects.update({name: newProject})
 
         projectSettings.currentProject = previousProject
@@ -558,15 +542,21 @@ def projectGroup(name):
             projectSettings.currentGroup.subgroups.update({name: newGroup})
             projectSettings.currentGroup = newGroup
 
+        previousProject = projectSettings.currentProject.copy()
         groupFunction()
+        projectSettings.currentProject = previousProject
 
         projectSettings.currentGroup = projectSettings.currentGroup.parentGroup
 
     return wrap
 
-def target(name):
+def target(name, override = False):
     def wrap(targetFunction):
-        projectSettings.currentProject.targets.update({name: targetFunction})
+        if override is True or name not in projectSettings.currentProject.targets:
+            projectSettings.currentProject.targets.update( { name : [ targetFunction ] } )
+        else:
+            projectSettings.currentProject.targets[name].append( targetFunction )
+
         return targetFunction
 
     _shared_globals.alltargets.add(name)
@@ -651,7 +641,10 @@ def build():
                     while LinkedSomething:
                         LinkedSomething = False
                         for otherProj in list(projects_in_flight):
-                            if otherProj.compiles_completed >= len(otherProj.final_chunk_set) + int(
+                            otherProj.mutex.acquire()
+                            complete = otherProj.compiles_completed
+                            otherProj.mutex.release()
+                            if complete >= len(otherProj.final_chunk_set) + int(
                                     otherProj.needs_c_precompile) + int(
                                     otherProj.needs_cpp_precompile):
                                 totaltime = (time.time() - otherProj.starttime)
@@ -775,7 +768,10 @@ def build():
         while LinkedSomething:
             LinkedSomething = False
             for otherProj in list(projects_in_flight):
-                if otherProj.compiles_completed >= len(otherProj.final_chunk_set) + int(
+                otherProj.mutex.acquire()
+                complete = otherProj.compiles_completed
+                otherProj.mutex.release()
+                if complete >= len(otherProj.final_chunk_set) + int(
                         otherProj.needs_c_precompile) + int(
                         otherProj.needs_cpp_precompile):
                     totaltime = (time.time() - otherProj.starttime)
@@ -825,6 +821,7 @@ def build():
     if pending_links:
         log.LOG_ERROR("Could not link all projects. Do you have unmet dependencies in your makefile?"
                       " Remaining projects: {0}".format([p.name for p in pending_links]))
+        _shared_globals.build_success = False
 
     compiletime = time.time() - starttime
     totalmin = math.floor(compiletime / 60)
@@ -1100,15 +1097,37 @@ def _setupdefaults():
     target("release")(release)
 
 
+def Done():
+    sys.exit(0)
+
+
+def Exit():
+    sys.exit(0)
+
+
+ARG_NOT_SET = type("ArgNotSetType", (), {})()
+
+_options = []
+
+helpMode = False
+
 def get_option(option):
-    option = option.replace("-", "_")
     global args
+    if not helpMode:
+        newparser = argparse.ArgumentParser()
+        global _options
+        for opt in _options:
+            newparser.add_argument(*opt[0], **opt[1])
+        _options = []
+        newargs, remainder = newparser.parse_known_args(args.remainder)
+        args.__dict__.update(newargs.__dict__)
+        args.remainder = remainder
+
+    option = option.replace("-", "_")
     if hasattr(args, option):
         return getattr(args, option)
     else:
-        return None
-
-_options = []
+        return ARG_NOT_SET
 
 def add_option(*args, **kwargs):
     _options.append([args, kwargs])
@@ -1156,6 +1175,8 @@ def _run():
         else:
             mainfileDir = os.path.abspath(os.getcwd())
         if "-h" in sys.argv or "--help" in sys.argv:
+            global helpMode
+            helpMode = True
             _execfile(mainfile, _shared_globals.makefile_dict, _shared_globals.makefile_dict)
             _shared_globals.sortedProjects = _utils.sortProjects()
 
@@ -1291,7 +1312,8 @@ def _run():
         for option in _options:
             group.add_argument(*option[0], **option[1])
 
-    args = parser.parse_args()
+    args, remainder = parser.parse_known_args()
+    args.remainder = remainder
 
     if args.version:
         with open(os.path.dirname(__file__) + "/version", "r") as f:
@@ -1337,12 +1359,44 @@ def _run():
     _shared_globals.disable_chunks = args.no_chunks
     _shared_globals.disable_precompile = args.no_precompile
 
+    #there's an execfile on this up above, but if we got this far we didn't pass --help or -h, so we need to do this here instead
+    _execfile(mainfile, _shared_globals.makefile_dict, _shared_globals.makefile_dict)
+
     def BuildWithTarget(target):
         if target is not None:
             _shared_globals.target = target.lower()
 
-        #there's an execfile on this up above, but if we got this far we didn't pass --help or -h, so we need to do this here instead
-        _execfile(mainfile, _shared_globals.makefile_dict, _shared_globals.makefile_dict)
+        for project in _shared_globals.tempprojects.values():
+            os.chdir(project.scriptPath)
+
+            newproject = project.copy()
+
+            if _shared_globals.target:
+                newproject.targetName = _shared_globals.target
+            else:
+                newproject.targetName = projectSettings.currentProject.default_target
+
+            if newproject.targetName not in newproject.targets:
+                log.LOG_INFO("Project {} has no rules specified for target {}. Skipping.".format(newproject.name, newproject.targetName))
+                return
+
+            projectSettings.currentProject = newproject
+
+            for targetFunc in newproject.targets[newproject.targetName]:
+                targetFunc()
+
+            alteredLinkDepends = []
+            alteredSrcDepends = []
+            for depend in newproject.linkDepends:
+                alteredLinkDepends.append("{}@{}".format(depend, projectSettings.currentProject.targetName))
+            for depend in newproject.srcDepends:
+                alteredSrcDepends.append("{}@{}".format(depend, projectSettings.currentProject.targetName))
+
+            newproject.linkDepends = alteredLinkDepends
+            newproject.srcDepends = alteredSrcDepends
+
+            newproject.name = "{}@{}".format(newproject.name, newproject.targetName)
+            _shared_globals.projects.update({newproject.name : newproject})
 
     if args.all_targets:
         for target in _shared_globals.alltargets:
@@ -1356,6 +1410,8 @@ def _run():
                 return
     else:
         BuildWithTarget(None)
+
+    os.chdir(mainfileDir)
 
     if project_build_list:
         for proj in _shared_globals.projects.keys():

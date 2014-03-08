@@ -23,15 +23,13 @@ import fnmatch
 import os
 import re
 import hashlib
-import subprocess
-import threading
 import time
 import sys
 import math
-import datetime
 import platform
 import glob
 import itertools
+import threading
 
 from csbuild import log
 from csbuild import _shared_globals
@@ -160,6 +158,10 @@ class projectSettings(object):
 
         self.library_mtimes = []
 
+        self.scriptPath = ""
+
+        self.mutex = threading.Lock()
+
     def prepareBuild(self):
         wd = os.getcwd()
         os.chdir(self.workingDirectory)
@@ -167,7 +169,7 @@ class projectSettings(object):
         self.activeToolchain = self.toolchains[self.activeToolchainName]
         self.obj_dir = os.path.abspath(self.obj_dir)
         self.output_dir = os.path.abspath(self.output_dir)
-        self.csbuild_dir = os.path.abspath(self.csbuild_dir)
+        self.csbuild_dir = os.path.join(self.obj_dir, ".csbuild")
 
         self.exclude_dirs.append(self.csbuild_dir)
 
@@ -319,7 +321,7 @@ class projectSettings(object):
             "cxxcmd": self.cxxcmd,
             "cccmd": self.cccmd,
             "recompile_all": self.recompile_all,
-            "targets": dict(self.targets),
+            "targets": {},
             "targetName": self.targetName,
             "final_chunk_set": list(self.final_chunk_set),
             "needs_c_precompile": self.needs_c_precompile,
@@ -337,7 +339,12 @@ class projectSettings(object):
             "built_something": self.built_something,
             "outputArchitecture": self.outputArchitecture,
             "library_mtimes" : list(self.library_mtimes),
+            "scriptPath" : self.scriptPath,
+            "mutex" : threading.Lock()
         }
+
+        for name in self.targets:
+            ret.targets.update( { name : list( self.targets[name] ) } )
 
         return ret
 
@@ -788,8 +795,7 @@ class projectSettings(object):
         if platform.system() == "Windows":
             inFile = inFile[2:]
 
-        md5file = "{}{}".format(self.csbuild_dir,
-            os.path.join(os.path.sep, "md5s", inFile))
+        md5file = "{}.md5".format(os.path.join(self.csbuild_dir, "md5s", inFile))
 
         md5dir = os.path.dirname(md5file)
         if not os.path.exists(md5dir):

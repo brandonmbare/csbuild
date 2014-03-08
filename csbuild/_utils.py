@@ -158,8 +158,11 @@ class threaded_build(threading.Thread):
                 if not _shared_globals.interrupted:
                     log.LOG_ERROR("Compile of {} failed!  (Return code: {})".format(self.file, ret))
                 _shared_globals.build_success = False
+
+                self.project.mutex.acquire()
                 self.project.compile_failed = True
                 self.project.compiles_completed += 1
+                self.project.mutex.release()
         except Exception as e:
             #If we don't do this with ALL exceptions, any unhandled exception here will cause the semaphore to never
             # release...
@@ -168,17 +171,27 @@ class threaded_build(threading.Thread):
             #if os.path.dirname(self.file) == _csbuild_dir:
             #   os.remove(self.file)
             _shared_globals.semaphore.release()
+
+            self.project.mutex.acquire()
             self.project.compile_failed = True
             self.project.compiles_completed += 1
+            self.project.mutex.release()
+
             raise e
         else:
             #if os.path.dirname(self.file) == _csbuild_dir:
             #   os.remove(self.file)
             #if inc or (not self.project.precompile and not self.project.chunk_precompile):
             endtime = time.time()
+            _shared_globals.sgmutex.acquire()
             _shared_globals.times.append(endtime - starttime)
+            _shared_globals.sgmutex.release()
+
             _shared_globals.semaphore.release()
+
+            self.project.mutex.acquire()
             self.project.compiles_completed += 1
+            self.project.mutex.release()
 
 
 def base_names(l):
