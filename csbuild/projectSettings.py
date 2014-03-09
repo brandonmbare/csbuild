@@ -678,6 +678,8 @@ class projectSettings( object ):
 				if absroot != self.csbuild_dir:
 					log.LOG_INFO( "Skipping dir {0}".format( root ) )
 				continue
+			if ".csbuild" in root:
+				continue
 			if absroot == self.csbuild_dir or absroot.startswith( self.csbuild_dir ):
 				continue
 			bFound = False

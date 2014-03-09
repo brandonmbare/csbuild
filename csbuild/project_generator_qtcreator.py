@@ -376,8 +376,11 @@ class project_generator_qtcreator( project_generator.project_generator ):
 
 
 	def _printXml( self, inxml, outfile, doctype ):
+		if sys.version_info >= (3, 0):
+			inxml = inxml.decode("utf-8")
 		outxml = '<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE {}>\n<!-- Written by CSBuild using input from QTCreator -->\n{}'.format(
 			doctype, inxml )
+
 
 		formatted = minidom.parseString( outxml ).toprettyxml( " ", "\n" )
 		inlist = formatted.split( "\n" )
