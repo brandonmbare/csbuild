@@ -1,5 +1,6 @@
 csbuild	csbuild-module.html
 csbuild.ClearSharedibraries	csbuild-module.html#ClearSharedibraries
+csbuild.StopOnFirstError	csbuild-module.html#StopOnFirstError
 csbuild.EnableUnity	csbuild-module.html#EnableUnity
 csbuild.Opt	csbuild-module.html#Opt
 csbuild.preCompileStep	csbuild-module.html#preCompileStep

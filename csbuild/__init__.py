@@ -554,6 +554,13 @@ def EnableChunkedBuild( ):
 	projectSettings.currentProject.use_chunks = True
 
 
+def StopOnFirstError():
+	"""
+	Stop compilation when the first error is encountered.
+	"""
+	_shared_globals.stopOnError = True
+
+
 def ChunkNumFiles( i ):
 	"""
 	Set the size of the chunks used in the chunked build. This indicates the number of files per compilation unit.
@@ -1159,6 +1166,10 @@ def build( ):
 
 					if _shared_globals.interrupted:
 						sys.exit( 2 )
+					if not _shared_globals.build_success and _shared_globals.stopOnError:
+						log.LOG_ERROR("Errors encountered during build, finishing current tasks and exiting...")
+						_shared_globals.semaphore.release()
+						break
 					if _shared_globals.times:
 						totaltime = (time.time( ) - starttime)
 						_shared_globals.lastupdate = totaltime
@@ -1192,6 +1203,9 @@ def build( ):
 				projects_in_flight.remove( project )
 				log.LOG_ERROR( "Build of {} ({}) failed! Finishing up non-dependent build tasks...".format(
 					project.output_name, project.targetName ) )
+
+			if not _shared_globals.build_success and _shared_globals.stopOnError:
+				break
 
 		#Wait until all threads are finished. Simple way to do this is acquire the semaphore until it's out of
 		# resources.
@@ -1228,6 +1242,7 @@ def build( ):
 		#Then immediately release all the semaphores once we've reclaimed them.
 		#We're not using any more threads so we don't need them now.
 		for j in range( _shared_globals.max_threads ):
+			projects_in_flight = set()
 			_shared_globals.semaphore.release( )
 
 		LinkedSomething = True
@@ -1818,6 +1833,11 @@ def _run( ):
 	parser.add_argument( '--prefix', help = "install prefix (default /usr/local)", action = "store" )
 	parser.add_argument( '-t', '--toolchain', help = "Toolchain to use for compiling.",
 		choices = _shared_globals.alltoolchains, action = "store" )
+	parser.add_argument(
+		"--stop-on-error",
+		help = "Stop compilation after the first error is encountered.",
+		action = "store_true"
+	)
 	parser.add_argument( '--no-precompile', help = "Disable precompiling globally, affects all projects",
 		action = "store_true" )
 	parser.add_argument( '--no-chunks', help = "Disable chunking globally, affects all projects",
@@ -1893,6 +1913,8 @@ def _run( ):
 
 	_shared_globals.disable_chunks = args.no_chunks
 	_shared_globals.disable_precompile = args.no_precompile
+
+	_shared_globals.stopOnError = args.stop_on_error
 
 	#there's an execfile on this up above, but if we got this far we didn't pass --help or -h, so we need to do this here instead
 	_execfile( mainfile, _shared_globals.makefile_dict, _shared_globals.makefile_dict )

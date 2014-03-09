@@ -98,6 +98,7 @@ and stepping on each other
 @undocumented: disable_shunks
 @undocumented: rebuild
 @undocumented: dummy_block
+@undocumented: stopOnError
 """
 
 import threading
@@ -176,6 +177,8 @@ allgenerators = { }
 rebuild = False
 
 sgmutex = threading.Lock( )
+
+stopOnError = False
 
 
 class dummy_block( object ):
