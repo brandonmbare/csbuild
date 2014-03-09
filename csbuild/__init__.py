@@ -1681,6 +1681,18 @@ def get_default_arg( argname ):
 	return parser.get_default( argname )
 
 
+def GetTargetList():
+	"""
+	Get the list of targets currently being built.
+
+	If no target has been specified (the default is being used), this list is empty.
+
+	@return: The list of targets
+	@rtype: list[str]
+	"""
+	return _shared_globals.target_list
+
+
 class dummy( object ):
 	def __setattr__( self, key, value ):
 		pass
@@ -1915,6 +1927,11 @@ def _run( ):
 	_shared_globals.disable_precompile = args.no_precompile
 
 	_shared_globals.stopOnError = args.stop_on_error
+
+	if args.all_targets:
+		_shared_globals.target_list = _shared_globals.alltargets
+	elif args.target:
+		_shared_globals.target_list = args.target
 
 	#there's an execfile on this up above, but if we got this far we didn't pass --help or -h, so we need to do this here instead
 	_execfile( mainfile, _shared_globals.makefile_dict, _shared_globals.makefile_dict )

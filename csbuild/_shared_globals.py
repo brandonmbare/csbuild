@@ -66,6 +66,9 @@ and stepping on each other
 @var sgmutex: A mutex to wrap around changes to values in _shared_globals
 @type sgmutex: threading.Lock
 
+@var target_list: List of targets requested by the user, empty if using default target
+@type target_list: list[str]
+
 @undocumented: semaphore
 @undocumented: lock
 @undocumented: called_something
@@ -179,6 +182,8 @@ rebuild = False
 sgmutex = threading.Lock( )
 
 stopOnError = False
+
+target_list = []
 
 
 class dummy_block( object ):

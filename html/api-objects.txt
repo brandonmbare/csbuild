@@ -41,6 +41,7 @@ csbuild.ChunkNumFiles	csbuild-module.html#ChunkNumFiles
 csbuild.NoBuiltinTargets	csbuild-module.html#NoBuiltinTargets
 csbuild.CppCompilerFlags	csbuild-module.html#CppCompilerFlags
 csbuild.ChunkFilesize	csbuild-module.html#ChunkFilesize
+csbuild.GetTargetList	csbuild-module.html#GetTargetList
 csbuild.InstallSubdir	csbuild-module.html#InstallSubdir
 csbuild.EnableChunkedBuild	csbuild-module.html#EnableChunkedBuild
 csbuild.ArchitecturePowerPC	csbuild-module.html#ArchitecturePowerPC
@@ -107,6 +108,7 @@ csbuild._shared_globals.sgmutex	csbuild._shared_globals-module.html#sgmutex
 csbuild._shared_globals.columns	csbuild._shared_globals-module.html#columns
 csbuild._shared_globals.max_threads	csbuild._shared_globals-module.html#max_threads
 csbuild._shared_globals.project_generators	csbuild._shared_globals-module.html#project_generators
+csbuild._shared_globals.target_list	csbuild._shared_globals-module.html#target_list
 csbuild._shared_globals.project_build_list	csbuild._shared_globals-module.html#project_build_list
 csbuild._shared_globals.allgenerators	csbuild._shared_globals-module.html#allgenerators
 csbuild._shared_globals.projects	csbuild._shared_globals-module.html#projects
