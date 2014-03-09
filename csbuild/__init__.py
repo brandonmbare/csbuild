@@ -901,6 +901,7 @@ def project( name, workingDirectory, linkDepends = None, srcDepends = None ):
 
 		newProject = projectSettings.currentProject.copy( )
 
+		newProject.key = name
 		newProject.name = name
 		newProject.workingDirectory = os.path.abspath( workingDirectory )
 		newProject.scriptPath = os.getcwd( )
@@ -969,6 +970,36 @@ def target( name, override = False ):
 	return wrap
 
 
+def preCompileStep( func ):
+	"""
+	Decorator that creates a pre-compile step for the containing project.
+
+	@param func: (Implicit) The function wrapped by this decorator
+	@type func: (Implicit) function
+
+	@note: The function this wraps should take a single argument, which will be of type
+	L{csbuild.projectSettings.projectSettings}.
+	"""
+
+	projectSettings.currentProject.preCompileStep = func
+	return func
+
+
+def postCompileStep( func ):
+	"""
+	Decorator that creates a post-compile step for the containing project.
+
+	@param func: (Implicit) The function wrapped by this decorator
+	@type func: (Implicit) function
+
+	@note: The function this wraps should take a single argument, which will be of type
+	L{csbuild.projectSettings.projectSettings}.
+	"""
+
+	projectSettings.currentProject.postCompileStep = func
+	return func
+
+
 #</editor-fold>
 
 _shared_globals.starttime = time.time( )
@@ -1008,7 +1039,7 @@ def build( ):
 		if not project.check_libraries( ):
 			sys.exit( 1 )
 			#if _utils.needs_link(project):
-			#    projects_needing_links.add(project.name)
+			#    projects_needing_links.add(project.key)
 
 	starttime = time.time( )
 
@@ -1027,6 +1058,10 @@ def build( ):
 			projectSettings.currentProject = project
 
 			project.starttime = time.time( )
+
+			if project.preCompileStep:
+				log.LOG_BUILD( "Running pre-compile step for {} ({})".format( project.output_name, project.targetName ) )
+				project.preCompileStep( project )
 
 			log.LOG_BUILD( "Building {0} ({1})".format( project.output_name, project.targetName ) )
 
@@ -1082,10 +1117,16 @@ def build( ):
 								if okToLink:
 									if not link( otherProj ):
 										_shared_globals.build_success = False
+									else:
+										if project.postCompileStep:
+											log.LOG_BUILD( "Running post-compile step for {} ({})".format( project.output_name, project.targetName ) )
+											project.postCompileStep( project )
+
 									LinkedSomething = True
 									log.LOG_BUILD(
 										"Finished {} ({})".format( otherProj.output_name, otherProj.targetName ) )
-									projects_done.add( otherProj.name )
+
+									projects_done.add( otherProj.key )
 								else:
 									log.LOG_LINKER(
 										"Linking for {} ({}) deferred until all dependencies have finished building...".format(
@@ -1101,10 +1142,15 @@ def build( ):
 							if okToLink:
 								if not link( otherProj ):
 									_shared_globals.build_success = False
+								else:
+									if project.postCompileStep:
+										log.LOG_BUILD( "Running post-compile step for {} ({})".format( project.output_name, project.targetName ) )
+										project.postCompileStep( project )
+
 								LinkedSomething = True
 								log.LOG_BUILD(
 									"Finished {} ({})".format( otherProj.output_name, otherProj.targetName ) )
-								projects_done.add( otherProj.name )
+								projects_done.add( otherProj.key )
 								pending_links.remove( otherProj )
 
 					if _shared_globals.interrupted:
@@ -1213,7 +1259,7 @@ def build( ):
 						link( otherProj )
 						LinkedSomething = True
 						log.LOG_BUILD( "Finished {} ({})".format( otherProj.output_name, otherProj.targetName ) )
-						projects_done.add( otherProj.name )
+						projects_done.add( otherProj.key )
 					else:
 						log.LOG_LINKER(
 							"Linking for {} ({}) deferred until all dependencies have finished building...".format(
@@ -1230,15 +1276,15 @@ def build( ):
 					link( otherProj )
 					LinkedSomething = True
 					log.LOG_BUILD( "Finished {} ({})".format( otherProj.output_name, otherProj.targetName ) )
-					projects_done.add( otherProj.name )
+					projects_done.add( otherProj.key )
 					pending_links.remove( otherProj )
 
 	if projects_in_flight:
 		log.LOG_ERROR( "Could not complete all projects. This is probably very bad and should never happen."
-					   " Remaining projects: {0}".format( [p.name for p in projects_in_flight] ) )
+					   " Remaining projects: {0}".format( [p.key for p in projects_in_flight] ) )
 	if pending_links:
 		log.LOG_ERROR( "Could not link all projects. Do you have unmet dependencies in your makefile?"
-					   " Remaining projects: {0}".format( [p.name for p in pending_links] ) )
+					   " Remaining projects: {0}".format( [p.key for p in pending_links] ) )
 		_shared_globals.build_success = False
 
 	compiletime = time.time( ) - starttime
@@ -1676,7 +1722,7 @@ def _run( ):
 	maxcols = min( math.floor( len( _shared_globals.sortedProjects ) / 4 ), 4 )
 
 	for proj in _shared_globals.sortedProjects:
-		projtable[j].append( proj.name.rsplit( "@", 1 )[0] )
+		projtable[j].append( proj.name )
 		if i < maxcols:
 			i += 1
 		else:
@@ -1887,8 +1933,8 @@ def _run( ):
 			newproject.linkDepends = alteredLinkDepends
 			newproject.srcDepends = alteredSrcDepends
 
-			newproject.name = "{}@{}".format( newproject.name, newproject.targetName )
-			_shared_globals.projects.update( { newproject.name: newproject } )
+			newproject.key = "{}@{}".format( newproject.name, newproject.targetName )
+			_shared_globals.projects.update( { newproject.key: newproject } )
 
 
 	if args.all_targets:
@@ -1916,7 +1962,7 @@ def _run( ):
 
 
 	def insert_depends( proj, projList, already_inserted = set( ) ):
-		already_inserted.add( proj.name )
+		already_inserted.add( proj.key )
 		if project not in already_errored_link:
 			already_errored_link[project] = set( )
 			already_errored_source[project] = set( )
@@ -1926,13 +1972,13 @@ def _run( ):
 			if depend in already_inserted:
 				log.LOG_ERROR(
 					"Circular dependencies detected: {0} and {1} in linkDepends".format( depend.rsplit( "@", 1 )[0],
-						proj.name.rsplit( "@", 1 )[0] ) )
+						proj.name ) )
 				sys.exit( 1 )
 
 			if depend not in _shared_globals.projects:
 				if depend not in already_errored_link[project]:
 					log.LOG_ERROR(
-						"Project {} references non-existent link dependency {}".format( proj.name.rsplit( "@", 1 )[0],
+						"Project {} references non-existent link dependency {}".format( proj.name,
 							depend.rsplit( "@", 1 )[0] ) )
 					already_errored_link[project].add( depend )
 					del proj.linkDepends[index]
@@ -1949,13 +1995,13 @@ def _run( ):
 			if depend in already_inserted:
 				log.LOG_ERROR(
 					"Circular dependencies detected: {0} and {1} in linkDepends".format( depend.rsplit( "@", 1 )[0],
-						proj.name.rsplit( "@", 1 )[0] ) )
+						proj.name ) )
 				sys.exit( 1 )
 
 			if depend not in _shared_globals.projects:
 				if depend not in already_errored_link[project]:
 					log.LOG_ERROR(
-						"Project {} references non-existent link dependency {}".format( proj.name.rsplit( "@", 1 )[0],
+						"Project {} references non-existent link dependency {}".format( proj.name,
 							depend.rsplit( "@", 1 )[0] ) )
 					already_errored_link[project].add( depend )
 					del proj.linkDepends[index]
@@ -1965,7 +2011,7 @@ def _run( ):
 			projList[depend] = projData
 
 			insert_depends( projData, projList )
-		already_inserted.remove( proj.name )
+		already_inserted.remove( proj.key )
 
 
 	if _shared_globals.project_build_list:
@@ -2030,7 +2076,7 @@ def _run( ):
 
 
 try:
-	pass#_run( )
+	_run( )
 except:
 	_barWriter.stop( )
 	raise

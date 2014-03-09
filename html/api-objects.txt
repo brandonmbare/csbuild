@@ -2,11 +2,13 @@ csbuild	csbuild-module.html
 csbuild.ClearSharedibraries	csbuild-module.html#ClearSharedibraries
 csbuild.EnableUnity	csbuild-module.html#EnableUnity
 csbuild.Opt	csbuild-module.html#Opt
+csbuild.preCompileStep	csbuild-module.html#preCompileStep
 csbuild.StaticLibraries	csbuild-module.html#StaticLibraries
 csbuild.EnableWarningsAsErrors	csbuild-module.html#EnableWarningsAsErrors
 csbuild.DefaultTarget	csbuild-module.html#DefaultTarget
 csbuild.Undefine	csbuild-module.html#Undefine
 csbuild.ClearChunks	csbuild-module.html#ClearChunks
+csbuild.postCompileStep	csbuild-module.html#postCompileStep
 csbuild.Force64Bit	csbuild-module.html#Force64Bit
 csbuild.ExcludeFiles	csbuild-module.html#ExcludeFiles
 csbuild.mainfile	csbuild-module.html#mainfile
@@ -151,11 +153,13 @@ csbuild.projectSettings.projectSettings.chunks	csbuild.projectSettings.projectSe
 csbuild.projectSettings.projectSettings.targetName	csbuild.projectSettings.projectSettings-class.html#targetName
 csbuild.projectSettings.projectSettings.static_libraries	csbuild.projectSettings.projectSettings-class.html#static_libraries
 csbuild.projectSettings.projectSettings.header_install_dir	csbuild.projectSettings.projectSettings-class.html#header_install_dir
+csbuild.projectSettings.projectSettings.preCompileStep	csbuild.projectSettings.projectSettings-class.html#preCompileStep
 csbuild.projectSettings.projectSettings.cppheaderfile	csbuild.projectSettings.projectSettings-class.html#cppheaderfile
 csbuild.projectSettings.projectSettings.force_32_bit	csbuild.projectSettings.projectSettings-class.html#force_32_bit
 csbuild.projectSettings.projectSettings.cc	csbuild.projectSettings.projectSettings-class.html#cc
 csbuild.projectSettings.projectSettings.mutex	csbuild.projectSettings.projectSettings-class.html#mutex
 csbuild.projectSettings.projectSettings.type	csbuild.projectSettings.projectSettings-class.html#type
+csbuild.projectSettings.projectSettings.postCompileStep	csbuild.projectSettings.projectSettings-class.html#postCompileStep
 csbuild.projectSettings.projectSettings.built_something	csbuild.projectSettings.projectSettings-class.html#built_something
 csbuild.projectSettings.projectSettings.exclude_files	csbuild.projectSettings.projectSettings-class.html#exclude_files
 csbuild.projectSettings.projectSettings.obj_dir	csbuild.projectSettings.projectSettings-class.html#obj_dir
@@ -207,6 +211,7 @@ csbuild.projectSettings.projectSettings.header_recursion	csbuild.projectSettings
 csbuild.projectSettings.projectSettings.profile	csbuild.projectSettings.projectSettings-class.html#profile
 csbuild.projectSettings.projectSettings.srcDepends	csbuild.projectSettings.projectSettings-class.html#srcDepends
 csbuild.projectSettings.projectSettings.precompile_exclude	csbuild.projectSettings.projectSettings-class.html#precompile_exclude
+csbuild.projectSettings.projectSettings.key	csbuild.projectSettings.projectSettings-class.html#key
 csbuild.projectSettings.projectSettings.chunk_size	csbuild.projectSettings.projectSettings-class.html#chunk_size
 csbuild.projectSettings.projectSettings.opt_level	csbuild.projectSettings.projectSettings-class.html#opt_level
 csbuild.projectSettings.projectSettings.needs_cpp_precompile	csbuild.projectSettings.projectSettings-class.html#needs_cpp_precompile

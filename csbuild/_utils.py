@@ -262,7 +262,7 @@ def sortProjects( ):
 
 
 	def insert_depends( project, already_inserted = set( ) ):
-		already_inserted.add( project.name )
+		already_inserted.add( project.key )
 		if project not in already_errored_link:
 			already_errored_link[project] = set( )
 			already_errored_source[project] = set( )
@@ -272,12 +272,12 @@ def sortProjects( ):
 			if depend in already_inserted:
 				log.LOG_ERROR(
 					"Circular dependencies detected: {0} and {1} in linkDepends".format( depend.rsplit( "@", 1 )[0],
-						project.name.rsplit( "@", 1 )[0] ) )
+						project.name ) )
 				sys.exit( 1 )
 			if depend not in _shared_globals.projects:
 				if depend not in already_errored_link[project]:
 					log.LOG_ERROR( "Project {} references non-existent link dependency {}".format(
-						project.name.rsplit( "@", 1 )[0], depend.rsplit( "@", 1 )[0] ) )
+						project.name, depend.rsplit( "@", 1 )[0] ) )
 					already_errored_link[project].add( depend )
 					del project.linkDepends[index]
 				continue
@@ -288,19 +288,19 @@ def sortProjects( ):
 			if depend in already_inserted:
 				log.LOG_ERROR(
 					"Circular dependencies detected: {0} and {1} in srcDepends".format( depend.rsplit( "@", 1 )[0],
-						project.name.rsplit( "@", 1 )[0] ) )
+						project.name ) )
 				sys.exit( 1 )
 			if depend not in _shared_globals.projects:
 				if depend not in already_errored_source[project]:
 					log.LOG_ERROR( "Project {} references non-existent source dependency {}".format(
-						project.name.rsplit( "@", 1 )[0], depend.rsplit( "@", 1 )[0] ) )
+						project.name, depend.rsplit( "@", 1 )[0] ) )
 					already_errored_source[project].add( depend )
 					del project.srcDepends[index]
 				continue
 			insert_depends( _shared_globals.projects[depend], already_inserted )
 		if project not in ret:
 			ret.append( project )
-		already_inserted.remove( project.name )
+		already_inserted.remove( project.key )
 
 
 	for project in _shared_globals.projects.values( ):

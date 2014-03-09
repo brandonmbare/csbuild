@@ -30,6 +30,7 @@ Contains a plugin class for interfacing with MSVC
 import os
 import platform
 import subprocess
+import sys
 
 from csbuild import toolchain
 from csbuild import _shared_globals
@@ -160,7 +161,12 @@ class toolchain_msvc( toolchain.toolchainBase ):
 			batch_file_path = os.path.join( self._toolchain_path, "vcvarsall.bat" )
 			fd = subprocess.Popen( '"{}" {} & set'.format( batch_file_path, "x64" if self._build_64_bit else "x86" ),
 				stdout = subprocess.PIPE, stderr = subprocess.PIPE )
-			(output, errors) = fd.communicate( )
+
+			if sys.version_info >= (3, 0):
+				(output, errors) = fd.communicate( str.encode("utf-8") )
+			else:
+				(output, errors) = fd.communicate( )
+
 			output_lines = output.splitlines( )
 
 			for line in output_lines:

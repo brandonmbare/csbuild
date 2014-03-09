@@ -62,6 +62,9 @@ class projectSettings( object ):
 	@ivar name: The project's name
 	@type name: str
 
+	@ivar key: A unique key made by combining project name and target
+	@type key: str
+
 	@ivar workingDirectory: The directory containing all of the project's files
 	@type workingDirectory: str
 
@@ -308,6 +311,12 @@ class projectSettings( object ):
 	@ivar mutex: A mutex used to control modification of project data across multiple threads
 	@type mutex: threading.Lock
 
+	@ivar preCompileStep: A function that will be executed before compile of this project begins
+	@type preCompileStep: function
+
+	@ivar postCompileStep: A function that will be executed after compile of this project ends
+	@type postCompileStep: function
+
 	@undocumented: prepareBuild
 	@undocumented: __getattribute__
 	@undocumented: __setattr__
@@ -333,6 +342,7 @@ class projectSettings( object ):
 		Default projectSettings constructor
 		"""
 		self.name = ""
+		self.key = ""
 		self.workingDirectory = "./"
 		self.linkDepends = []
 		self.srcDepends = []
@@ -450,6 +460,9 @@ class projectSettings( object ):
 
 		self.mutex = threading.Lock( )
 
+		self.postCompileStep = None
+		self.preCompileStep = None
+
 
 	def prepareBuild( self ):
 		wd = os.getcwd( )
@@ -548,6 +561,7 @@ class projectSettings( object ):
 
 		ret.__dict__ = {
 			"name": self.name,
+			"key": self.key,
 			"workingDirectory": self.workingDirectory,
 			"linkDepends": list( self.linkDepends ),
 			"srcDepends": list( self.srcDepends ),
@@ -626,7 +640,9 @@ class projectSettings( object ):
 			"outputArchitecture": self.outputArchitecture,
 			"library_mtimes": list( self.library_mtimes ),
 			"scriptPath": self.scriptPath,
-			"mutex": threading.Lock( )
+			"mutex": threading.Lock( ),
+			"preCompileStep" : self.preCompileStep,
+			"postCompileStep" : self.postCompileStep
 		}
 
 		for name in self.targets:
