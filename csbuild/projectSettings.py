@@ -185,6 +185,9 @@ class projectSettings( object ):
 	@ivar chunks: Compiled list of chunks to be compiled in this project
 	@type chunks: list[str]
 
+	@ivar chunksByFile: Dictionary to get the list of files in a chunk from its filename
+	@type chunksByFile: dict[str, list[str]]
+
 	@ivar use_chunks: Whether or not to use chunks
 	@type use_chunks: bool
 
@@ -392,6 +395,7 @@ class projectSettings( object ):
 
 		self.allpaths = []
 		self.chunks = []
+		self.chunksByFile = {}
 
 		self.use_chunks = True
 		self.chunk_tolerance = 3
@@ -602,6 +606,7 @@ class projectSettings( object ):
 			"opt_set": self.opt_set,
 			"allpaths": list( self.allpaths ),
 			"chunks": list( self.chunks ),
+			"chunksByFile" : dict( self.chunksByFile ),
 			"use_chunks": self.use_chunks,
 			"chunk_tolerance": self.chunk_tolerance,
 			"chunk_size": self.chunk_size,
@@ -1090,8 +1095,10 @@ class projectSettings( object ):
 		"""Retrieves the chunk that a given file belongs to."""
 		for chunk in self.chunks:
 			if srcFile in chunk:
-				return hashlib.md5( "{0}_chunk_{1}".format( self.output_name.split( '.' )[0],
-					"__".join( _utils.base_names( chunk ) ) ) ).hexdigest( )
+				return "{}_chunk_{}".format(
+					self.output_name.split( '.' )[0],
+					hashlib.md5("__".join( _utils.base_names( chunk ) ) ).hexdigest( )
+				)
 
 
 	def save_md5( self, inFile ):

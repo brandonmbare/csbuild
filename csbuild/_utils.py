@@ -422,8 +422,11 @@ def chunked_build( ):
 		return
 
 	if totalChunks == 1 and not owningProject.unity:
-		chunkname = hashlib.md5( "{0}_chunk_{1}".format( owningProject.output_name.split( '.' )[0],
-			"__".join( base_names( owningProject.chunks[0] ) ) ) ).hexdigest( )
+		chunkname = "{}_chunk_{}".format(
+			owningProject.output_name.split( '.' )[0],
+			hashlib.md5( "__".join( base_names( owningProject.chunks[0] ) ) ).hexdigest()
+		)
+
 		obj = "{0}/{1}_{2}.o".format( owningProject.obj_dir, chunkname,
 			owningProject.targetName )
 		if os.path.exists( obj ):
@@ -458,14 +461,10 @@ def chunked_build( ):
 				outFile = "{0}/{1}_unity.cpp".format( project.csbuild_dir,
 					project.output_name )
 			else:
-				outFile = "{}/{}.cpp".format(
+				outFile = "{}/{}_chunk_{}.cpp".format(
 					project.csbuild_dir,
-					hashlib.md5(
-						"{}_chunk_{}".format(
-							project.output_name.split( '.' )[0],
-							"__".join( base_names( chunk ) )
-						)
-					).hexdigest( )
+					project.output_name.split( '.' )[0],
+					hashlib.md5( "__".join( base_names( chunk ) ) ).hexdigest( )
 				)
 
 			#If only one or two sources in this chunk need to be built, we get no benefit from building it as a unit.
@@ -492,9 +491,14 @@ def chunked_build( ):
 					f.write( "//Total size: {0} bytes".format( chunksize ) )
 
 				project.final_chunk_set.append( outFile )
+				project.chunksByFile.update( { outFile : base_names( chunk ) } )
 			elif len( sources_in_this_chunk ) > 0:
-				chunkname = hashlib.md5( "{0}_chunk_{1}".format( project.output_name.split( '.' )[0],
-					"__".join( base_names( chunk ) ) ) )
+
+				chunkname = "{}_chunk_{}".format(
+					project.output_name.split( '.' )[0],
+					hashlib.md5( "__".join( base_names( chunk ) ) ).hexdigest()
+				)
+
 				obj = "{0}/{1}_{2}.o".format( project.obj_dir, chunkname,
 					project.targetName )
 				if os.path.exists( obj ):

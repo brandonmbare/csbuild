@@ -1073,6 +1073,10 @@ def build( ):
 					#not set until here because final_chunk_set may be empty.
 					project.built_something = True
 
+					chunkFileStr = ""
+					if chunk in project.chunksByFile:
+						chunkFileStr = " {}".format(project.chunksByFile[chunk])
+
 					built = True
 					obj = "{0}/{1}_{2}.o".format( projectSettings.currentProject.obj_dir,
 						os.path.basename( chunk ).split( '.' )[0],
@@ -1170,18 +1174,18 @@ def build( ):
 						estmin = math.floor( esttime / 60 )
 						estsec = round( esttime % 60 )
 						log.LOG_BUILD(
-							"Compiling {0}... ({1}/{2}) - {3}:{4:02}/{5}:{6:02}".format( os.path.basename( obj ),
+							"Compiling {0}{7}... ({1}/{2}) - {3}:{4:02}/{5}:{6:02}".format( os.path.basename( obj ),
 								_shared_globals.current_compile, _shared_globals.total_compiles, int( minutes ),
 								int( seconds ), int( estmin ),
-								int( estsec ) ) )
+								int( estsec ), chunkFileStr ) )
 					else:
 						totaltime = (time.time( ) - starttime)
 						minutes = math.floor( totaltime / 60 )
 						seconds = round( totaltime % 60 )
 						log.LOG_BUILD(
-							"Compiling {0}... ({1}/{2}) - {3}:{4:02}".format( os.path.basename( obj ),
+							"Compiling {0}{5}... ({1}/{2}) - {3}:{4:02}".format( os.path.basename( obj ),
 								_shared_globals.current_compile,
-								_shared_globals.total_compiles, int( minutes ), int( seconds ) ) )
+								_shared_globals.total_compiles, int( minutes ), int( seconds ), chunkFileStr ) )
 					_utils.threaded_build( chunk, obj, project ).start( )
 					_shared_globals.current_compile += 1
 			else:
@@ -1318,19 +1322,14 @@ def link( project, *objs ):
 	if not objs:
 		for chunk in project.chunks:
 			if not project.unity:
-				obj = "{}/{}_{}.o".format(
+				obj = "{}/{}_chunk_{}_{}.o".format(
 					project.obj_dir,
-					hashlib.md5(
-						"{}_chunk_{}".format(
-							project.output_name.split( '.' )[0],
-							"__".join( _utils.base_names( chunk ) )
-						)
-					).hexdigest( ),
+					project.output_name.split( '.' )[0],
+					hashlib.md5( "__".join( _utils.base_names( chunk ) ) ).hexdigest(),
 					project.targetName
 				)
 			else:
-				obj = "{0}/{1}_unity_{2}.o".format( project.obj_dir, project.output_name,
-					project.targetName )
+				obj = "{0}/{1}_unity_{2}.o".format( project.obj_dir, project.output_name, project.targetName )
 			if project.use_chunks and os.path.exists( obj ):
 				objs.append( obj )
 			else:

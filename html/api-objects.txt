@@ -166,7 +166,7 @@ csbuild.projectSettings.projectSettings.obj_dir	csbuild.projectSettings.projectS
 csbuild.projectSettings.projectSettings.precompile_done	csbuild.projectSettings.projectSettings-class.html#precompile_done
 csbuild.projectSettings.projectSettings.ccpccmd	csbuild.projectSettings.projectSettings-class.html#ccpccmd
 csbuild.projectSettings.projectSettings.cpp_compiler_flags	csbuild.projectSettings.projectSettings-class.html#cpp_compiler_flags
-csbuild.projectSettings.projectSettings.recompile_all	csbuild.projectSettings.projectSettings-class.html#recompile_all
+csbuild.projectSettings.projectSettings.default_target	csbuild.projectSettings.projectSettings-class.html#default_target
 csbuild.projectSettings.projectSettings.no_warnings	csbuild.projectSettings.projectSettings-class.html#no_warnings
 csbuild.projectSettings.projectSettings.func	csbuild.projectSettings.projectSettings-class.html#func
 csbuild.projectSettings.projectSettings.copy	csbuild.projectSettings.projectSettings-class.html#copy
@@ -196,6 +196,7 @@ csbuild.projectSettings.projectSettings.allheaders	csbuild.projectSettings.proje
 csbuild.projectSettings.projectSettings.targets	csbuild.projectSettings.projectSettings-class.html#targets
 csbuild.projectSettings.projectSettings.__init__	csbuild.projectSettings.projectSettings-class.html#__init__
 csbuild.projectSettings.projectSettings.defines	csbuild.projectSettings.projectSettings-class.html#defines
+csbuild.projectSettings.projectSettings.recompile_all	csbuild.projectSettings.projectSettings-class.html#recompile_all
 csbuild.projectSettings.projectSettings.workingDirectory	csbuild.projectSettings.projectSettings-class.html#workingDirectory
 csbuild.projectSettings.projectSettings.chunk_tolerance	csbuild.projectSettings.projectSettings-class.html#chunk_tolerance
 csbuild.projectSettings.projectSettings.undefines	csbuild.projectSettings.projectSettings-class.html#undefines
@@ -218,7 +219,7 @@ csbuild.projectSettings.projectSettings.needs_cpp_precompile	csbuild.projectSett
 csbuild.projectSettings.projectSettings.force_64_bit	csbuild.projectSettings.projectSettings-class.html#force_64_bit
 csbuild.projectSettings.projectSettings.activeToolchain	csbuild.projectSettings.projectSettings-class.html#activeToolchain
 csbuild.projectSettings.projectSettings.exclude_dirs	csbuild.projectSettings.projectSettings-class.html#exclude_dirs
-csbuild.projectSettings.projectSettings.default_target	csbuild.projectSettings.projectSettings-class.html#default_target
+csbuild.projectSettings.projectSettings.chunksByFile	csbuild.projectSettings.projectSettings-class.html#chunksByFile
 csbuild.projectSettings.projectSettings.warnings_as_errors	csbuild.projectSettings.projectSettings-class.html#warnings_as_errors
 csbuild.projectSettings.projectSettings.shared_libraries	csbuild.projectSettings.projectSettings-class.html#shared_libraries
 csbuild.projectSettings.projectSettings.csbuild_dir	csbuild.projectSettings.projectSettings-class.html#csbuild_dir
