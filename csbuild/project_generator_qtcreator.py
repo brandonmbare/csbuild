@@ -17,6 +17,7 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
+import stat
 
 import xml.etree.ElementTree as ET
 import xml.dom.minidom as minidom
@@ -43,11 +44,10 @@ class project_generator_qtcreator( project_generator.project_generator ):
 	@undocumented: update_qtcreator_config
 	@undocumented: _printXml
 	"""
-	def __init__( self, path, solutionname ):
-		project_generator.project_generator.__init__( self, path, solutionname )
+	def __init__( self, path, solutionname, extraargs ):
+		project_generator.project_generator.__init__( self, path, solutionname, extraargs )
 
 		self.qtpath = os.path.expanduser( csbuild.get_option( "qtpath" ) )
-		self.formatted_args = self.get_formatted_args( ["qtpath"] )
 
 		self.update_qtcreator_config( )
 
@@ -59,7 +59,7 @@ class project_generator_qtcreator( project_generator.project_generator ):
 			default = "~/.config" )
 
 
-	def _writeProject( self, project, parentNames ):
+	def _writeProject( self, projectDict, parentNames ):
 		depth = len( parentNames )
 		if depth == 0:
 			parentPath = ""
@@ -68,24 +68,32 @@ class project_generator_qtcreator( project_generator.project_generator ):
 		else:
 			parentPath = os.path.join( *parentNames )
 
+		# Grab a random project from the dictionary, first one will do.
+		# These values don't matter much as they're likely to be the same (or close enough to the same for our purposes)
+		# across all targets.
+		project = projectDict[projectDict.keys()[0]]
+
 		projectpath = os.path.join( self.rootpath, parentPath, project.name )
 		if not os.path.exists( projectpath ):
 			os.makedirs( projectpath )
 
 		log.LOG_INFO( "Creating project {}.pro".format( projectpath ) )
 
+		launcher = "{}_launcher".format( project.name )
+		launcherpath = os.path.join( projectpath, launcher )
+
 		with open( os.path.join( projectpath, "{}.pro".format( project.name ) ), "w" ) as f:
 			f.write( "SOURCES += \\\n" )
 			for source in project.allsources:
-				f.write( "\t{} \\\n".format( os.path.abspath( source ) ) )
+				f.write( "\t{} \\\n".format( os.path.relpath( source, projectpath ) ) )
 
 			f.write( "\nHEADERS += \\\n" )
 			for header in project.allheaders:
-				f.write( "\t{} \\\n".format( os.path.abspath( header ) ) )
+				f.write( "\t{} \\\n".format( os.path.relpath( header, projectpath ) ) )
 
-			f.write( "\nDESTDIR = {}\n\n".format( project.output_dir ) )
+			f.write( "\nDESTDIR = {}\n\n".format( projectpath ) )
 
-			f.write( "TARGET = {}\n\n".format( project.output_name ) )
+			f.write( "TARGET = {}\n\n".format( launcher ) )
 
 			if project.type == csbuild.ProjectType.Application:
 				f.write( "TEMPLATE = app\n\n" )
@@ -114,6 +122,40 @@ class project_generator_qtcreator( project_generator.project_generator ):
 					f.write( "\nQMAKE_CXXFLAGS += -std={}\n".format( project.cstandard ) )
 			except:
 				pass
+
+		with open( launcherpath, "w" ) as f:
+			f.write("#!/bin/bash\n\n")
+			written = False
+			for project in projectDict.values():
+				if written:
+					f.write('el')
+				f.write('if [ "$CSB_BUILD_TARGET" = "{}" ]; then\n'.format(project.targetName))
+				executable = os.path.join(project.output_dir, project.output_name)
+				f.write('\techo "Executing {} $@ ({} target)..."\n'.format(project.targetName, executable))
+				f.write('\tcd {}\n'.format(project.output_dir))
+				f.write('\t./{} $@\n'.format(project.output_name))
+				f.write('\texit $?\n')
+				written = True
+
+			f.write('elif [ "$CSB_BUILD_TARGET"=="ALL TARGETS" ]; then\n')
+			f.write('\techo "No target selected. Please select a target to execute."\n')
+			f.write('\texit 1\n')
+			f.write('else\n')
+			f.write('\techo "No executable defined for project {} / target $CSB_BUILD_TARGET."\n'.format(project.name))
+			f.write('\texit 1\n')
+			f.write('fi')
+
+		os.chmod(
+			launcherpath,
+			stat.S_IXUSR |
+			stat.S_IRUSR |
+			stat.S_IWUSR |
+			stat.S_IXGRP |
+			stat.S_IRGRP |
+			stat.S_IWGRP |
+			stat.S_IROTH |
+			stat.S_IXOTH
+		)
 
 		with open( os.path.join( projectpath, "Makefile" ), "w" ) as f:
 			projstr = " --project {}".format( project.name )
@@ -212,7 +254,7 @@ class project_generator_qtcreator( project_generator.project_generator ):
 		add( vm, "value", type = "int", key = "ProjectExplorer.Target.ActiveRunConfiguration" ).text = "0"
 
 		stepcount = 0
-		for target in _shared_globals.alltargets:
+		for target in list(_shared_globals.alltargets) + ["--all-targets"]:
 			vm2 = add( vm, "valuemap", type = "QVariantMap",
 				key = "ProjectExplorer.Target.BuildConfiguration.{}".format( stepcount ) )
 			stepcount += 1
@@ -243,7 +285,7 @@ class project_generator_qtcreator( project_generator.project_generator ):
 					key = "Qt4ProjectManager.MakeStep.Clean" ).text = "true" if clean else "false"
 				add( vm4, "value", type = "QString",
 					key = "Qt4ProjectManager.MakeStep.MakeArguments" ).text = "{}ARGS='{}{}'".format(
-					"clean " if clean else "", self.formatted_args, target )
+					"clean " if clean else "", "{} ".format(self.extraargs) if self.extraargs else "", target )
 				add( vm4, "value", type = "QString", key = "Qt4ProjectManager.MakeStep.MakeCommand" )
 
 				add( vm3, "value", type = "int", key = "ProjectExplorer.BuildStepList.StepsCount" ).text = "1"
@@ -261,13 +303,15 @@ class project_generator_qtcreator( project_generator.project_generator ):
 			add( vm2, "value", type = "int", key = "ProjectExplorer.BuildConfiguration.BuildStepListCount" ).text = "2"
 			add( vm2, "value", type = "bool",
 				key = "ProjectExplorer.BuildConfiguration.ClearSystemEnvironment" ).text = "false"
-			add( vm2, "valuelist", type = "QVariantList",
+			ev = add( vm2, "valuelist", type = "QVariantList",
 				key = "ProjectExplorer.BuildConfiguration.UserEnvironmentChanges" )
 
+			add( ev, "value", type = "QString" ).text = "CSB_BUILD_TARGET={}".format( "ALL TARGETS" if target == "--all-targets" else target )
+
 			add( vm2, "value", type = "QString",
-				key = "ProjectExplorer.ProjectConfiguration.DefaultDisplayName" ).text = target
+				key = "ProjectExplorer.ProjectConfiguration.DefaultDisplayName" ).text = "ALL TARGETS" if target == "--all-targets" else target
 			add( vm2, "value", type = "QString",
-				key = "ProjectExplorer.ProjectConfiguration.DisplayName" ).text = target
+				key = "ProjectExplorer.ProjectConfiguration.DisplayName" ).text = "ALL TARGETS" if target == "--all-targets" else target
 			add( vm2, "value", type = "QString",
 				key = "ProjectExplorer.ProjectConfiguration.Id" ).text = "Qt4ProjectManager.Qt4BuildConfiguration"
 			add( vm2, "value", type = "QString",

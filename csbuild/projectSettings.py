@@ -320,6 +320,9 @@ class projectSettings( object ):
 	@ivar postCompileStep: A function that will be executed after compile of this project ends
 	@type postCompileStep: function
 
+	@ivar parentGroup: The group this project is contained within
+	@type parentGroup: ProjectGroup
+
 	@undocumented: prepareBuild
 	@undocumented: __getattribute__
 	@undocumented: __setattr__
@@ -467,6 +470,8 @@ class projectSettings( object ):
 		self.postCompileStep = None
 		self.preCompileStep = None
 
+		self.parentGroup = currentGroup
+
 
 	def prepareBuild( self ):
 		wd = os.getcwd( )
@@ -527,6 +532,10 @@ class projectSettings( object ):
 			self.sources = list( self.allsources )
 
 		_shared_globals.allfiles += self.sources
+
+		if self.name not in self.parentGroup.projects:
+			self.parentGroup.projects[self.name] = {}
+		self.parentGroup.projects[self.name][self.targetName] = self
 
 		os.chdir( wd )
 
@@ -647,7 +656,8 @@ class projectSettings( object ):
 			"scriptPath": self.scriptPath,
 			"mutex": threading.Lock( ),
 			"preCompileStep" : self.preCompileStep,
-			"postCompileStep" : self.postCompileStep
+			"postCompileStep" : self.postCompileStep,
+			"parentGroup" : self.parentGroup
 		}
 
 		for name in self.targets:
@@ -1216,15 +1226,17 @@ class projectSettings( object ):
 		return not self.compile_failed
 
 
-currentProject = projectSettings( )
-
 
 class ProjectGroup( object ):
 	"""
 	Defines a group of projects, and also may contain subgroups.
 
-	@ivar projects: List of projects directly under this group
-	@type projects: dict[str, projectSettings]
+	@ivar tempprojects: Temporary list of projects directly under this group
+	@type tempprojects: dict[str, projectSettings]
+
+	@ivar projects: Fully fleshed-out list of projects under this group
+	Dict is { name : { target : project } }
+	@type projects: dict[str, dict[str, projectSettings]]
 
 	@ivar subgroups: List of child groups
 	@type subgroups: dict[str, ProjectGroup]
@@ -1245,11 +1257,13 @@ class ProjectGroup( object ):
 		@param parentGroup: parent group
 		@type parentGroup: ProjectGroup
 		"""
-		self.projects = { }
-		self.subgroups = { }
+		self.tempprojects = {}
+		self.projects = {}
+		self.subgroups = {}
 		self.name = name
 		self.parentGroup = parentGroup
 
 
 rootProject = ProjectGroup( "", None )
 currentGroup = rootProject
+currentProject = projectSettings( )

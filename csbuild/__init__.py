@@ -918,7 +918,8 @@ def project( name, workingDirectory, linkDepends = None, srcDepends = None ):
 		newProject.func = projectFunction
 
 		_shared_globals.tempprojects.update( { name: newProject } )
-		projectSettings.currentGroup.projects.update( { name: newProject } )
+		projectSettings.currentGroup.tempprojects.update( { name: newProject } )
+		newProject.parentGroup = projectSettings.currentGroup
 
 		projectSettings.currentProject = previousProject
 		return projectFunction
@@ -1863,6 +1864,8 @@ def _run( ):
 		default = "" )
 	group.add_argument( '--solution-name', help = "Name of solution output file (default is csbuild)", action = "store",
 		default = "csbuild" )
+	group.add_argument( '--solution-args', help = 'Arguments passed to the build script executed by the solution',
+		action = "store", default = "")
 
 	for chain in _shared_globals.alltoolchains.items( ):
 		if chain[1].additional_args != toolchain.toolchainBase.additional_args:
@@ -1928,8 +1931,11 @@ def _run( ):
 
 	_shared_globals.stopOnError = args.stop_on_error
 
+	if args.generate_solution is not None:
+		args.all_targets = True
+
 	if args.all_targets:
-		_shared_globals.target_list = _shared_globals.alltargets
+		_shared_globals.target_list = list(_shared_globals.alltargets)
 	elif args.target:
 		_shared_globals.target_list = args.target
 
@@ -1973,7 +1979,6 @@ def _run( ):
 
 			newproject.key = "{}@{}".format( newproject.name, newproject.targetName )
 			_shared_globals.projects.update( { newproject.key: newproject } )
-
 
 	if args.all_targets:
 		for target in _shared_globals.alltargets:
@@ -2078,7 +2083,7 @@ def _run( ):
 		if args.generate_solution not in _shared_globals.project_generators:
 			log.LOG_ERROR( "No solution generator present for solution of type {}".format( args.generate_solution ) )
 			sys.exit( 0 )
-		generator = _shared_globals.project_generators[args.generate_solution]( args.solution_path, args.solution_name )
+		generator = _shared_globals.project_generators[args.generate_solution]( args.solution_path, args.solution_name, args.solution_args )
 
 		generator.write_solution( )
 		log.LOG_BUILD( "Done" )

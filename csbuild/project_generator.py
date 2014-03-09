@@ -35,53 +35,20 @@ class project_generator( object ):
 	To create a new project generator, inherit from this class, and then use
 	L{csbuild.RegisterProjectGenerator()<csbuild.RegisterProjectGenerator>}
 	"""
-	def __init__( self, path, solutionname ):
+	def __init__( self, path, solutionname, extraargs ):
 		"""
 		@param path: The output path for the solution
 		@type path: str
+
 		@param solutionname: The name for the output solution file
 		@type solutionname: str
+
+		@param extraargs: Additional arguments specified by the user to be used in the solution's build command
+		@type extraargs: str
 		"""
 		self.rootpath = os.path.abspath( path )
 		self.solutionname = solutionname
-
-		args = csbuild.get_args( )
-
-		self.args = { }
-		for arg in args.items( ):
-			if "generate_solution" in arg[0]:
-				continue
-			if "solution_name" in arg[0]:
-				continue
-			if "solution_path" in arg[0]:
-				continue
-			if "fakearg" in arg[0]:
-				continue
-			if arg[0] == "target":
-				continue
-			if arg[0] == "project":
-				continue
-
-			if arg[1] == csbuild.get_default_arg( arg[0] ):
-				continue
-
-			self.args.update( { arg[0].replace( "_", "-" ): arg[1] } )
-
-
-	def get_formatted_args( self, excludes ):
-		"""
-		Retrieves the list of arguments to append to the csbuild execution command when generating project files.
-
-		@param excludes: List of options NOT to return, usually project generator-specific arguments
-		@type excludes: list[str]
-		"""
-		outstr = ""
-		for arg in self.args.items( ):
-			if arg[0] in excludes:
-				continue
-
-			outstr += "--{}={} ".format( arg[0], arg[1] )
-		return outstr
+		self.extraargs = extraargs
 
 
 	@staticmethod

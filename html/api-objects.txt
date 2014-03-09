@@ -125,8 +125,8 @@ csbuild.log.LOG_ERROR	csbuild.log-module.html#LOG_ERROR
 csbuild.log.LOG_INFO	csbuild.log-module.html#LOG_INFO
 csbuild.projectSettings	csbuild.projectSettings-module.html
 csbuild.projectSettings.currentGroup	csbuild.projectSettings-module.html#currentGroup
-csbuild.projectSettings.rootProject	csbuild.projectSettings-module.html#rootProject
 csbuild.projectSettings.currentProject	csbuild.projectSettings-module.html#currentProject
+csbuild.projectSettings.rootProject	csbuild.projectSettings-module.html#rootProject
 csbuild.project_generator	csbuild.project_generator-module.html
 csbuild.project_generator_qtcreator	csbuild.project_generator_qtcreator-module.html
 csbuild.terminfo	csbuild.terminfo-module.html
@@ -142,6 +142,7 @@ csbuild.ProjectType.StaticLibrary	csbuild.ProjectType-class.html#StaticLibrary
 csbuild.ProjectType.Application	csbuild.ProjectType-class.html#Application
 csbuild.projectSettings.ProjectGroup	csbuild.projectSettings.ProjectGroup-class.html
 csbuild.projectSettings.ProjectGroup.name	csbuild.projectSettings.ProjectGroup-class.html#name
+csbuild.projectSettings.ProjectGroup.tempprojects	csbuild.projectSettings.ProjectGroup-class.html#tempprojects
 csbuild.projectSettings.ProjectGroup.parentGroup	csbuild.projectSettings.ProjectGroup-class.html#parentGroup
 csbuild.projectSettings.ProjectGroup.__init__	csbuild.projectSettings.ProjectGroup-class.html#__init__
 csbuild.projectSettings.ProjectGroup.projects	csbuild.projectSettings.ProjectGroup-class.html#projects
@@ -168,6 +169,7 @@ csbuild.projectSettings.projectSettings.exclude_files	csbuild.projectSettings.pr
 csbuild.projectSettings.projectSettings.obj_dir	csbuild.projectSettings.projectSettings-class.html#obj_dir
 csbuild.projectSettings.projectSettings.precompile_done	csbuild.projectSettings.projectSettings-class.html#precompile_done
 csbuild.projectSettings.projectSettings.ccpccmd	csbuild.projectSettings.projectSettings-class.html#ccpccmd
+csbuild.projectSettings.projectSettings.parentGroup	csbuild.projectSettings.projectSettings-class.html#parentGroup
 csbuild.projectSettings.projectSettings.cpp_compiler_flags	csbuild.projectSettings.projectSettings-class.html#cpp_compiler_flags
 csbuild.projectSettings.projectSettings.default_target	csbuild.projectSettings.projectSettings-class.html#default_target
 csbuild.projectSettings.projectSettings.no_warnings	csbuild.projectSettings.projectSettings-class.html#no_warnings
@@ -237,7 +239,6 @@ csbuild.projectSettings.projectSettings.library_dirs	csbuild.projectSettings.pro
 csbuild.projectSettings.projectSettings.outputArchitecture	csbuild.projectSettings.projectSettings-class.html#outputArchitecture
 csbuild.project_generator.project_generator	csbuild.project_generator.project_generator-class.html
 csbuild.project_generator.project_generator.write_solution	csbuild.project_generator.project_generator-class.html#write_solution
-csbuild.project_generator.project_generator.get_formatted_args	csbuild.project_generator.project_generator-class.html#get_formatted_args
 csbuild.project_generator.project_generator.additional_args	csbuild.project_generator.project_generator-class.html#additional_args
 csbuild.project_generator.project_generator.__init__	csbuild.project_generator.project_generator-class.html#__init__
 csbuild.project_generator_qtcreator.project_generator_qtcreator	csbuild.project_generator_qtcreator.project_generator_qtcreator-class.html
