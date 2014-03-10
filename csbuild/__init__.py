@@ -27,6 +27,12 @@ Provides access to most CSBuild functionality
 (If you're not within an @project function, os.getcwd() will return the path to this file)
 @type mainfile: str
 
+@attention: To support CSBuild's operation, Python's import lock is DISABLED once CSBuild has started.
+This should not be a problem for most makefiles, but if you do any threading within your makefile, take note:
+anything that's imported and used by those threads should always be implemented on the main thread before that
+thread's execution starts. Otherwise, CSBuild does not guarantee that the import will have completed
+once that thread tries to use it. Long story short: Don't import modules within threads.
+
 @undocumented: dummy
 @undocumented: _setupdefaults
 @undocumented: _execfile
@@ -56,6 +62,7 @@ import threading
 import time
 import platform
 import hashlib
+import imp
 
 
 class ProjectType( object ):
@@ -1072,6 +1079,8 @@ def build( ):
 				project.preCompileStep( project )
 
 			log.LOG_BUILD( "Building {0} ({1})".format( project.output_name, project.targetName ) )
+			project.state = _shared_globals.ProjectState.BUILDING
+			project.startTime = time.time()
 
 			if project.precompile_headers( ):
 				if not os.path.exists( projectSettings.currentProject.obj_dir ):
@@ -1118,6 +1127,7 @@ def build( ):
 									log.LOG_ERROR(
 										"Build of {} ({}) failed! Finishing up non-dependent build tasks...".format(
 											otherProj.output_name, otherProj.targetName ) )
+									otherProj.state = _shared_globals.ProjectState.FAILED
 									continue
 
 								okToLink = True
@@ -1127,12 +1137,16 @@ def build( ):
 											okToLink = False
 											break
 								if okToLink:
+									otherProj.state = _shared_globals.ProjectState.LINKING
 									if not link( otherProj ):
 										_shared_globals.build_success = False
+										otherProj.state = _shared_globals.ProjectState.FAILED
 									else:
-										if project.postCompileStep:
-											log.LOG_BUILD( "Running post-compile step for {} ({})".format( project.output_name, project.targetName ) )
-											project.postCompileStep( project )
+										if otherProj.postCompileStep:
+											log.LOG_BUILD( "Running post-compile step for {} ({})".format( otherProj.output_name, otherProj.targetName ) )
+											otherProj.postCompileStep( otherProj )
+										otherProj.state = _shared_globals.ProjectState.FINISHED
+									otherProj.endTime = time.time()
 
 									LinkedSomething = True
 									log.LOG_BUILD(
@@ -1143,6 +1157,7 @@ def build( ):
 									log.LOG_LINKER(
 										"Linking for {} ({}) deferred until all dependencies have finished building...".format(
 											otherProj.output_name, otherProj.targetName ) )
+									otherProj.state = _shared_globals.ProjectState.WAITING_FOR_LINK
 									pending_links.append( otherProj )
 
 						for otherProj in list( pending_links ):
@@ -1152,12 +1167,17 @@ def build( ):
 									okToLink = False
 									break
 							if okToLink:
+								otherProj.state = _shared_globals.ProjectState.LINKING
 								if not link( otherProj ):
 									_shared_globals.build_success = False
+									otherProj.state = _shared_globals.ProjectState.FAILED
 								else:
-									if project.postCompileStep:
-										log.LOG_BUILD( "Running post-compile step for {} ({})".format( project.output_name, project.targetName ) )
-										project.postCompileStep( project )
+									if otherProj.postCompileStep:
+										log.LOG_BUILD( "Running post-compile step for {} ({})".format( otherProj.output_name, otherProj.targetName ) )
+										otherProj.postCompileStep( otherProj )
+									otherProj.state = _shared_globals.ProjectState.FINISHED
+
+								otherProj.endTime = time.time()
 
 								LinkedSomething = True
 								log.LOG_BUILD(
@@ -1243,7 +1263,8 @@ def build( ):
 		#Then immediately release all the semaphores once we've reclaimed them.
 		#We're not using any more threads so we don't need them now.
 		for j in range( _shared_globals.max_threads ):
-			projects_in_flight = set()
+			if _shared_globals.stopOnError:
+				projects_in_flight = set()
 			_shared_globals.semaphore.release( )
 
 		LinkedSomething = True
@@ -1267,6 +1288,7 @@ def build( ):
 					if otherProj.compile_failed:
 						log.LOG_ERROR( "Build of {} ({}) failed! Finishing up non-dependent build tasks...".format(
 							otherProj.output_name, otherProj.targetName ) )
+						otherProj.state = _shared_globals.ProjectState.FAILED
 						continue
 
 					okToLink = True
@@ -1276,7 +1298,17 @@ def build( ):
 								okToLink = False
 								break
 					if okToLink:
-						link( otherProj )
+						otherProj.state = _shared_globals.ProjectState.LINKING
+						if not link( otherProj ):
+							_shared_globals.build_success = False
+							otherProj.state = _shared_globals.ProjectState.FAILED
+						else:
+							if otherProj.postCompileStep:
+								log.LOG_BUILD( "Running post-compile step for {} ({})".format( otherProj.output_name, otherProj.targetName ) )
+								otherProj.postCompileStep( otherProj )
+							otherProj.state = _shared_globals.ProjectState.FINISHED
+						otherProj.endTime = time.time()
+
 						LinkedSomething = True
 						log.LOG_BUILD( "Finished {} ({})".format( otherProj.output_name, otherProj.targetName ) )
 						projects_done.add( otherProj.key )
@@ -1284,6 +1316,7 @@ def build( ):
 						log.LOG_LINKER(
 							"Linking for {} ({}) deferred until all dependencies have finished building...".format(
 								otherProj.output_name, otherProj.targetName ) )
+						otherProj.state = _shared_globals.ProjectState.WAITING_FOR_LINK
 						pending_links.append( otherProj )
 
 			for otherProj in list( pending_links ):
@@ -1293,7 +1326,17 @@ def build( ):
 						okToLink = False
 						break
 				if okToLink:
-					link( otherProj )
+					otherProj.state = _shared_globals.ProjectState.LINKING
+					if not link( otherProj ):
+						_shared_globals.build_success = False
+						otherProj.state = _shared_globals.ProjectState.FAILED
+					else:
+						if otherProj.postCompileStep:
+							log.LOG_BUILD( "Running post-compile step for {} ({})".format( otherProj.output_name, otherProj.targetName ) )
+							otherProj.postCompileStep( otherProj )
+						otherProj.state = _shared_globals.ProjectState.FINISHED
+					otherProj.endTime = time.time()
+
 					LinkedSomething = True
 					log.LOG_BUILD( "Finished {} ({})".format( otherProj.output_name, otherProj.targetName ) )
 					projects_done.add( otherProj.key )
@@ -1536,6 +1579,13 @@ def AddScript( incFile ):
 	"""
 	Include the given makefile script as part of this build process.
 
+	@attention: The included file will be loaded in the B{current} file's namespace, not a new namespace.
+	This doesn't work the same way as importing a module. Any functions or variables defined in the current module
+	will be available to the called script, and anything defined in the called script will be available to the
+	calling module after it's been called. As a result, this can be used much like #include in C++ to pull in
+	utility scripts in addition to calling makefiles. The result is essentially as if the called script were
+	copied and pasted directly into this one in the location of the AddScript() call.
+
 	@type incFile: str
 	@param incFile: path to an additional makefile script to call as part of this build
 	"""
@@ -1715,6 +1765,18 @@ mainfile = ""
 
 
 def _run( ):
+
+	# Note:
+	# The reason for this line of code is that the import lock, in the way that CSBuild operates, prevents
+	# us from being able to call subprocess.Popen() or any other process execution function other than os.popen().
+	# This exists to prevent multiple threads from importing at the same time, so... Within csbuild, never import
+	# within any thread but the main thread. Any import statements used by threads should be in the module those
+	# thread objects are defined in so they're completed in full on the main thread before that thread starts.
+	#
+	# After this point, the LOCK IS RELEASED. Importing is NO LONGER THREAD-SAFE. DON'T DO IT.
+	if imp.lock_held():
+		imp.release_lock()
+
 	_setupdefaults( )
 
 	global args
@@ -1836,7 +1898,9 @@ def _run( ):
 		help = "Quiet. Disables all logging except for WARN and ERROR.", default = 1 )
 	group2.add_argument( '-qq', '--very-quiet', action = "store_const", const = 3, dest = "quiet",
 		help = "Very quiet. Disables all csb-specific logging.", default = 1 )
-	parser.add_argument( "-j", "--jobs", action = "store", dest = "jobs", type = int )
+	parser.add_argument( "-j", "--jobs", action = "store", dest = "jobs", type = int, help = "Number of simultaneous build processes" )
+	parser.add_argument( "-g", "--gui", action = "store_true", dest = "gui", help = "Show GUI while building (experimental)")
+	parser.add_argument( "--auto-close-gui", action = "store_true", help = "Automatically close the gui on build success (will stay open on failure)")
 	parser.add_argument( '--show-commands', help = "Show all commands sent to the system.", action = "store_true" )
 	parser.add_argument( '--no-progress', help = "Turn off the progress bar.", action = "store_true" )
 	parser.add_argument( '--force-color', help = "Force color on or off.",
@@ -2077,6 +2141,11 @@ def _run( ):
 	totalsec = round( totaltime % 60 )
 	log.LOG_BUILD( "Task preparation took {0}:{1:02}".format( int( totalmin ), int( totalsec ) ) )
 
+	if args.gui:
+		_shared_globals.autoCloseGui = args.auto_close_gui
+		from csbuild import _gui
+		_gui.run()
+
 	if args.generate_solution is not None:
 		if not args.solution_path:
 			args.solution_path = os.path.join( ".", "Solutions", args.generate_solution )
@@ -2111,6 +2180,8 @@ def _run( ):
 			log.LOG_ERROR( error )
 
 	_barWriter.stop( )
+
+	imp.acquire_lock()
 
 	if not _shared_globals.build_success:
 		sys.exit( 1 )

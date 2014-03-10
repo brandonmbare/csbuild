@@ -54,7 +54,6 @@ from csbuild import log
 from csbuild import _shared_globals
 from csbuild import _utils
 
-
 class projectSettings( object ):
 	"""
 	Contains settings for the project
@@ -323,6 +322,15 @@ class projectSettings( object ):
 	@ivar parentGroup: The group this project is contained within
 	@type parentGroup: ProjectGroup
 
+	@ivar state: Current state of the project
+	@type state: L{_shared_globals.ProjectState}
+
+	@ivar startTime: The time the project build started
+	@type startTime: float
+
+	@ivar endTime: The time the project build ended
+	@type endTime: float
+
 	@undocumented: prepareBuild
 	@undocumented: __getattribute__
 	@undocumented: __setattr__
@@ -472,6 +480,19 @@ class projectSettings( object ):
 
 		self.parentGroup = currentGroup
 
+		#GUI support
+		self.state = _shared_globals.ProjectState.PENDING
+		self.startTime = 0
+		self.endTime = 0
+		self.compileOutput = {}
+		self.compileErrors = {}
+		self.fileStatus = {}
+		self.fileStart = {}
+		self.fileEnd = {}
+		self.cpchcontents = []
+		self.cpppchcontents = []
+		self.updated = False
+
 
 	def prepareBuild( self ):
 		wd = os.getcwd( )
@@ -558,6 +579,11 @@ class projectSettings( object ):
 
 
 	def __setattr__( self, name, value ):
+		if name == "state":
+			self.mutex.acquire()
+			self.updated = True
+			self.mutex.release()
+
 		if hasattr( self, "activeToolchain" ):
 			activeToolchain = object.__getattribute__( self, "activeToolchain" )
 			if activeToolchain and name in activeToolchain.settingsOverrides:
@@ -657,7 +683,18 @@ class projectSettings( object ):
 			"mutex": threading.Lock( ),
 			"preCompileStep" : self.preCompileStep,
 			"postCompileStep" : self.postCompileStep,
-			"parentGroup" : self.parentGroup
+			"parentGroup" : self.parentGroup,
+			"state" : self.state,
+			"startTime" : self.startTime,
+			"endTime" : self.endTime,
+			"compileOutput" : dict(self.compileOutput),
+			"compileErrors" : dict(self.compileErrors),
+			"fileStatus" : dict(self.fileStatus),
+			"fileStart" : dict(self.fileStart),
+			"fileEnd" : dict(self.fileEnd),
+			"cpchcontents" : list(self.cpchcontents),
+			"cpppchcontents" : list(self.cpppchcontents),
+			"updated" : self.updated,
 		}
 
 		for name in self.targets:

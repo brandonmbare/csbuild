@@ -79,11 +79,11 @@ and stepping on each other
 @undocumented: newmd5s
 @undocumented: times
 @undocumented: starttime
-@undocumented: endtime
+@undocumented: esttime
 @undocumented: lastupdate
 @undocumented: buildtime
 @undocumented: target
-@undocumented: CleainBuild
+@undocumented: CleanBuild
 @undocumented: do_install
 @undocumented: tempprojects
 @undocumented: finished_projects
@@ -98,15 +98,28 @@ and stepping on each other
 @undocumented: errors
 @undocumented: warnings
 @undocumented: disable_precompile
-@undocumented: disable_shunks
+@undocumented: disable_chunks
 @undocumented: rebuild
 @undocumented: dummy_block
 @undocumented: stopOnError
+@undocumented: autoCloseGui
 """
 
 import threading
 import multiprocessing
 from csbuild import terminfo
+
+class ProjectState( object ):
+	"""
+	Defines the state for a project. A subset of these values (PENDING, BUILDING, FINISHED, FAILED) is also used to define
+	state for individual files.
+	"""
+	PENDING = 0
+	BUILDING = 1
+	WAITING_FOR_LINK = 2
+	LINKING = 3
+	FINISHED = 4
+	FAILED = 5
 
 color_supported = terminfo.TermInfo.SupportsColor( )
 columns = terminfo.TermInfo.GetNumColumns( ) if color_supported else 0
@@ -184,6 +197,8 @@ sgmutex = threading.Lock( )
 stopOnError = False
 
 target_list = []
+
+autoCloseGui = False
 
 
 class dummy_block( object ):

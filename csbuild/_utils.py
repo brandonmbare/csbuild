@@ -28,6 +28,7 @@ import sys
 import datetime
 import platform
 import glob
+import imp
 
 from csbuild import log
 from csbuild import _shared_globals
@@ -103,6 +104,11 @@ class threaded_build( threading.Thread ):
 		"""Actually run the build process."""
 		starttime = time.time( )
 		try:
+			self.project.mutex.acquire( )
+			self.project.fileStatus[self.file] = _shared_globals.ProjectState.BUILDING
+			self.project.fileStart[self.file] = time.time()
+			self.project.updated = True
+			self.project.mutex.release( )
 			inc = ""
 			headerfile = ""
 			if self.file.endswith( ".c" ) or self.file == self.project.cheaderfile:
@@ -129,23 +135,18 @@ class threaded_build( threading.Thread ):
 			if os.path.exists( self.obj ):
 				os.remove( self.obj )
 
-			# We have to use os.popen here on Linux, not subprocess.Popen. For some reason, any call to subprocess
-			# likes to freeze here when running under Linux, but os.popen works fine.  However, Windows needs subprocess
-			# because os.popen won't pipe its output.
-			if platform.system( ) == "Windows":
-				fd = subprocess.Popen( cmd, stdout = subprocess.PIPE, stderr = subprocess.PIPE )
-				(output, errors) = fd.communicate( )
-				ret = fd.returncode
-				sys.stdout.flush( )
-				sys.stderr.flush( )
-				sys.stdout.write( output )
-				sys.stderr.write( errors )
-			else:
-				fd = os.popen( cmd )
-				output = fd.read( )
-				ret = fd.close( )
-				sys.stdout.flush( )
-				sys.stdout.write( output )
+			fd = subprocess.Popen( cmd, stdout = subprocess.PIPE, stderr = subprocess.PIPE, shell=True )
+			(output, errors) = fd.communicate( )
+			ret = fd.returncode
+			sys.stdout.flush( )
+			sys.stderr.flush( )
+			sys.stdout.write( output )
+			sys.stderr.write( errors )
+
+			self.project.mutex.acquire( )
+			self.project.compileOutput[self.file] = output
+			self.project.compileErrors[self.file] = errors
+			self.project.mutex.release( )
 
 			if ret:
 				if str( ret ) == str( self.project.activeToolchain.interrupt_exit_code( ) ):
@@ -165,6 +166,9 @@ class threaded_build( threading.Thread ):
 				self.project.mutex.acquire( )
 				self.project.compile_failed = True
 				self.project.compiles_completed += 1
+				self.project.fileStatus[self.file] = _shared_globals.ProjectState.FAILED
+				self.project.fileEnd[self.file] = time.time()
+				self.project.updated = True
 				self.project.mutex.release( )
 		except Exception as e:
 			#If we don't do this with ALL exceptions, any unhandled exception here will cause the semaphore to never
@@ -178,6 +182,9 @@ class threaded_build( threading.Thread ):
 			self.project.mutex.acquire( )
 			self.project.compile_failed = True
 			self.project.compiles_completed += 1
+			self.project.fileStatus[self.file] = _shared_globals.ProjectState.FAILED
+			self.project.fileEnd[self.file] = time.time()
+			self.project.updated = True
 			self.project.mutex.release( )
 
 			raise e
@@ -194,6 +201,9 @@ class threaded_build( threading.Thread ):
 
 			self.project.mutex.acquire( )
 			self.project.compiles_completed += 1
+			self.project.fileStatus[self.file] = _shared_globals.ProjectState.FINISHED
+			self.project.fileEnd[self.file] = time.time()
+			self.project.updated = True
 			self.project.mutex.release( )
 
 
@@ -346,6 +356,10 @@ def prepare_precompiles( ):
 						f.write( "extern \"C\"\n{\n\t" )
 						externed = True
 					f.write( '#include "{0}"\n'.format( os.path.abspath( header ) ) )
+					if forCpp:
+						project.cpppchcontents.append( header )
+					else:
+						project.cpchcontents.append( header )
 					if externed:
 						f.write( "}\n" )
 			return True, headerfile
@@ -491,7 +505,7 @@ def chunked_build( ):
 					f.write( "//Total size: {0} bytes".format( chunksize ) )
 
 				project.final_chunk_set.append( outFile )
-				project.chunksByFile.update( { outFile : base_names( chunk ) } )
+				project.chunksByFile.update( { outFile : [ os.path.basename(piece) for piece in chunk ] } )
 			elif len( sources_in_this_chunk ) > 0:
 
 				chunkname = "{}_chunk_{}".format(
