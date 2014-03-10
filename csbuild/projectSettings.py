@@ -1155,7 +1155,7 @@ class projectSettings( object ):
 		if platform.system( ) == "Windows":
 			inFile = inFile[2:]
 
-		md5file = "{}.md5".format( os.path.join( self.csbuild_dir, "md5s", inFile ) )
+		md5file = "{}.md5".format( os.path.join( self.csbuild_dir, "md5s", hashlib.md5( inFile ).hexdigest(), os.path.basename( inFile ) ) )
 
 		md5dir = os.path.dirname( md5file )
 		if not os.path.exists( md5dir ):

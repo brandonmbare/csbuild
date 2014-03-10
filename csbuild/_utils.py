@@ -140,8 +140,9 @@ class threaded_build( threading.Thread ):
 			ret = fd.returncode
 			sys.stdout.flush( )
 			sys.stderr.flush( )
-			sys.stdout.write( output )
-			sys.stderr.write( errors )
+			with _shared_globals.printmutex:
+				sys.stdout.write( output )
+				sys.stderr.write( errors )
 
 			self.project.mutex.acquire( )
 			self.project.compileOutput[self.file] = output
@@ -194,7 +195,7 @@ class threaded_build( threading.Thread ):
 			#if inc or (not self.project.precompile and not self.project.chunk_precompile):
 			endtime = time.time( )
 			_shared_globals.sgmutex.acquire( )
-			_shared_globals.times.append( endtime - starttime )
+			#_shared_globals.times.append( endtime - starttime )
 			_shared_globals.sgmutex.release( )
 
 			_shared_globals.semaphore.release( )

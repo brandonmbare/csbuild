@@ -198,9 +198,9 @@ class bar_writer( threading.Thread ):
 					estsec = round( top % 60 )
 
 				frac = float( cur ) / float( top )
-				num = int( math.floor( frac * (_shared_globals.columns - 21) ) )
-				if num >= _shared_globals.columns - 20:
-					num = _shared_globals.columns - 21
+				num = int( math.floor( frac * (_shared_globals.columns - 16) ) )
+				if num >= _shared_globals.columns - 15:
+					num = _shared_globals.columns - 16
 				perc = int( frac * 100 )
 				if perc >= 100:
 					perc = 99
@@ -215,6 +215,19 @@ class bar_writer( threading.Thread ):
 				else:
 					highnum = num
 
+				totalCompletedCompiles = 0
+				for project in _shared_globals.sortedProjects:
+					totalCompletedCompiles += project.compiles_completed
+
+				perc = 1 if _shared_globals.total_compiles == 0 else float(totalCompletedCompiles)/float(_shared_globals.total_compiles)
+				num = int( math.floor( perc * (_shared_globals.columns - 16) ) )
+				if num >= _shared_globals.columns - 15:
+					num = _shared_globals.columns - 16
+
+				perc = int(round(perc * 100))
+				if perc == 100:
+					perc = 99
+
 				with _shared_globals.printmutex:
 					if _shared_globals.times:
 						sys.stdout.write( "[" + "=" * num + " " * (
@@ -228,7 +241,7 @@ class bar_writer( threading.Thread ):
 					else:
 						sys.stdout.write(
 							"[" + "=" * num + " " * (
-								(_shared_globals.columns - 20) - num) + "]{0: 2}:{1:02}/?:?? (~{2: 3}%)".format(
+								(_shared_globals.columns - 15) - num) + "]{0: 2}:{1:02} (~{2: 3}%)".format(
 								int( minutes ), int( seconds ), perc ) )
 					sys.stdout.flush( )
 					sys.stdout.write( "\r" + " " * _shared_globals.columns + "\r" )

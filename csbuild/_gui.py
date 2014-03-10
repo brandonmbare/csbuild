@@ -96,6 +96,7 @@ class MainWindow( QtGui.QMainWindow ):
 		self.m_timeLeftLabel.setObjectName("m_timeLeftLabel")
 
 		self.horizontalLayout_2.addWidget(self.m_timeLeftLabel)
+		self.m_timeLeftLabel.hide()
 
 
 		self.verticalLayout.addLayout(self.horizontalLayout_2)
@@ -524,9 +525,15 @@ class MainWindow( QtGui.QMainWindow ):
 	def onTick(self):
 		self.UpdateProjects()
 
-		totalCompletedCompiles = len(_shared_globals.times)
+		totalCompletedCompiles = 0
+		for project in _shared_globals.sortedProjects:
+			totalCompletedCompiles += project.compiles_completed
 
-		self.m_mainProgressBar.setValue( 100 if _shared_globals.total_compiles == 0 else float(totalCompletedCompiles)/float(_shared_globals.total_compiles) * 100 )
+		perc = 100 if _shared_globals.total_compiles == 0 else float(totalCompletedCompiles)/float(_shared_globals.total_compiles) * 100
+		if perc == 100 and not self.readyToClose:
+			perc = 99
+
+		self.m_mainProgressBar.setValue( perc )
 		self.m_filesCompletedLabel.setText("{}/{} files compiled".format(totalCompletedCompiles, _shared_globals.total_compiles))
 
 		curtime = time.time( )
