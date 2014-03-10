@@ -544,10 +544,11 @@ class MainWindow( QtGui.QMainWindow ):
 																_shared_globals.times ))) / _shared_globals
 												.max_threads)
 
-			estmin = math.floor( top / 60 )
-			estsec = round( top % 60 )
+			diff = max( top - timeDiff, 0 )
+			estmin = max( math.floor( diff / 60 ), 0 )
+			estsec = max( round( diff % 60 ), 0 )
 
-			self.m_timeLeftLabel.setText("Est. Time Left: {0:2}:{1:02}".format( int(estmin - minutes), int(estsec - seconds) ))
+			self.m_timeLeftLabel.setText("Est. Time Left: {0:2}:{1:02}".format( int(estmin), int(estsec) ))
 		else:
 			self.m_timeLeftLabel.setText("Est. Time Left: Unknown")
 
