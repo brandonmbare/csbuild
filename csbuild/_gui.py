@@ -12,17 +12,22 @@ class MainWindow( QtGui.QMainWindow ):
 		
 		self.setObjectName("MainWindow")
 		
-		self.resize(1024, 600)
+		self.resize(1100, 600)
 		
 		self.centralWidget = QtGui.QWidget(self)
 		self.centralWidget.setObjectName("centralWidget")
 		
 		self.mainLayout = QtGui.QHBoxLayout(self.centralWidget)
+
+		self.m_splitter = QtGui.QSplitter(self.centralWidget)
+
+		self.innerWidget = QtGui.QWidget(self.centralWidget)
+		self.innerLayout = QtGui.QHBoxLayout(self.innerWidget)
 		
 		self.verticalLayout = QtGui.QVBoxLayout()
 		self.verticalLayout.setObjectName("verticalLayout")
 	
-		self.m_buildSummaryLabel = QtGui.QLabel(self.centralWidget)
+		self.m_buildSummaryLabel = QtGui.QLabel(self.innerWidget)
 		self.m_buildSummaryLabel.setObjectName("m_buildSummaryLabel")
 		font = QtGui.QFont()
 		font.setPointSize( 16 )
@@ -32,12 +37,12 @@ class MainWindow( QtGui.QMainWindow ):
 
 		self.horizontalLayout = QtGui.QHBoxLayout()
 		self.horizontalLayout.setObjectName("horizontalLayout")
-		self.m_successfulBuildsLabel = QtGui.QLabel(self.centralWidget)
+		self.m_successfulBuildsLabel = QtGui.QLabel(self.innerWidget)
 		self.m_successfulBuildsLabel.setObjectName("m_successfulBuildsLabel")
 
 		self.horizontalLayout.addWidget(self.m_successfulBuildsLabel)
 
-		self.m_failedBuildsLabel = QtGui.QLabel(self.centralWidget)
+		self.m_failedBuildsLabel = QtGui.QLabel(self.innerWidget)
 		self.m_failedBuildsLabel.setObjectName("m_failedBuildsLabel")
 
 		self.horizontalLayout.addWidget(self.m_failedBuildsLabel)
@@ -49,15 +54,9 @@ class MainWindow( QtGui.QMainWindow ):
 
 		self.verticalLayout.addLayout(self.horizontalLayout)
 
-		self.m_buildTree = QtGui.QTreeWidget(self.centralWidget)
+		self.m_buildTree = QtGui.QTreeWidget(self.innerWidget)
 		self.m_buildTree.setColumnCount(8)
-		self.m_buildTree.setColumnWidth( 0, 25 )
-		self.m_buildTree.setColumnWidth( 1, 250 )
-		self.m_buildTree.setColumnWidth( 2, 100 )
-		self.m_buildTree.setColumnWidth( 3, 125 )
-		self.m_buildTree.setColumnWidth( 4, 75 )
-		self.m_buildTree.setColumnWidth( 5, 165 )
-		self.m_buildTree.setColumnWidth( 6, 165 )
+		self.m_buildTree.setUniformRowHeights(True)
 		
 		self.m_treeHeader = QtGui.QTreeWidgetItem()
 		#self.m_treeHeader.setTextAlignment(QtCore.Qt.AlignLeft|QtCore.Qt.AlignVCenter)
@@ -75,7 +74,7 @@ class MainWindow( QtGui.QMainWindow ):
 
 		self.verticalLayout.addWidget(self.m_buildTree)
 
-		self.m_mainProgressBar = QtGui.QProgressBar(self.centralWidget)
+		self.m_mainProgressBar = QtGui.QProgressBar(self.innerWidget)
 		self.m_mainProgressBar.setObjectName("m_mainProgressBar")
 		self.m_mainProgressBar.setValue(0)
 
@@ -83,7 +82,7 @@ class MainWindow( QtGui.QMainWindow ):
 
 		self.horizontalLayout_2 = QtGui.QHBoxLayout()
 		self.horizontalLayout_2.setObjectName("horizontalLayout_2")
-		self.m_filesCompletedLabel = QtGui.QLabel(self.centralWidget)
+		self.m_filesCompletedLabel = QtGui.QLabel(self.innerWidget)
 		self.m_filesCompletedLabel.setObjectName("m_filesCompletedLabel")
 
 		self.horizontalLayout_2.addWidget(self.m_filesCompletedLabel)
@@ -92,7 +91,7 @@ class MainWindow( QtGui.QMainWindow ):
 
 		self.horizontalLayout_2.addItem(horizontalSpacer)
 
-		self.m_timeLeftLabel = QtGui.QLabel(self.centralWidget)
+		self.m_timeLeftLabel = QtGui.QLabel(self.innerWidget)
 		self.m_timeLeftLabel.setObjectName("m_timeLeftLabel")
 
 		self.horizontalLayout_2.addWidget(self.m_timeLeftLabel)
@@ -101,9 +100,9 @@ class MainWindow( QtGui.QMainWindow ):
 
 		self.verticalLayout.addLayout(self.horizontalLayout_2)
 		
-		self.mainLayout.addLayout(self.verticalLayout)
+		self.innerLayout.addLayout(self.verticalLayout)
 		
-		self.m_pushButton =  QtGui.QPushButton(self.centralWidget)
+		self.m_pushButton =  QtGui.QPushButton(self.innerWidget)
 		self.m_pushButton.setObjectName("self.m_pushButton")
 		sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
 		sizePolicy.setHorizontalStretch(0)
@@ -114,15 +113,20 @@ class MainWindow( QtGui.QMainWindow ):
 		self.m_pushButton.setCheckable(True)
 		self.m_pushButton.toggled.connect(self.ButtonClicked)
 
-		self.mainLayout.addWidget(self.m_pushButton)
+		self.innerLayout.addWidget(self.m_pushButton)
+		self.m_splitter.addWidget(self.innerWidget)
 
 		self.m_textEdit = QtGui.QTextEdit(self.centralWidget)
 		self.m_textEdit.setObjectName("textEdit")
 		self.m_textEdit.setReadOnly(True)
 		self.m_textEdit.setFontFamily("monospace")
-		self.m_textEdit.hide()
 
-		self.mainLayout.addWidget(self.m_textEdit)
+		self.m_splitter.addWidget(self.m_textEdit)
+		self.mainLayout.addWidget(self.m_splitter)
+
+		self.m_splitter.setSizes( [ 1, 0 ] )
+		self.m_splitter.setCollapsible( 0, False )
+		self.m_splitter.splitterMoved.connect(self.SplitterMoved)
 
 		self.setCentralWidget(self.centralWidget)
 
@@ -141,12 +145,39 @@ class MainWindow( QtGui.QMainWindow ):
 
 		self.successfulBuilds = set()
 		self.failedBuilds = set()
+		self.m_ignoreButton = False
 
 	def ButtonClicked(self, toggled):
+		if self.m_ignoreButton:
+			return
+
 		if toggled:
-			self.m_textEdit.show()
+			self.m_splitter.setSizes( [ 1100, max( self.width() - 1100, 600 ) ] )
+			self.m_pushButton.setText(">")
 		else:
-			self.m_textEdit.hide()
+			self.m_splitter.setSizes( [ 1, 0 ] )
+			self.m_pushButton.setText("<")
+
+	def resizeEvent(self, event):
+		QtGui.QMainWindow.resizeEvent(self, event)
+		textBoxSize = self.m_splitter.sizes()[1]
+		if textBoxSize != 0:
+			self.m_splitter.setSizes( [ 1100, max( self.width() - 1100, 600 ) ] )
+
+	def SplitterMoved(self, index, pos):
+		textBoxSize = self.m_splitter.sizes()[1]
+		if textBoxSize == 0:
+			if self.m_pushButton.isChecked():
+				self.m_ignoreButton = True
+				self.m_pushButton.setChecked(False)
+				self.m_ignoreButton = False
+			self.m_pushButton.setText("<")
+		else:
+			if not self.m_pushButton.isChecked():
+				self.m_ignoreButton = True
+				self.m_pushButton.setChecked(True)
+				self.m_ignoreButton = False
+			self.m_pushButton.setText(">")
 
 	def SelectionChanged(self, current, previous):
 		if current is None:
@@ -155,6 +186,7 @@ class MainWindow( QtGui.QMainWindow ):
 				outStr += ("=" * 40) + "\n\n"
 				outStr += project.name
 				outStr += ("=" * 40) + "\n\n"
+				project.mutex.acquire()
 				for filename in project.compileOutput:
 					outStr += filename
 					errors = ""
@@ -169,6 +201,7 @@ class MainWindow( QtGui.QMainWindow ):
 							outStr += "ERROR OUTPUT:\n\n" + errors + "\n\n"
 						if output:
 							outStr += "OUTPUT:\n\n" + output + "\n\n"
+				project.mutex.release()
 				outStr += "\n\n"
 			if outStr != self.m_textEdit.toPlainText():
 				self.m_textEdit.setText(outStr)
@@ -187,6 +220,7 @@ class MainWindow( QtGui.QMainWindow ):
 
 				if widget == current:
 					outStr = ""
+					project.mutex.acquire()
 					for filename in project.compileOutput:
 						errors = ""
 						output = ""
@@ -202,6 +236,7 @@ class MainWindow( QtGui.QMainWindow ):
 								outStr += "OUTPUT:\n\n" + output + "\n\n"
 					if outStr != self.m_textEdit.toPlainText():
 						self.m_textEdit.setText(outStr)
+					project.mutex.release()
 				elif widget.isExpanded():
 					def HandleChild( idx, file ):
 						childWidget = widget.child(idx)
@@ -210,10 +245,12 @@ class MainWindow( QtGui.QMainWindow ):
 							outStr = ""
 							errors = ""
 							output = ""
+							project.mutex.acquire()
 							if file in project.compileErrors:
 								errors = project.compileErrors[file]
 							if file in project.compileOutput:
 								output = project.compileOutput[file]
+							project.mutex.release()
 							if errors or output:
 								outStr += file
 								outStr += "\n" + ("=" * 40) + "\n\n"
@@ -288,6 +325,8 @@ class MainWindow( QtGui.QMainWindow ):
 				):
 					if not forFile or state != _shared_globals.ProjectState.BUILDING:
 						progressBar.setValue( percent )
+						progressBar.setTextVisible(True)
+
 					progressBar.setFormat( "%p%" )
 					widget.setText(1, "{0:03}".format(percent))
 
@@ -312,8 +351,6 @@ class MainWindow( QtGui.QMainWindow ):
 							""".format(float(progressBar.width()-1)/30.0)
 						)
 
-						#progressBar.setInvertedAppearance( self.marqueeInverted )
-						#progressBar.setValue( self.marqueeValue )
 						progressBar.setValue( 100 )
 
 						progressBar.setTextVisible(False)
@@ -376,20 +413,21 @@ class MainWindow( QtGui.QMainWindow ):
 					progressBar.setStyleSheet(
 						"""
 						QProgressBar::chunk
-						{
-							background-color: #00FF80;
-						}
+						{{
+							background-color: #{};
+						}}
 						QProgressBar
-						{
+						{{
 							border: 1px solid black;
 							border-radius: 3px;
 							background: #505050;
 							padding: 0px;
 							text-align: center;
 							color: black;
-						}
-						"""
+						}}
+						""".format( "ADFFD0" if forFile else "00FF80" )
 					)
+
 					widget.setText(5, time.asctime(time.localtime(startTime)))
 					widget.setText(6, time.asctime(time.localtime(endTime)))
 					timeDiff = endTime - startTime
@@ -511,16 +549,16 @@ class MainWindow( QtGui.QMainWindow ):
 		self.m_treeHeader.setText(7, "Time")
 		self.m_buildTree.setColumnWidth( 0, 50 )
 		self.m_buildTree.setColumnWidth( 1, 250 )
-		self.m_buildTree.setColumnWidth( 2, 100 )
+		self.m_buildTree.setColumnWidth( 2, 125 )
 		self.m_buildTree.setColumnWidth( 3, 125 )
 		self.m_buildTree.setColumnWidth( 4, 75 )
-		self.m_buildTree.setColumnWidth( 5, 165 )
-		self.m_buildTree.setColumnWidth( 6, 165 )
+		self.m_buildTree.setColumnWidth( 5, 175 )
+		self.m_buildTree.setColumnWidth( 6, 175 )
 		self.m_buildTree.setColumnWidth( 7, 50 )
 
 		self.m_filesCompletedLabel.setText("0/0 files compiled")
 		self.m_timeLeftLabel.setText("Est. Time Left: 0:00")
-		self.m_pushButton.setText(">")
+		self.m_pushButton.setText("<")
 
 	def onTick(self):
 		self.UpdateProjects()
@@ -610,9 +648,11 @@ class GuiThread( threading.Thread ):
 			widgetItem.setText(0, str(row))
 			widgetItem.setText(2, "Pending...")
 			widgetItem.setText(3, project.name)
+			widgetItem.setToolTip(3, project.name)
 			widgetItem.setText(4, project.targetName)
+			widgetItem.setToolTip(4, project.targetName)
 
-			def AddProgressBar( widgetItem ):
+			def AddProgressBar( widgetItem):
 				progressBar = QtGui.QProgressBar()
 
 				progressBar.setStyleSheet(
@@ -623,6 +663,7 @@ class GuiThread( threading.Thread ):
 					}
 					QProgressBar
 					{
+						background-color: #808080;
 						border: 1px solid black;
 						border-radius: 3px;
 						padding: 0px;
@@ -632,26 +673,43 @@ class GuiThread( threading.Thread ):
 				)
 
 				progressBar.setFormat("Pending...")
-				progressBar.setValue(100)
+				progressBar.setValue(0)
 				window.m_buildTree.setItemWidget( widgetItem, 1, progressBar )
 
 			AddProgressBar( widgetItem )
 
 			idx = 0
+			font = QtGui.QFont()
+			font.setItalic(True)
+
 			if project.needs_cpp_precompile:
 				idx += 1
 				childItem = QtGui.QTreeWidgetItem( widgetItem )
 				childItem.setText(0, "{}.{}".format(row, idx))
 				childItem.setText(2, "Pending...")
 				childItem.setText(3, os.path.basename(project.cppheaderfile))
+				childItem.setToolTip(3, project.cppheaderfile)
 				childItem.setText(4, project.targetName)
+				childItem.setToolTip(4, project.targetName)
+
+				childItem.setFont(0, font)
+				childItem.setFont(1, font)
+				childItem.setFont(2, font)
+				childItem.setFont(3, font)
+				childItem.setFont(4, font)
+				childItem.setFont(5, font)
+				childItem.setFont(6, font)
+				childItem.setFont(7, font)
+
 				AddProgressBar( childItem )
 
 				widgetItem.addChild(childItem)
 
 				for header in project.cpppchcontents:
 					subChildItem = QtGui.QTreeWidgetItem( childItem )
-					subChildItem.setText( 1, os.path.basename(header) )
+					subChildItem.setText( 0, os.path.basename(header) )
+					subChildItem.setFirstColumnSpanned(True)
+					subChildItem.setToolTip( 0, header )
 					childItem.addChild(subChildItem)
 
 			if project.needs_c_precompile:
@@ -660,14 +718,28 @@ class GuiThread( threading.Thread ):
 				childItem.setText(0, "{}.{}".format(row, idx))
 				childItem.setText(2, "Pending...")
 				childItem.setText(3, os.path.basename(project.cheaderfile))
+				childItem.setToolTip(3, project.cheaderfile)
 				childItem.setText(4, project.targetName)
+				childItem.setToolTip(4, project.targetName)
+
+				childItem.setFont(0, font)
+				childItem.setFont(1, font)
+				childItem.setFont(2, font)
+				childItem.setFont(3, font)
+				childItem.setFont(4, font)
+				childItem.setFont(5, font)
+				childItem.setFont(6, font)
+				childItem.setFont(7, font)
+
 				AddProgressBar( childItem )
 
 				widgetItem.addChild(childItem)
 
 				for header in project.cpchcontents:
 					subChildItem = QtGui.QTreeWidgetItem( childItem )
-					subChildItem.setText( 1, os.path.basename(header) )
+					subChildItem.setText( 0, os.path.basename(header) )
+					subChildItem.setFirstColumnSpanned(True)
+					subChildItem.setToolTip( 0, header )
 					childItem.addChild(subChildItem)
 
 			for source in project.final_chunk_set:
@@ -676,7 +748,18 @@ class GuiThread( threading.Thread ):
 				childItem.setText(0, "{}.{}".format(row, idx))
 				childItem.setText(2, "Pending...")
 				childItem.setText(3, os.path.basename(source))
+				childItem.setToolTip(3, source)
 				childItem.setText(4, project.targetName)
+				childItem.setToolTip(4, project.targetName)
+
+				childItem.setFont(0, font)
+				childItem.setFont(1, font)
+				childItem.setFont(2, font)
+				childItem.setFont(3, font)
+				childItem.setFont(4, font)
+				childItem.setFont(5, font)
+				childItem.setFont(6, font)
+				childItem.setFont(7, font)
 
 				AddProgressBar( childItem )
 
@@ -685,7 +768,9 @@ class GuiThread( threading.Thread ):
 				if source in project.chunksByFile:
 					for piece in project.chunksByFile[source]:
 						subChildItem = QtGui.QTreeWidgetItem( childItem )
-						subChildItem.setText( 1, piece )
+						subChildItem.setText( 0, piece )
+						subChildItem.setFirstColumnSpanned(True)
+						subChildItem.setToolTip( 0, piece )
 						childItem.addChild(subChildItem)
 
 		window.m_buildTree.setSortingEnabled(True)
