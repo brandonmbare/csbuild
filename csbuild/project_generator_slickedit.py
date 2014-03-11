@@ -132,6 +132,8 @@ class project_generator_slickedit(project_generator.project_generator):
 		mainfileDirPath = os.getcwd()
 		projectDirPath = os.path.dirname(projectFilePath)
 
+		extraArgs = self.extraargs.replace(",", " ")
+
 		rootNode = CreateRootNode(OutputType.PROJECT)
 		rootNode.set("Version", "10.0")
 		rootNode.set("VendorName", "SlickEdit")
@@ -201,16 +203,16 @@ class project_generator_slickedit(project_generator.project_generator):
 			cleanAllNode.set("MenuCaption", "&Clean All")
 
 			commandNode = AddNode(compileProjectNode, "Exec")
-			commandNode.set("CmdLine", "{} {} {} --project={}".format(sys.executable, csbuild.mainfile, targetCommand, projectName))
+			commandNode.set("CmdLine", "{} {} {} --project={} {}".format(sys.executable, csbuild.mainfile, targetCommand, projectName, extraArgs))
 
 			commandNode = AddNode(buildAllNode, "Exec")
-			commandNode.set("CmdLine", "{} {} {}".format(sys.executable, csbuild.mainfile, targetCommand))
+			commandNode.set("CmdLine", "{} {} {} {}".format(sys.executable, csbuild.mainfile, targetCommand, extraArgs))
 
 			commandNode = AddNode(rebuildAllNode, "Exec")
-			commandNode.set("CmdLine", "{} {} {} --rebuild".format(sys.executable, csbuild.mainfile, targetCommand))
+			commandNode.set("CmdLine", "{} {} {} --rebuild {}".format(sys.executable, csbuild.mainfile, targetCommand, extraArgs))
 
 			commandNode = AddNode(cleanAllNode, "Exec")
-			commandNode.set("CmdLine", "{} {} {} --clean".format(sys.executable, csbuild.mainfile, targetCommand))
+			commandNode.set("CmdLine", "{} {} {} --clean {}".format(sys.executable, csbuild.mainfile, targetCommand, extraArgs))
 
 		# Grab a string of the XML document we've created and save it.
 		xmlString = ET.tostring(rootNode)
