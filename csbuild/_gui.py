@@ -36,6 +36,30 @@ import math
 import signal
 from csbuild import _shared_globals
 
+class TreeWidgetItem(QtGui.QTreeWidgetItem):
+	def __init__(self, *args, **kwargs):
+		QtGui.QTreeWidgetItem.__init__(self, *args, **kwargs)
+		self.numericColumns = set()
+
+	def setColumnNumeric(self, col):
+		self.numericColumns.add(col)
+
+	def __lt__(self, other):
+		if self.parent():
+			return False
+
+		sortCol = self.treeWidget().sortColumn()
+		numericColumns = self.treeWidget().headerItem().numericColumns
+		try:
+			if sortCol in numericColumns:
+				myNumber = float(self.text(sortCol))
+				otherNumber = float(other.text(sortCol))
+				return myNumber < otherNumber
+		except:
+			pass
+
+		return QtGui.QTreeWidgetItem.__lt__(self, other)
+
 class MainWindow( QMainWindow ):
 	def __init__(self, *args, **kwargs):
 		self.exitRequested = False
@@ -54,9 +78,10 @@ class MainWindow( QMainWindow ):
 		self.mainLayout = QtGui.QHBoxLayout()
 
 		self.m_splitter = QtGui.QSplitter(self.centralWidget)
+		self.m_splitter.setOrientation(QtCore.Qt.Vertical)
 
 		self.innerWidget = QtGui.QWidget(self.centralWidget)
-		self.innerLayout = QtGui.QHBoxLayout(self.innerWidget)
+		self.innerLayout = QtGui.QVBoxLayout(self.innerWidget)
 		
 		self.verticalLayout = QtGui.QVBoxLayout()
 		self.verticalLayout.setObjectName("verticalLayout")
@@ -102,7 +127,7 @@ class MainWindow( QMainWindow ):
 		self.m_buildTree.setColumnCount(10)
 		self.m_buildTree.setUniformRowHeights(True)
 		
-		self.m_treeHeader = QtGui.QTreeWidgetItem()
+		self.m_treeHeader = TreeWidgetItem()
 		self.m_buildTree.setHeaderItem(self.m_treeHeader)
 		
 		self.m_buildTree.setObjectName("m_buildTree")
@@ -112,40 +137,44 @@ class MainWindow( QMainWindow ):
 		self.m_buildTree.setAnimated(True)
 		self.m_buildTree.header().setStretchLastSection(True)
 		self.m_buildTree.currentItemChanged.connect(self.SelectionChanged)
-		self.m_buildTree.expanded.connect(self.ForceUpdateProjects)
+		self.m_buildTree.expanded.connect(self.UpdateProjects)
 
 		self.verticalLayout.addWidget(self.m_buildTree)
 		
 		self.innerLayout.addLayout(self.verticalLayout)
-		
+
 		self.m_pushButton =  QtGui.QPushButton(self.innerWidget)
 		self.m_pushButton.setObjectName("self.m_pushButton")
-		sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
+		sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
 		sizePolicy.setHorizontalStretch(0)
 		sizePolicy.setVerticalStretch(0)
 		sizePolicy.setHeightForWidth(self.m_pushButton.sizePolicy().hasHeightForWidth())
 		self.m_pushButton.setSizePolicy(sizePolicy)
-		self.m_pushButton.setMaximumSize(QtCore.QSize(20, 16777215))
+		self.m_pushButton.setMaximumSize(QtCore.QSize(16777215, 20))
 		self.m_pushButton.setCheckable(True)
 		self.m_pushButton.toggled.connect(self.ButtonClicked)
 
 		self.innerLayout.addWidget(self.m_pushButton)
 		self.m_splitter.addWidget(self.innerWidget)
 
-		self.innerWidget2 = QtGui.QWidget(self.centralWidget)
-		self.innerLayout2 = QtGui.QVBoxLayout(self.innerWidget2)
-		self.m_textEdit = QtGui.QTextEdit(self.innerWidget2)
+		self.innerWidget2 = QtGui.QTabWidget(self.centralWidget)
+
+		self.textPage = QtGui.QWidget(self.innerWidget2)
+		self.innerLayout2 = QtGui.QVBoxLayout(self.textPage)
+		self.m_textEdit = QtGui.QTextEdit(self.textPage)
 		self.m_textEdit.setObjectName("textEdit")
 		self.m_textEdit.setReadOnly(True)
 		self.m_textEdit.setFontFamily("monospace")
-		self.m_textEdit.hide()
 		self.innerLayout2.addWidget(self.m_textEdit)
 
-		self.m_errorTree = QtGui.QTreeWidget(self.innerWidget2)
+		self.errorsPage = QtGui.QWidget(self.innerWidget2)
+
+		self.innerLayout3 = QtGui.QVBoxLayout(self.errorsPage)
+		self.m_errorTree = QtGui.QTreeWidget(self.errorsPage)
 		self.m_errorTree.setColumnCount(5)
 		self.m_errorTree.setUniformRowHeights(True)
 
-		self.m_treeHeader2 = QtGui.QTreeWidgetItem()
+		self.m_treeHeader2 = TreeWidgetItem()
 		self.m_errorTree.setHeaderItem(self.m_treeHeader2)
 
 		self.m_errorTree.setObjectName("m_errorTree")
@@ -154,7 +183,10 @@ class MainWindow( QMainWindow ):
 		self.m_errorTree.setSortingEnabled(True)
 		self.m_errorTree.setAnimated(True)
 		self.m_errorTree.header().setStretchLastSection(False)
-		self.innerLayout2.addWidget(self.m_errorTree)
+		self.innerLayout3.addWidget(self.m_errorTree)
+
+		self.innerWidget2.addTab(self.errorsPage, "Errors/Warnings")
+		self.innerWidget2.addTab(self.textPage, "Text Output")
 
 		self.m_splitter.addWidget(self.innerWidget2)
 
@@ -215,6 +247,11 @@ class MainWindow( QMainWindow ):
 		self.successfulBuilds = set()
 		self.failedBuilds = set()
 		self.m_ignoreButton = False
+		self.pulseColor = 0
+		self.pulseUp = False
+		self.animatingBars = {}
+		self.projectToItem = {}
+		self.itemToProject = {}
 
 	def ButtonClicked(self, toggled):
 		if self.m_ignoreButton:
@@ -227,10 +264,10 @@ class MainWindow( QMainWindow ):
 			self.m_errorTree.setColumnWidth( 2, 100 )
 			self.m_errorTree.setColumnWidth( 3, 50 )
 			self.m_errorTree.setColumnWidth( 4, 50 )
-			self.m_pushButton.setText(u"»")
+			self.m_pushButton.setText(u"▾ Output ▾")
 		else:
 			self.m_splitter.setSizes( [ 1, 0 ] )
-			self.m_pushButton.setText(u"«")
+			self.m_pushButton.setText(u"▴ Output ▴")
 
 	def resizeEvent(self, event):
 		QMainWindow.resizeEvent(self, event)
@@ -250,7 +287,7 @@ class MainWindow( QMainWindow ):
 				self.m_ignoreButton = True
 				self.m_pushButton.setChecked(False)
 				self.m_ignoreButton = False
-			self.m_pushButton.setText(u"«")
+			self.m_pushButton.setText(u"▴ Output ▴")
 		else:
 			if not self.m_pushButton.isChecked():
 				self.m_ignoreButton = True
@@ -261,7 +298,7 @@ class MainWindow( QMainWindow ):
 			self.m_errorTree.setColumnWidth( 2, 100 )
 			self.m_errorTree.setColumnWidth( 3, 50 )
 			self.m_errorTree.setColumnWidth( 4, 50 )
-			self.m_pushButton.setText(u"»")
+			self.m_pushButton.setText(u"▾ Output ▾")
 
 	def SelectionChanged(self, current, previous):
 		if self.m_textEdit.isVisible():
@@ -390,7 +427,7 @@ class MainWindow( QMainWindow ):
 					font = QtGui.QFont()
 					font.setFamily("monospace")
 
-					newItem = QtGui.QTreeWidgetItem()
+					newItem = TreeWidgetItem()
 					if data.level == _shared_globals.OutputLevel.WARNING:
 						newItem.setText(0, "W")
 						brush = QtGui.QBrush( QtCore.Qt.darkYellow )
@@ -434,7 +471,7 @@ class MainWindow( QMainWindow ):
 						font = QtGui.QFont()
 						font.setItalic(True)
 						font.setFamily("monospace")
-						childItem = QtGui.QTreeWidgetItem(newItem)
+						childItem = TreeWidgetItem(newItem)
 						childItem.setDisabled(True)
 
 						if detail.level == _shared_globals.OutputLevel.NOTE:
@@ -505,287 +542,308 @@ class MainWindow( QMainWindow ):
 							idx += 1
 			self.m_errorTree.setSortingEnabled(True)
 
-	def ForceUpdateProjects(self):
-		self.UpdateProjects(True)
-
-	def UpdateProjects(self, forceUpdate = False):
+	def UpdateProjects(self, expandedIndex = None):
 		updatedProjects = []
 
-		for project in _shared_globals.sortedProjects:
-			project.mutex.acquire()
-			if project.updated or forceUpdate:
-				updatedProjects.append(project)
-				project.updated = False
-			project.mutex.release()
-
-		if not updatedProjects:
-			return
-
-		self.m_buildTree.setSortingEnabled(False)
-		if self.marqueeValue == 100 or self.marqueeValue == 0:
-			self.marqueeInverted = not self.marqueeInverted
-
-		if self.marqueeInverted:
-			self.marqueeValue -= 25
+		if expandedIndex is not None:
+			updatedProjects = [ self.itemToProject[ self.m_buildTree.itemFromIndex( expandedIndex ) ] ]
 		else:
-			self.marqueeValue += 25
+			for project in _shared_globals.sortedProjects:
+				project.mutex.acquire()
+				if project.updated or project:
+					updatedProjects.append(project)
+					project.updated = False
+				project.mutex.release()
 
-		selectedWidget = self.m_buildTree.currentItem()
+		def drawProgressBar( progressBar, widget, state, startTime, endTime, percent, forFile, warnings, errors ):
+			if warnings > 0:
+				brush = QtGui.QBrush( QtCore.Qt.darkYellow )
+				font = QtGui.QFont()
+				font.setBold(True)
+				widget.setForeground( 5, brush )
+				widget.setFont( 5, font )
+			if errors > 0:
+				brush = QtGui.QBrush( QtCore.Qt.red )
+				font = QtGui.QFont()
+				font.setBold(True)
+				widget.setForeground( 6, brush )
+				widget.setFont( 6, font )
 
-		for project in updatedProjects:
-			widget = None
-			for i in range(self.m_buildTree.topLevelItemCount()):
-				tempWidget = self.m_buildTree.topLevelItem(i)
-				name = tempWidget.text(3)
-				target = tempWidget.text(4)
-				if name == project.name and target == project.targetName:
-					widget = tempWidget
-					break
-			if not widget:
-				continue
+			if(
+				state >= _shared_globals.ProjectState.BUILDING and
+				state != _shared_globals.ProjectState.FAILED
+			):
+				if not forFile or state != _shared_globals.ProjectState.BUILDING:
+					progressBar.setValue( percent )
+					progressBar.setTextVisible(True)
+					if widget.text(1) != str(percent):
+						widget.setText(1, str(percent))
+				else:
+					if widget.text(1) != "0":
+						widget.setText(1, "0")
 
-			if selectedWidget == widget:
-				self.SelectionChanged(selectedWidget, selectedWidget)
+				progressBar.setFormat( "%p%" )
 
+			if state >= _shared_globals.ProjectState.BUILDING:
+				widget.setText(5, str(warnings))
+				widget.setText(6, str(errors))
+				widget.setText(7, time.asctime(time.localtime(startTime)))
 
-			def drawProgressBar( progressBar, widget, state, startTime, endTime, percent, forFile, warnings, errors ):
-				if warnings > 0:
-					brush = QtGui.QBrush( QtCore.Qt.darkYellow )
-					font = QtGui.QFont()
-					font.setBold(True)
-					widget.setForeground( 5, brush )
-					widget.setFont( 5, font )
-				if errors > 0:
-					brush = QtGui.QBrush( QtCore.Qt.red )
-					font = QtGui.QFont()
-					font.setBold(True)
-					widget.setForeground( 6, brush )
-					widget.setFont( 6, font )
-
-				if(
-					state >= _shared_globals.ProjectState.BUILDING and
-					state != _shared_globals.ProjectState.FAILED
-				):
-					if not forFile or state != _shared_globals.ProjectState.BUILDING:
-						progressBar.setValue( percent )
-						progressBar.setTextVisible(True)
-
-					progressBar.setFormat( "%p%" )
-					widget.setText(1, "{0:03}".format(percent))
-
-				if state >= _shared_globals.ProjectState.BUILDING:
-					widget.setText(5, str(warnings))
-					widget.setText(6, str(errors))
-					widget.setText(7, time.asctime(time.localtime(startTime)))
-
-				if state == _shared_globals.ProjectState.BUILDING:
-					widget.setText(2, "Building")
-					if forFile:
-						progressBar.setStyleSheet(
-							"""
-							QProgressBar::chunk
-							{{
-								background-color: #FFD800;
-								width: {}px;
-								margin: 0.5px;
-							}}
-							QProgressBar
-							{{
-								border: 1px solid black;
-								border-radius: 3px;
-								padding: 0px;
-								text-align: center;
-							}}
-							""".format(float(progressBar.width()-1)/30.0)
-						)
-
-						progressBar.setValue( 100 )
-
-						progressBar.setTextVisible(False)
-					else:
-						progressBar.setStyleSheet(
-							"""
-							QProgressBar::chunk
-							{
-								background-color: #0040FF;
-							}
-							QProgressBar
-							{
-								border: 1px solid black;
-								border-radius: 3px;
-								padding: 0px;
-								text-align: center;
-							}
-							"""
-						)
-				if state == _shared_globals.ProjectState.WAITING_FOR_LINK:
-					widget.setText(2,"Link/Wait")
-					progressBar.setStyleSheet(
-						"""
-						QProgressBar::chunk
-						{
-							background-color: #008080;
-						}
-						QProgressBar
-						{
-							border: 1px solid black;
-							border-radius: 3px;
-							background: #505050;
-							padding: 0px;
-							text-align: center;
-						}
-						"""
-					)
-				if state == _shared_globals.ProjectState.LINKING:
-					widget.setText(2, "Linking")
-					progressBar.setStyleSheet(
-						"""
-						QProgressBar::chunk
-						{
-							background-color: #00E060;
-						}
-						QProgressBar
-						{
-							border: 1px solid black;
-							border-radius: 3px;
-							background: #505050;
-							padding: 0px;
-							text-align: center;
-							color: black;
-						}
-						"""
-					)
-				if state == _shared_globals.ProjectState.FINISHED:
-					widget.setText(2, "Done!")
+			if state == _shared_globals.ProjectState.BUILDING:
+				self.animatingBars[progressBar] = ( widget, state, startTime, endTime, percent, forFile, warnings, errors )
+				widget.setText(2, "Building")
+				if forFile:
 					progressBar.setStyleSheet(
 						"""
 						QProgressBar::chunk
 						{{
-							background-color: #{};
+							background-color: #FF{:02x}00;
 						}}
 						QProgressBar
 						{{
 							border: 1px solid black;
 							border-radius: 3px;
-							background: #505050;
 							padding: 0px;
 							text-align: center;
-							color: black;
 						}}
-						""".format( "ADFFD0" if forFile else "00FF80" )
+						""".format(self.pulseColor+127)
 					)
 
-					widget.setText(8, time.asctime(time.localtime(endTime)))
-					timeDiff = endTime - startTime
-					minutes = math.floor( timeDiff / 60 )
-					seconds = round( timeDiff % 60 )
-					widget.setText(9, "{0:2}:{1:02}".format( int(minutes), int(seconds) ) )
+					progressBar.setValue( 100 )
 
-				if state == _shared_globals.ProjectState.FAILED:
-					widget.setText(2, "Build Failed!")
+					progressBar.setTextVisible(False)
+				else:
 					progressBar.setStyleSheet(
 						"""
 						QProgressBar::chunk
-						{
-							background-color: #800000;
-						}
+						{{
+							background-color: #00{:02x}FF;
+						}}
 						QProgressBar
-						{
+						{{
 							border: 1px solid black;
 							border-radius: 3px;
-							background: #505050;
 							padding: 0px;
 							text-align: center;
-						}
-						"""
+						}}
+						""".format(self.pulseColor)
 					)
+			if state == _shared_globals.ProjectState.WAITING_FOR_LINK:
+				if progressBar in self.animatingBars:
+					del self.animatingBars[progressBar]
+				widget.setText(2,"Link/Wait")
+				progressBar.setStyleSheet(
+					"""
+					QProgressBar::chunk
+					{
+						background-color: #008080;
+					}
+					QProgressBar
+					{
+						border: 1px solid black;
+						border-radius: 3px;
+						background: #505050;
+						padding: 0px;
+						text-align: center;
+					}
+					"""
+				)
+			if state == _shared_globals.ProjectState.LINKING:
+				self.animatingBars[progressBar] = ( widget, state, startTime, endTime, percent, forFile, warnings, errors )
+				widget.setText(2, "Linking")
+				progressBar.setStyleSheet(
+					"""
+					QProgressBar::chunk
+					{{
+						background-color: #00E0{:02x};
+					}}
+					QProgressBar
+					{{
+						border: 1px solid black;
+						border-radius: 3px;
+						background: #505050;
+						padding: 0px;
+						text-align: center;
+						color: black;
+					}}
+					""".format(self.pulseColor + 64)
+				)
+			if state == _shared_globals.ProjectState.FINISHED:
+				if progressBar in self.animatingBars:
+					del self.animatingBars[progressBar]
+				widget.setText(2, "Done!")
+				progressBar.setStyleSheet(
+					"""
+					QProgressBar::chunk
+					{{
+						background-color: #{};
+					}}
+					QProgressBar
+					{{
+						border: 1px solid black;
+						border-radius: 3px;
+						background: #505050;
+						padding: 0px;
+						text-align: center;
+						color: black;
+					}}
+					""".format( "ADFFD0" if forFile else "00FF80" )
+				)
 
-					widget.setText(8, time.asctime(time.localtime(endTime)))
-					timeDiff = endTime - startTime
-					minutes = math.floor( timeDiff / 60 )
-					seconds = round( timeDiff % 60 )
-					widget.setText(9, "{0:2}:{1:02}".format( int(minutes), int(seconds) ) )
+				widget.setText(8, time.asctime(time.localtime(endTime)))
+				timeDiff = endTime - startTime
+				minutes = math.floor( timeDiff / 60 )
+				seconds = round( timeDiff % 60 )
+				widget.setText(9, "{0:2}:{1:02}".format( int(minutes), int(seconds) ) )
 
-			progressBar = self.m_buildTree.itemWidget(widget, 1)
+			if state == _shared_globals.ProjectState.FAILED:
+				if progressBar in self.animatingBars:
+					del self.animatingBars[progressBar]
+				widget.setText(2, "Failed!")
+				progressBar.setStyleSheet(
+					"""
+					QProgressBar::chunk
+					{
+						background-color: #800000;
+					}
+					QProgressBar
+					{
+						border: 1px solid black;
+						border-radius: 3px;
+						background: #505050;
+						padding: 0px;
+						text-align: center;
+					}
+					"""
+				)
+				progressBar.setValue(100)
+				progressBar.setFormat("FAILED!")
 
-			project.mutex.acquire( )
-			complete = project.compiles_completed
-			project.mutex.release( )
+				widget.setText(8, time.asctime(time.localtime(endTime)))
+				timeDiff = endTime - startTime
+				minutes = math.floor( timeDiff / 60 )
+				seconds = round( timeDiff % 60 )
+				widget.setText(9, "{0:2}:{1:02}".format( int(minutes), int(seconds) ) )
 
-			total = len( project.final_chunk_set ) + int(
-					project.needs_c_precompile ) + int(
-					project.needs_cpp_precompile )
-			percent = 100 if total == 0 else ( float(complete) / float(total) ) * 100
-			if percent == 100 and project.state < _shared_globals.ProjectState.FINISHED:
-				percent = 99
+		if updatedProjects:
 
-			drawProgressBar( progressBar, widget, project.state, project.startTime, project.endTime, percent, False, project.warnings, project.errors )
+			self.m_buildTree.setSortingEnabled(False)
 
+			if self.pulseColor == 0 or self.pulseColor == 128:
+				self.pulseUp = not self.pulseUp
 
-			if project.state == _shared_globals.ProjectState.FINISHED:
-				self.successfulBuilds.add(project.key)
-			elif project.state == _shared_globals.ProjectState.FAILED:
-				self.failedBuilds.add(project.key)
+			if self.pulseUp:
+				self.pulseColor += 32
+			else:
+				self.pulseColor -= 32
 
-			if widget.isExpanded():
-				def HandleChildProgressBar( idx, file ):
-					childWidget = widget.child(idx)
-					progressBar = self.m_buildTree.itemWidget(childWidget, 1)
+			if self.pulseColor > 128:
+				self.pulseColor = 128
+			if self.pulseColor < 0:
+				self.pulseColor = 0
 
-					project.mutex.acquire( )
-					try:
-						state = project.fileStatus[file]
-					except:
-						state = _shared_globals.ProjectState.PENDING
+			selectedWidget = self.m_buildTree.currentItem()
 
-					try:
-						startTime = project.fileStart[file]
-						endTime = project.fileEnd[file]
-					except:
-						startTime = 0
-						endTime = 0
+			for project in updatedProjects:
+				widget = self.projectToItem[project]
+				if not widget:
+					continue
 
-					warnings = 0
-					errors = 0
+				if selectedWidget == widget:
+					self.SelectionChanged(selectedWidget, selectedWidget)
 
-					if file in project.warningsByFile:
-						warnings = project.warningsByFile[file]
-					if file in project.errorsByFile:
-						errors = project.errorsByFile[file]
+				progressBar = self.m_buildTree.itemWidget(widget, 1)
 
-					project.mutex.release( )
+				project.mutex.acquire( )
+				complete = project.compiles_completed
+				project.mutex.release( )
 
-					drawProgressBar( progressBar, childWidget, state, startTime, endTime, 0 if state <= _shared_globals.ProjectState.BUILDING else 100, True, warnings, errors )
+				total = len( project.final_chunk_set ) + int(
+						project.needs_c_precompile ) + int(
+						project.needs_cpp_precompile )
+				percent = 100 if total == 0 else ( float(complete) / float(total) ) * 100
+				if percent == 100 and project.state < _shared_globals.ProjectState.FINISHED:
+					percent = 99
 
-					if selectedWidget == childWidget:
-						self.SelectionChanged(selectedWidget, selectedWidget)
+				drawProgressBar( progressBar, widget, project.state, project.startTime, project.endTime, percent, False, project.warnings, project.errors )
 
 
-				idx = 0
-				if project.needs_cpp_precompile:
-					HandleChildProgressBar( idx, project.cppheaderfile )
-					idx += 1
+				if project.state == _shared_globals.ProjectState.FINISHED:
+					self.successfulBuilds.add(project.key)
+				elif project.state == _shared_globals.ProjectState.FAILED:
+					self.failedBuilds.add(project.key)
 
-				if project.needs_c_precompile:
-					HandleChildProgressBar( idx, project.cheaderfile )
-					idx += 1
+				if widget.isExpanded():
+					def HandleChildProgressBar( idx, file ):
+						childWidget = widget.child(idx)
+						progressBar = self.m_buildTree.itemWidget(childWidget, 1)
 
-				for file in project.final_chunk_set:
-					HandleChildProgressBar( idx, file )
-					idx += 1
+						project.mutex.acquire( )
+						try:
+							state = project.fileStatus[file]
+						except:
+							state = _shared_globals.ProjectState.PENDING
 
-		self.m_buildTree.setSortingEnabled(True)
+						try:
+							startTime = project.fileStart[file]
+							endTime = project.fileEnd[file]
+						except:
+							startTime = 0
+							endTime = 0
 
-		successcount = len(self.successfulBuilds)
-		failcount = len(self.failedBuilds)
+						warnings = 0
+						errors = 0
 
-		self.m_successfulBuildsLabel.setText("Successful Builds: {}".format(successcount))
-		self.m_failedBuildsLabel.setText("Failed Builds: {}".format(failcount))
+						if file in project.warningsByFile:
+							warnings = project.warningsByFile[file]
+						if file in project.errorsByFile:
+							errors = project.errorsByFile[file]
 
-		if successcount + failcount == len(_shared_globals.sortedProjects):
-			self.readyToClose = True
-			if _shared_globals.autoCloseGui:
-				self.close()
+						project.mutex.release( )
+
+						drawProgressBar( progressBar, childWidget, state, startTime, endTime, 0 if state <= _shared_globals.ProjectState.BUILDING else 100, True, warnings, errors )
+
+						if selectedWidget == childWidget:
+							self.SelectionChanged(selectedWidget, selectedWidget)
+
+
+					idx = 0
+					if project.needs_cpp_precompile:
+						HandleChildProgressBar( idx, project.cppheaderfile )
+						idx += 1
+
+					if project.needs_c_precompile:
+						HandleChildProgressBar( idx, project.cheaderfile )
+						idx += 1
+
+					for file in project.final_chunk_set:
+						HandleChildProgressBar( idx, file )
+						idx += 1
+
+			self.m_buildTree.setSortingEnabled(True)
+
+			successcount = len(self.successfulBuilds)
+			failcount = len(self.failedBuilds)
+
+			self.m_successfulBuildsLabel.setText("Successful Builds: {}".format(successcount))
+			self.m_failedBuildsLabel.setText("Failed Builds: {}".format(failcount))
+
+			if failcount > 0:
+				font = QtGui.QFont()
+				font.setBold(True)
+				self.m_failedBuildsLabel.setFont( font )
+				palette = QtGui.QPalette()
+				palette.setColor( self.m_errorLabel.foregroundRole(), QtCore.Qt.red )
+				self.m_failedBuildsLabel.setPalette(palette)
+
+			if successcount + failcount == len(_shared_globals.sortedProjects):
+				self.readyToClose = True
+				if _shared_globals.autoCloseGui:
+					self.close()
+		if self.animatingBars:
+			for bar in self.animatingBars:
+				data = self.animatingBars[bar]
+				drawProgressBar( bar, *data )
 
 
 	def retranslateUi(self):
@@ -805,6 +863,11 @@ class MainWindow( QMainWindow ):
 		self.m_treeHeader.setText(7, "Build Started")
 		self.m_treeHeader.setText(8, "Build Finished")
 		self.m_treeHeader.setText(9, "Time")
+		self.m_treeHeader.setColumnNumeric(0)
+		self.m_treeHeader.setColumnNumeric(1)
+		self.m_treeHeader.setColumnNumeric(5)
+		self.m_treeHeader.setColumnNumeric(6)
+
 		self.m_buildTree.setColumnWidth( 0, 50 )
 		self.m_buildTree.setColumnWidth( 1, 250 )
 		self.m_buildTree.setColumnWidth( 2, 75 )
@@ -821,6 +884,8 @@ class MainWindow( QMainWindow ):
 		self.m_treeHeader2.setText(2, "File")
 		self.m_treeHeader2.setText(3, "Line")
 		self.m_treeHeader2.setText(4, "Col")
+		self.m_treeHeader2.setColumnNumeric(3)
+		self.m_treeHeader2.setColumnNumeric(4)
 		self.m_errorTree.setColumnWidth( 0, 50 )
 		self.m_errorTree.setColumnWidth( 1, max(250, self.m_errorTree.width() - 250) )
 		self.m_errorTree.setColumnWidth( 2, 100 )
@@ -829,7 +894,7 @@ class MainWindow( QMainWindow ):
 
 		self.m_filesCompletedLabel.setText("0/0 files compiled")
 		self.m_timeLeftLabel.setText("Est. Time Left: 0:00")
-		self.m_pushButton.setText(u"«")
+		self.m_pushButton.setText(u"▴ Output ▴")
 
 	def onTick(self):
 		self.UpdateProjects()
@@ -942,9 +1007,10 @@ class GuiThread( threading.Thread ):
 		row = 0
 		for project in _shared_globals.sortedProjects:
 			row += 1
-			widgetItem = QtGui.QTreeWidgetItem()
+			widgetItem = TreeWidgetItem()
 			window.m_buildTree.addTopLevelItem(widgetItem)
 			widgetItem.setText(0, str(row))
+			widgetItem.setText(1, "1000")
 			widgetItem.setText(2, "Pending...")
 			widgetItem.setText(3, project.name)
 			widgetItem.setToolTip(3, project.name)
@@ -952,6 +1018,9 @@ class GuiThread( threading.Thread ):
 			widgetItem.setToolTip(4, project.targetName)
 			widgetItem.setText(5, "0")
 			widgetItem.setText(6, "0")
+
+			window.projectToItem[project] = widgetItem
+			window.itemToProject[widgetItem] = project
 
 			def AddProgressBar( widgetItem):
 				progressBar = QtGui.QProgressBar()
@@ -985,8 +1054,9 @@ class GuiThread( threading.Thread ):
 
 			if project.needs_cpp_precompile:
 				idx += 1
-				childItem = QtGui.QTreeWidgetItem( widgetItem )
+				childItem = TreeWidgetItem( widgetItem )
 				childItem.setText(0, "{}.{}".format(row, idx))
+				childItem.setText(1, "1000")
 				childItem.setText(2, "Pending...")
 				childItem.setText(3, os.path.basename(project.cppheaderfile))
 				childItem.setToolTip(3, project.cppheaderfile)
@@ -1011,7 +1081,7 @@ class GuiThread( threading.Thread ):
 				widgetItem.addChild(childItem)
 
 				for header in project.cpppchcontents:
-					subChildItem = QtGui.QTreeWidgetItem( childItem )
+					subChildItem = TreeWidgetItem( childItem )
 					subChildItem.setText( 0, os.path.basename(header) )
 					subChildItem.setFirstColumnSpanned(True)
 					subChildItem.setToolTip( 0, header )
@@ -1019,8 +1089,9 @@ class GuiThread( threading.Thread ):
 
 			if project.needs_c_precompile:
 				idx += 1
-				childItem = QtGui.QTreeWidgetItem( widgetItem )
+				childItem = TreeWidgetItem( widgetItem )
 				childItem.setText(0, "{}.{}".format(row, idx))
+				childItem.setText(1, "1000")
 				childItem.setText(2, "Pending...")
 				childItem.setText(3, os.path.basename(project.cheaderfile))
 				childItem.setToolTip(3, project.cheaderfile)
@@ -1045,7 +1116,7 @@ class GuiThread( threading.Thread ):
 				widgetItem.addChild(childItem)
 
 				for header in project.cpchcontents:
-					subChildItem = QtGui.QTreeWidgetItem( childItem )
+					subChildItem = TreeWidgetItem( childItem )
 					subChildItem.setText( 0, os.path.basename(header) )
 					subChildItem.setFirstColumnSpanned(True)
 					subChildItem.setToolTip( 0, header )
@@ -1053,8 +1124,9 @@ class GuiThread( threading.Thread ):
 
 			for source in project.final_chunk_set:
 				idx += 1
-				childItem = QtGui.QTreeWidgetItem( widgetItem )
+				childItem = TreeWidgetItem( widgetItem )
 				childItem.setText(0, "{}.{}".format(row, idx))
+				childItem.setText(1, "1000")
 				childItem.setText(2, "Pending...")
 				childItem.setText(3, os.path.basename(source))
 				childItem.setToolTip(3, source)
@@ -1080,7 +1152,7 @@ class GuiThread( threading.Thread ):
 
 				if source in project.chunksByFile:
 					for piece in project.chunksByFile[source]:
-						subChildItem = QtGui.QTreeWidgetItem( childItem )
+						subChildItem = TreeWidgetItem( childItem )
 						subChildItem.setText( 0, piece )
 						subChildItem.setFirstColumnSpanned(True)
 						subChildItem.setToolTip( 0, piece )

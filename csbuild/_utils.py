@@ -147,24 +147,33 @@ class threaded_build( threading.Thread ):
 				sys.stderr.write( errors )
 
 			self.project.mutex.acquire( )
-			self.project.compileOutput[self.file] = output
-			self.project.compileErrors[self.file] = errors
 			ansi_escape = re.compile(r'\x1b[^m]*m')
 			stripped_errors = re.sub(ansi_escape, '', errors)
+			self.project.compileOutput[self.file] = output
+			self.project.compileErrors[self.file] = stripped_errors
 			errorlist = self.project.activeToolchain.parseOutput(stripped_errors)
 			errorcount = 0
 			warningcount = 0
-			for error in errorlist:
-				if error.level == _shared_globals.OutputLevel.ERROR:
-					errorcount += 1
-				if error.level == _shared_globals.OutputLevel.WARNING:
-					warningcount += 1
+			if errorlist:
+				for error in errorlist:
+					if error.level == _shared_globals.OutputLevel.ERROR:
+						errorcount += 1
+					if error.level == _shared_globals.OutputLevel.WARNING:
+						warningcount += 1
 
-			self.project.errors += errorcount
-			self.project.warnings += warningcount
-			self.project.errorsByFile[self.file] = errorcount
-			self.project.warningsByFile[self.file] = warningcount
-			self.project.parsedErrors[self.file] = errorlist
+				self.project.errors += errorcount
+				self.project.warnings += warningcount
+				self.project.errorsByFile[self.file] = errorcount
+				self.project.warningsByFile[self.file] = warningcount
+				self.project.parsedErrors[self.file] = errorlist
+
+				if errorcount > 0:
+					self.project.fileStatus[self.file] = _shared_globals.ProjectState.FAILED
+				else:
+					self.project.fileStatus[self.file] = _shared_globals.ProjectState.FINISHED
+			else:
+				self.project.fileStatus[self.file] = _shared_globals.ProjectState.FINISHED
+
 			self.project.mutex.release( )
 
 			_shared_globals.sgmutex.acquire()
@@ -225,7 +234,6 @@ class threaded_build( threading.Thread ):
 
 			self.project.mutex.acquire( )
 			self.project.compiles_completed += 1
-			self.project.fileStatus[self.file] = _shared_globals.ProjectState.FINISHED
 			self.project.fileEnd[self.file] = time.time()
 			self.project.updated = True
 			self.project.mutex.release( )

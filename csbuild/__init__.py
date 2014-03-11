@@ -1230,6 +1230,16 @@ def build( ):
 				log.LOG_ERROR( "Build of {} ({}) failed! Finishing up non-dependent build tasks...".format(
 					project.output_name, project.targetName ) )
 
+				# TODO:
+				# with project.mutex:
+				# 	for chunk in project.final_chunk_set:
+				# 		project.fileStatus[chunk] = _shared_globals.ProjectState.FAILED
+				# 	prev = project.compiles_completed
+				# 	project.compiles_completed = len(project.final_chunk_set) + int(project.needs_cpp_precompile) + int(project.needs_c_precompile)
+				# 	_shared_globals.current_compile += project.compiles_completed - prev
+
+				project.state = _shared_globals.ProjectState.FAILED
+
 			if not _shared_globals.build_success and _shared_globals.stopOnError:
 				break
 
