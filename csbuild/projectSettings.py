@@ -1144,9 +1144,12 @@ class projectSettings( object ):
 		"""Retrieves the chunk that a given file belongs to."""
 		for chunk in self.chunks:
 			if srcFile in chunk:
+				chunk_names = "__".join( _utils.base_names( chunk ) )
+				if sys.version_info >= (3, 0):
+					chunk_names = chunk_names.encode()
 				return "{}_chunk_{}".format(
 					self.output_name.split( '.' )[0],
-					hashlib.md5("__".join( _utils.base_names( chunk ) ) ).hexdigest( )
+					hashlib.md5( chunk_names ).hexdigest( )
 				)
 
 

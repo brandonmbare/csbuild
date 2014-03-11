@@ -71,7 +71,7 @@ class project_generator_qtcreator( project_generator.project_generator ):
 		# Grab a random project from the dictionary, first one will do.
 		# These values don't matter much as they're likely to be the same (or close enough to the same for our purposes)
 		# across all targets.
-		project = projectDict[projectDict.keys()[0]]
+		project = projectDict[list(projectDict.keys())[0]]
 
 		projectpath = os.path.join( self.rootpath, parentPath, project.name )
 		if not os.path.exists( projectpath ):

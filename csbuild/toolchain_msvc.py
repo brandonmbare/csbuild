@@ -170,6 +170,11 @@ class toolchain_msvc( toolchain.toolchainBase ):
 			output_lines = output.splitlines( )
 
 			for line in output_lines:
+				# Convert to a string on Python3.
+				if sys.version_info >= (3, 0):
+					line = line.decode("utf-8")
+
+				# Check if the line we're on has the Windows SDK directory listed.
 				if line.startswith( "WindowsSdkDir=" ):
 					key_value_list = line.split( "=", 1 )
 					WINDOWS_SDK_DIR = key_value_list[1]
