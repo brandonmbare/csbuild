@@ -149,7 +149,28 @@ class threaded_build( threading.Thread ):
 			self.project.mutex.acquire( )
 			self.project.compileOutput[self.file] = output
 			self.project.compileErrors[self.file] = errors
+			ansi_escape = re.compile(r'\x1b[^m]*m')
+			stripped_errors = re.sub(ansi_escape, '', errors)
+			errorlist = self.project.activeToolchain.parseOutput(stripped_errors)
+			errorcount = 0
+			warningcount = 0
+			for error in errorlist:
+				if error.level == _shared_globals.OutputLevel.ERROR:
+					errorcount += 1
+				if error.level == _shared_globals.OutputLevel.WARNING:
+					warningcount += 1
+
+			self.project.errors += errorcount
+			self.project.warnings += warningcount
+			self.project.errorsByFile[self.file] = errorcount
+			self.project.warningsByFile[self.file] = warningcount
+			self.project.parsedErrors[self.file] = errorlist
 			self.project.mutex.release( )
+
+			_shared_globals.sgmutex.acquire()
+			_shared_globals.warningcount += warningcount
+			_shared_globals.errorcount += errorcount
+			_shared_globals.sgmutex.release()
 
 			if ret:
 				if str( ret ) == str( self.project.activeToolchain.interrupt_exit_code( ) ):

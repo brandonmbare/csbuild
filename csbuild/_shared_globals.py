@@ -103,6 +103,8 @@ and stepping on each other
 @undocumented: dummy_block
 @undocumented: stopOnError
 @undocumented: autoCloseGui
+@undocumented: warningcount
+@undocumented: errorcount
 """
 
 import threading
@@ -120,6 +122,22 @@ class ProjectState( object ):
 	LINKING = 3
 	FINISHED = 4
 	FAILED = 5
+
+class OutputLevel( object ):
+	UNKNOWN = -1
+	NOTE = 0
+	WARNING = 1
+	ERROR = 2
+
+class OutputLine( object ):
+	def __init__(self):
+		self.level = OutputLevel.UNKNOWN
+		self.text = ""
+		self.file = ""
+		self.line = -1
+		self.column = -1
+		self.details = []
+
 
 color_supported = terminfo.TermInfo.SupportsColor( )
 columns = terminfo.TermInfo.GetNumColumns( ) if color_supported else 0
@@ -199,6 +217,9 @@ stopOnError = False
 target_list = []
 
 autoCloseGui = False
+
+warningcount = 0
+errorcount = 0
 
 
 class dummy_block( object ):

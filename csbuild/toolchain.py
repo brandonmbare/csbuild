@@ -65,6 +65,9 @@ class toolchainBase( object ):
 		self.settingsOverrides = { }
 
 
+	def parseOutput(self, outputStr):
+		return None
+
 	@staticmethod
 	def additional_args( parser ):
 		"""

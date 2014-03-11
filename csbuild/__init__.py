@@ -1648,6 +1648,7 @@ def _setupdefaults( ):
 	target( "debug" )( debug )
 	target( "release" )( release )
 
+_guiModule = None
 
 def Done( code = 0 ):
 	"""
@@ -1666,6 +1667,9 @@ def Exit( code = 0 ):
 	@param code: Exit code to exit with
 	@type code: int
 	"""
+	if _guiModule:
+		_guiModule.stop()
+
 	if platform.system() != "Windows":
 		imp.acquire_lock()
 
@@ -2160,6 +2164,7 @@ def _run( ):
 	if args.gui:
 		_shared_globals.autoCloseGui = args.auto_close_gui
 		from csbuild import _gui
+		_guiModule = _gui
 		_gui.run()
 
 	if args.generate_solution is not None:

@@ -486,12 +486,17 @@ class projectSettings( object ):
 		self.endTime = 0
 		self.compileOutput = {}
 		self.compileErrors = {}
+		self.parsedErrors = {}
 		self.fileStatus = {}
 		self.fileStart = {}
 		self.fileEnd = {}
 		self.cpchcontents = []
 		self.cpppchcontents = []
 		self.updated = False
+		self.warnings = 0
+		self.errors = 0
+		self.warningsByFile = {}
+		self.errorsByFile = {}
 
 
 	def prepareBuild( self ):
@@ -689,12 +694,17 @@ class projectSettings( object ):
 			"endTime" : self.endTime,
 			"compileOutput" : dict(self.compileOutput),
 			"compileErrors" : dict(self.compileErrors),
+			"parsedErrors" : dict(self.parsedErrors),
 			"fileStatus" : dict(self.fileStatus),
 			"fileStart" : dict(self.fileStart),
 			"fileEnd" : dict(self.fileEnd),
 			"cpchcontents" : list(self.cpchcontents),
 			"cpppchcontents" : list(self.cpppchcontents),
 			"updated" : self.updated,
+			"warnings" : self.warnings,
+			"errors" : self.errors,
+			"warningsByFile" : self.warningsByFile,
+			"errorsByFile" : self.errorsByFile,
 		}
 
 		for name in self.targets:

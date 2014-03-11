@@ -79,6 +79,7 @@ class toolchain_gcc( toolchain.toolchainBase ):
 		self.settingsOverrides["cppstandard"] = ""
 		self.settingsOverrides["cstandard"] = ""
 		self.settingsOverrides["strictOrdering"] = False
+		self.isClang = False
 
 
 	def SetupForProject( self, project ):
@@ -246,6 +247,8 @@ class toolchain_gcc( toolchain.toolchainBase ):
 		exitcodes = ""
 		if "clang" not in compiler:
 			exitcodes = "-pass-exit-codes"
+		else:
+			self.isClang = True
 
 		if isCpp:
 			standard = self.settingsOverrides["cppstandard"]
@@ -312,6 +315,131 @@ class toolchain_gcc( toolchain.toolchainBase ):
 	def get_pch_file( self, fileName ):
 		return fileName + ".gch"
 
+
+	def parseClangOutput(self, outputStr):
+		command = re.compile("^clang(\\+\\+)?: +(fatal +)?(warning|error|note): (.*)$")
+		inLine = re.compile("^In (.*) included from (.*):(\\d+):$")
+		message = re.compile("^(<command line>|([A-Za-z]:)?[^:]+\\.[^:]+)(:(\\d+):(\\d+)|\\((\\d+)\\) *): +(fatal +)?(error|warning|note): (.*)$")
+		summary = re.compile("^\\d+ (warnings?|errors?)( and \\d (warnings?|errors?))? generated.$")
+		codesign = re.compile("^Code ?Sign error: (.*)$")
+
+		line = None
+		ret = []
+		detailsToAppend = []
+		lastLine = -1
+		lastCol = -1
+		lastFile = ""
+		try:
+			for text in outputStr.split('\n'):
+				match = summary.match(text)
+				if match is not None:
+					return ret
+
+				match = command.match(text)
+				if match is not None:
+					line = _shared_globals.OutputLine()
+
+					str = match.group(3)
+					if str == "error":
+						line.level = _shared_globals.OutputLevel.ERROR
+					elif str == "warning":
+						line.level = _shared_globals.OutputLevel.WARNING
+					else:
+						line.level = _shared_globals.OutputLevel.NOTE
+
+					lastLine = -1
+					lastCol = -1
+					lastFile = ""
+
+					line.text = match.group(4)
+					line.details = detailsToAppend
+					detailsToAppend = []
+					ret.append(line)
+					continue
+
+				match = inLine.match(text)
+				if match is not None:
+					subline = _shared_globals.OutputLine()
+					subline.text = text
+					subline.file = match.group(2)
+					subline.line = int(match.group(3))
+					subline.column = 0
+					detailsToAppend.append(subline)
+
+					lastLine = -1
+					lastCol = -1
+					lastFile = ""
+					continue
+
+				match = message.match(text)
+				if match is not None:
+					newLine = _shared_globals.OutputLine()
+					newLine.file = match.group(1)
+					try:
+						newLine.line = int(match.group(4))
+						newLine.column = int(match.group(5))
+					except:
+						newLine.line = int(match.group(5))
+						newLine.column = int(match.group(6))
+
+					lastLine = newLine.line
+					lastCol = newLine.column
+					lastFile = newLine.file
+
+					str = match.group(8)
+					if str == "error":
+						newLine.level = _shared_globals.OutputLevel.ERROR
+					elif str == "warning":
+						newLine.level = _shared_globals.OutputLevel.WARNING
+					else:
+						newLine.level = _shared_globals.OutputLevel.NOTE
+
+					newLine.text = match.group(9)
+					newLine.details = detailsToAppend
+					detailsToAppend = []
+					if newLine.level == _shared_globals.OutputLevel.NOTE:
+						line.details.append(newLine)
+					else:
+						line = newLine
+						ret.append(line)
+					continue
+
+				match = codesign.match(text)
+				if match is not None:
+					line = _shared_globals.OutputLine()
+					line.level = _shared_globals.OutputLevel.ERROR
+					line.text = match.group(1)
+
+					lastLine = -1
+					lastCol = -1
+					lastFile = ""
+
+					continue
+
+				if line:
+					subline = _shared_globals.OutputLine()
+					subline.text = text
+					subline.line = lastLine
+					subline.column = lastCol
+					subline.file = lastFile
+					line.details.append(subline)
+
+			return ret
+		except Exception as e:
+			print(e)
+			return None
+
+
+
+	def parseGccOutput(self, outputStr):
+		return None
+
+
+	def parseOutput(self, outputStr):
+		if self.isClang:
+			return self.parseClangOutput(outputStr)
+		else:
+			return self.parseGccOutput(outputStr)
 
 	def WarnFlags( self, *args ):
 		"""
