@@ -2,32 +2,33 @@
 import csbuild
 from csbuild import log
 
+# try:
+# 	from PyQt5 import QtCore, QtGui, QtWidgets
+# 	QMainWindow = QtWidgets.QMainWindow
+# 	QApplication = QtWidgets.QApplication
+# 	QtGui.QWidget = QtWidgets.QWidget
+# 	QtGui.QHBoxLayout = QtWidgets.QHBoxLayout
+# 	QtGui.QVBoxLayout = QtWidgets.QVBoxLayout
+# 	QtGui.QSplitter = QtWidgets.QSplitter
+# 	QtGui.QLabel = QtWidgets.QLabel
+# 	QtGui.QProgressBar = QtWidgets.QProgressBar
+# 	QtGui.QPushButton = QtWidgets.QPushButton
+# 	QtGui.QTreeWidget = QtWidgets.QTreeWidget
+# 	QtGui.QTreeWidgetItem = QtWidgets.QTreeWidgetItem
+# 	QtGui.QSpacerItem = QtWidgets.QSpacerItem
+# 	QtGui.QSizePolicy = QtWidgets.QSizePolicy
+# 	QtGui.QTextEdit = QtWidgets.QTextEdit
+# 	QtGui.QTabWidget = QtWidgets.QTabWidget
+# 	log.LOG_INFO("Using Qt5")
+# except:
 try:
-	from PyQt5 import QtCore, QtGui, QtWidgets
-	QMainWindow = QtWidgets.QMainWindow
-	QApplication = QtWidgets.QApplication
-	QtGui.QWidget = QtWidgets.QWidget
-	QtGui.QHBoxLayout = QtWidgets.QHBoxLayout
-	QtGui.QVBoxLayout = QtWidgets.QVBoxLayout
-	QtGui.QSplitter = QtWidgets.QSplitter
-	QtGui.QLabel = QtWidgets.QLabel
-	QtGui.QProgressBar = QtWidgets.QProgressBar
-	QtGui.QPushButton = QtWidgets.QPushButton
-	QtGui.QTreeWidget = QtWidgets.QTreeWidget
-	QtGui.QTreeWidgetItem = QtWidgets.QTreeWidgetItem
-	QtGui.QSpacerItem = QtWidgets.QSpacerItem
-	QtGui.QSizePolicy = QtWidgets.QSizePolicy
-	QtGui.QTextEdit = QtWidgets.QTextEdit
-	log.LOG_INFO("Using Qt5")
+	from PyQt4 import QtCore, QtGui
+	QMainWindow = QtGui.QMainWindow
+	QApplication = QtGui.QApplication
+	log.LOG_INFO("Using Qt4")
 except:
-	try:
-		from PyQt4 import QtCore, QtGui
-		QMainWindow = QtGui.QMainWindow
-		QApplication = QtGui.QApplication
-		log.LOG_INFO("Using Qt4")
-	except:
-		log.LOG_ERROR("Either PyQt5 or PyQt4 must be installed on your system to load the CSBuild GUI")
-		csbuild.Exit( 1 )
+	log.LOG_ERROR("PyQt4 must be installed on your system to load the CSBuild GUI")
+	csbuild.Exit( 1 )
 
 import os
 import threading
@@ -547,7 +548,9 @@ class MainWindow( QMainWindow ):
 		updatedProjects = []
 
 		if expandedIndex is not None:
-			updatedProjects = [ self.itemToProject[ self.m_buildTree.itemFromIndex( expandedIndex ) ] ]
+			text = self.m_buildTree.itemFromIndex( expandedIndex ).text(0)
+			if text and text in self.itemToProject:
+				updatedProjects = [ self.itemToProject[ text ] ]
 		else:
 			for project in _shared_globals.sortedProjects:
 				project.mutex.acquire()
@@ -1023,7 +1026,7 @@ class GuiThread( threading.Thread ):
 			widgetItem.setText(6, "0")
 
 			window.projectToItem[project] = widgetItem
-			window.itemToProject[widgetItem] = project
+			window.itemToProject[str(row)] = project
 
 			def AddProgressBar( widgetItem):
 				progressBar = QtGui.QProgressBar()
