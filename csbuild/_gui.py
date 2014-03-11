@@ -1002,6 +1002,8 @@ class GuiThread( threading.Thread ):
 
 	def run( self ):
 		self.app = QApplication([])
+		global lock
+		lock.release()
 		window = MainWindow()
 
 		window.m_buildTree.setSortingEnabled(False)
@@ -1169,11 +1171,14 @@ class GuiThread( threading.Thread ):
 		self.window.exitRequested = True
 
 _thread = None
+lock = threading.Lock()
 
 def run():
 	global _thread
 	_thread = GuiThread()
 	_thread.start()
+	lock.acquire()
+	lock.acquire()
 
 def stop():
 	global _thread
