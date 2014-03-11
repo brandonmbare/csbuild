@@ -26,10 +26,9 @@ import threading
 import time
 import sys
 import datetime
-import platform
 import glob
-import imp
 
+import csbuild
 from csbuild import log
 from csbuild import _shared_globals
 
@@ -229,10 +228,7 @@ def get_base_name( name ):
 def check_version( ):
 	"""Checks the currently installed version against the latest version, and logs a warning if the current version
 	is out of date."""
-	with open( os.path.dirname( __file__ ) + "/version", "r" ) as f:
-		csbuild_version = f.read( )
-
-	if "-Dev-" in csbuild_version:
+	if "-Dev-" in csbuild.__version__:
 		return
 
 	if not os.path.exists( os.path.expanduser( "~/.csbuild/check" ) ):
@@ -261,9 +257,9 @@ def check_version( ):
 		if not RMatch:
 			return
 		latest_version = RMatch.group( 1 )
-		if latest_version != csbuild_version:
+		if latest_version != csbuild.__version__:
 			log.LOG_WARN(
-				"A new version of csbuild is available. Current version: {0}, latest: {1}".format( csbuild_version,
+				"A new version of csbuild is available. Current version: {0}, latest: {1}".format( csbuild.__version__,
 					latest_version ) )
 			log.LOG_WARN( "Use 'sudo pip install csbuild --upgrade' to get the latest version." )
 
@@ -287,7 +283,7 @@ def sortProjects( ):
 				log.LOG_ERROR(
 					"Circular dependencies detected: {0} and {1} in linkDepends".format( depend.rsplit( "@", 1 )[0],
 						project.name ) )
-				sys.exit( 1 )
+				csbuild.Exit( 1 )
 			if depend not in _shared_globals.projects:
 				if depend not in already_errored_link[project]:
 					log.LOG_ERROR( "Project {} references non-existent link dependency {}".format(
@@ -303,7 +299,7 @@ def sortProjects( ):
 				log.LOG_ERROR(
 					"Circular dependencies detected: {0} and {1} in srcDepends".format( depend.rsplit( "@", 1 )[0],
 						project.name ) )
-				sys.exit( 1 )
+				csbuild.Exit( 1 )
 			if depend not in _shared_globals.projects:
 				if depend not in already_errored_source[project]:
 					log.LOG_ERROR( "Project {} references non-existent source dependency {}".format(
@@ -482,7 +478,7 @@ def chunked_build( ):
 				outFile = "{0}/{1}_unity.cpp".format( project.csbuild_dir,
 					project.output_name )
 			else:
-				chunk_names = "__".join( _utils.base_names( chunk ) )
+				chunk_names = "__".join( base_names( chunk ) )
 				if sys.version_info >= (3, 0):
 					chunk_names = chunk_names.encode()
 				outFile = "{}/{}_chunk_{}.cpp".format(
@@ -517,7 +513,7 @@ def chunked_build( ):
 				project.final_chunk_set.append( outFile )
 				project.chunksByFile.update( { outFile : [ os.path.basename(piece) for piece in chunk ] } )
 			elif len( sources_in_this_chunk ) > 0:
-				chunk_names = "__".join( _utils.base_names( chunk ) )
+				chunk_names = "__".join( base_names( chunk ) )
 				if sys.version_info >= (3, 0):
 					chunk_names = chunk_names.encode()
 

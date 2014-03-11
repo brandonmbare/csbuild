@@ -1,4 +1,34 @@
-from PyQt4 import QtCore, QtGui
+# coding=utf-8
+import csbuild
+from csbuild import log
+
+try:
+	from PyQt5 import QtCore, QtGui, QtWidgets
+	QMainWindow = QtWidgets.QMainWindow
+	QApplication = QtWidgets.QApplication
+	QtGui.QWidget = QtWidgets.QWidget
+	QtGui.QHBoxLayout = QtWidgets.QHBoxLayout
+	QtGui.QVBoxLayout = QtWidgets.QVBoxLayout
+	QtGui.QSplitter = QtWidgets.QSplitter
+	QtGui.QLabel = QtWidgets.QLabel
+	QtGui.QProgressBar = QtWidgets.QProgressBar
+	QtGui.QPushButton = QtWidgets.QPushButton
+	QtGui.QTreeWidget = QtWidgets.QTreeWidget
+	QtGui.QTreeWidgetItem = QtWidgets.QTreeWidgetItem
+	QtGui.QSpacerItem = QtWidgets.QSpacerItem
+	QtGui.QSizePolicy = QtWidgets.QSizePolicy
+	QtGui.QTextEdit = QtWidgets.QTextEdit
+	log.LOG_INFO("Using Qt5")
+except:
+	try:
+		from PyQt4 import QtCore, QtGui
+		QMainWindow = QtGui.QMainWindow
+		QApplication = QtGui.QApplication
+		log.LOG_INFO("Using Qt4")
+	except:
+		log.LOG_ERROR("Either PyQt5 or PyQt4 must be installed on your system to load the CSBuild GUI")
+		csbuild.Exit( 1 )
+
 import os
 import threading
 import time
@@ -6,9 +36,9 @@ import math
 import signal
 from csbuild import _shared_globals
 
-class MainWindow( QtGui.QMainWindow ):
+class MainWindow( QMainWindow ):
 	def __init__(self, *args, **kwargs):
-		QtGui.QMainWindow.__init__(self, *args, **kwargs)
+		QMainWindow.__init__(self, *args, **kwargs)
 		
 		self.setObjectName("MainWindow")
 		
@@ -153,13 +183,13 @@ class MainWindow( QtGui.QMainWindow ):
 
 		if toggled:
 			self.m_splitter.setSizes( [ 1100, max( self.width() - 1100, 600 ) ] )
-			self.m_pushButton.setText(">")
+			self.m_pushButton.setText(u"»")
 		else:
 			self.m_splitter.setSizes( [ 1, 0 ] )
-			self.m_pushButton.setText("<")
+			self.m_pushButton.setText(u"«")
 
 	def resizeEvent(self, event):
-		QtGui.QMainWindow.resizeEvent(self, event)
+		QMainWindow.resizeEvent(self, event)
 		textBoxSize = self.m_splitter.sizes()[1]
 		if textBoxSize != 0:
 			self.m_splitter.setSizes( [ 1100, max( self.width() - 1100, 600 ) ] )
@@ -171,13 +201,13 @@ class MainWindow( QtGui.QMainWindow ):
 				self.m_ignoreButton = True
 				self.m_pushButton.setChecked(False)
 				self.m_ignoreButton = False
-			self.m_pushButton.setText("<")
+			self.m_pushButton.setText(u"«")
 		else:
 			if not self.m_pushButton.isChecked():
 				self.m_ignoreButton = True
 				self.m_pushButton.setChecked(True)
 				self.m_ignoreButton = False
-			self.m_pushButton.setText(">")
+			self.m_pushButton.setText(u"»")
 
 	def SelectionChanged(self, current, previous):
 		if current is None:
@@ -535,7 +565,7 @@ class MainWindow( QtGui.QMainWindow ):
 
 
 	def retranslateUi(self):
-		self.setWindowTitle("MainWindow")
+		self.setWindowTitle("CSBuild {}".format(csbuild.__version__))
 		self.m_buildSummaryLabel.setText("Build Started at 00:00... (00:00)")
 		self.m_successfulBuildsLabel.setText("Successful Builds: 0")
 		self.m_failedBuildsLabel.setText("Failed Builds: 0")
@@ -558,7 +588,7 @@ class MainWindow( QtGui.QMainWindow ):
 
 		self.m_filesCompletedLabel.setText("0/0 files compiled")
 		self.m_timeLeftLabel.setText("Est. Time Left: 0:00")
-		self.m_pushButton.setText("<")
+		self.m_pushButton.setText(u"«")
 
 	def onTick(self):
 		self.UpdateProjects()
@@ -610,12 +640,12 @@ class MainWindow( QtGui.QMainWindow ):
 				QtGui.QMessageBox.No
 			)
 			if answer == QtGui.QMessageBox.Yes:
-				QtGui.QMainWindow.closeEvent(self, event)
+				QMainWindow.closeEvent(self, event)
 				os.kill(os.getpid(), signal.SIGINT)
 			else:
 				event.ignore()
 		else:
-			QtGui.QMainWindow.closeEvent(self, event)
+			QMainWindow.closeEvent(self, event)
 
 
 
@@ -636,7 +666,7 @@ class GuiThread( threading.Thread ):
 
 
 	def run( self ):
-		self.app = QtGui.QApplication([])
+		self.app = QApplication([])
 		window = MainWindow()
 
 		window.m_buildTree.setSortingEnabled(False)

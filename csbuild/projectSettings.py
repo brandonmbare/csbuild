@@ -1158,7 +1158,13 @@ class projectSettings( object ):
 		if platform.system( ) == "Windows":
 			inFile = inFile[2:]
 
-		md5file = "{}.md5".format( os.path.join( self.csbuild_dir, "md5s", hashlib.md5( inFile ).hexdigest(), os.path.basename( inFile ) ) )
+		if sys.version_info >= (3,0):
+			inFile = inFile.encode("utf-8")
+			baseName = os.path.basename( inFile ).decode("utf-8")
+		else:
+			baseName = os.path.basename( inFile )
+
+		md5file = "{}.md5".format( os.path.join( self.csbuild_dir, "md5s", hashlib.md5( inFile ).hexdigest(), baseName ) )
 
 		md5dir = os.path.dirname( md5file )
 		if not os.path.exists( md5dir ):
@@ -1211,7 +1217,7 @@ class projectSettings( object ):
 					log.LOG_INFO( "Waiting for a build thread to become available..." )
 				_shared_globals.semaphore.acquire( True )
 			if _shared_globals.interrupted:
-				sys.exit( 2 )
+				csbuild.Exit( 2 )
 
 			log.LOG_BUILD(
 				"Precompiling {0} ({1}/{2})...".format(
@@ -1233,7 +1239,7 @@ class projectSettings( object ):
 					log.LOG_INFO( "Waiting for a build thread to become available..." )
 				_shared_globals.semaphore.acquire( True )
 			if _shared_globals.interrupted:
-				sys.exit( 2 )
+				csbuild.Exit( 2 )
 
 			log.LOG_BUILD(
 				"Precompiling {0} ({1}/{2})...".format(

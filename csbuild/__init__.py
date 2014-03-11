@@ -96,6 +96,10 @@ __status__ = "Development"
 
 __all__ = []
 
+
+with open( os.path.dirname( __file__ ) + "/version", "r" ) as f:
+	__version__ = f.read( )
+
 signal.signal( signal.SIGINT, signal.SIG_DFL )
 
 
@@ -1053,7 +1057,7 @@ def build( ):
 	for project in _shared_globals.sortedProjects:
 		log.LOG_BUILD( "Verifying libraries for {} ({})".format( project.output_name, project.targetName ) )
 		if not project.check_libraries( ):
-			sys.exit( 1 )
+			Exit( 1 )
 			#if _utils.needs_link(project):
 			#    projects_needing_links.add(project.key)
 
@@ -1187,7 +1191,7 @@ def build( ):
 								pending_links.remove( otherProj )
 
 					if _shared_globals.interrupted:
-						sys.exit( 2 )
+						Exit( 2 )
 					if not _shared_globals.build_success and _shared_globals.stopOnError:
 						log.LOG_ERROR("Errors encountered during build, finishing current tasks and exiting...")
 						_shared_globals.semaphore.release()
@@ -1259,7 +1263,7 @@ def build( ):
 								"s" if _shared_globals.max_threads - j != 1 else "" ) )
 				_shared_globals.semaphore.acquire( True )
 				if _shared_globals.interrupted:
-					sys.exit( 2 )
+					Exit( 2 )
 
 		#Then immediately release all the semaphores once we've reclaimed them.
 		#We're not using any more threads so we don't need them now.
@@ -1645,18 +1649,27 @@ def _setupdefaults( ):
 	target( "release" )( release )
 
 
-def Done( ):
+def Done( code = 0 ):
 	"""
 	Exit the build process early
+	
+	@param code: Exit code to exit with
+	@type code: int
 	"""
-	sys.exit( 0 )
+	Exit( code )
 
 
-def Exit( ):
+def Exit( code = 0 ):
 	"""
 	Exit the build process early
+	
+	@param code: Exit code to exit with
+	@type code: int
 	"""
-	sys.exit( 0 )
+	if platform.system() != "Windows":
+		imp.acquire_lock()
+
+	sys.exit( code )
 
 
 ARG_NOT_SET = type( "ArgNotSetType", (), { } )( )
@@ -1805,7 +1818,7 @@ def _run( ):
 
 	else:
 		log.LOG_ERROR( "CSB cannot be run from the interactive console." )
-		sys.exit( 1 )
+		Exit( 1 )
 
 	epilog = "    ------------------------------------------------------------    \n\nProjects available in this makefile (listed in build order):\n\n"
 
@@ -1955,9 +1968,7 @@ def _run( ):
 	args.remainder = remainder
 
 	if args.version:
-		with open( os.path.dirname( __file__ ) + "/version", "r" ) as f:
-			csbuild_version = f.read( )
-		print("CSBuild version {}".format( csbuild_version ))
+		print("CSBuild version {}".format( __version__ ))
 		print(__copyright__)
 		print("Code by {}".format( __author__ ))
 		print("Additional credits: {}".format( ", ".join( __credits__ ) ))
@@ -2085,7 +2096,7 @@ def _run( ):
 				log.LOG_ERROR(
 					"Circular dependencies detected: {0} and {1} in linkDepends".format( depend.rsplit( "@", 1 )[0],
 						proj.name ) )
-				sys.exit( 1 )
+				Exit( 1 )
 
 			if depend not in _shared_globals.projects:
 				if depend not in already_errored_link[project]:
@@ -2108,7 +2119,7 @@ def _run( ):
 				log.LOG_ERROR(
 					"Circular dependencies detected: {0} and {1} in linkDepends".format( depend.rsplit( "@", 1 )[0],
 						proj.name ) )
-				sys.exit( 1 )
+				Exit( 1 )
 
 			if depend not in _shared_globals.projects:
 				if depend not in already_errored_link[project]:
@@ -2156,7 +2167,7 @@ def _run( ):
 			args.solution_path = os.path.join( ".", "Solutions", args.generate_solution )
 		if args.generate_solution not in _shared_globals.project_generators:
 			log.LOG_ERROR( "No solution generator present for solution of type {}".format( args.generate_solution ) )
-			sys.exit( 0 )
+			Exit( 0 )
 		generator = _shared_globals.project_generators[args.generate_solution]( args.solution_path, args.solution_name, args.solution_args )
 
 		generator.write_solution( )
@@ -2186,17 +2197,15 @@ def _run( ):
 
 	_barWriter.stop( )
 
-	if platform.system() != "Windows":
-		imp.acquire_lock()
-
 	if not _shared_globals.build_success:
-		sys.exit( 1 )
+		Exit( 1 )
 	else:
-		sys.exit( 0 )
+		Exit( 0 )
 
 
 try:
 	_run( )
+	Exit( 0 )
 except:
 	_barWriter.stop( )
 	raise
