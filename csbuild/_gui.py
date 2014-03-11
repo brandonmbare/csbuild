@@ -526,7 +526,8 @@ class MainWindow( QMainWindow ):
 
 							if childWidget == current:
 								with project.mutex:
-									HandleError(project.parsedErrors[file])
+									if file in project.parsedErrors:
+										HandleError(project.parsedErrors[file])
 
 						idx = 0
 						if project.needs_cpp_precompile:
