@@ -81,6 +81,7 @@ from csbuild import log
 from csbuild import _shared_globals
 from csbuild import projectSettings
 from csbuild import project_generator_qtcreator
+from csbuild import project_generator_slickedit
 from csbuild import project_generator
 
 
@@ -1381,10 +1382,13 @@ def link( project, *objs ):
 	if not objs:
 		for chunk in project.chunks:
 			if not project.unity:
+				chunk_names = "__".join( _utils.base_names( chunk ) )
+				if sys.version_info >= (3, 0):
+					chunk_names = chunk_names.encode()
 				obj = "{}/{}_chunk_{}_{}.o".format(
 					project.obj_dir,
 					project.output_name.split( '.' )[0],
-					hashlib.md5( "__".join( _utils.base_names( chunk ) ) ).hexdigest(),
+					hashlib.md5( chunk_names ).hexdigest(),
 					project.targetName
 				)
 			else:
@@ -1630,6 +1634,7 @@ def _setupdefaults( ):
 	RegisterToolchain( "msvc", toolchain_msvc.toolchain_msvc )
 
 	RegisterProjectGenerator( "qtcreator", project_generator_qtcreator.project_generator_qtcreator )
+	RegisterProjectGenerator( "slickedit", project_generator_slickedit.project_generator_slickedit )
 
 	if platform.system( ) == "Windows":
 		SetActiveToolchain( "msvc" )
@@ -1774,7 +1779,7 @@ def _run( ):
 	# thread objects are defined in so they're completed in full on the main thread before that thread starts.
 	#
 	# After this point, the LOCK IS RELEASED. Importing is NO LONGER THREAD-SAFE. DON'T DO IT.
-	if imp.lock_held():
+	if platform.system() != "Windows" and imp.lock_held():
 		imp.release_lock()
 
 	_setupdefaults( )
@@ -2181,7 +2186,8 @@ def _run( ):
 
 	_barWriter.stop( )
 
-	imp.acquire_lock()
+	if platform.system() != "Windows":
+		imp.acquire_lock()
 
 	if not _shared_globals.build_success:
 		sys.exit( 1 )

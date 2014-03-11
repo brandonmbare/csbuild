@@ -141,6 +141,9 @@ class threaded_build( threading.Thread ):
 			sys.stdout.flush( )
 			sys.stderr.flush( )
 			with _shared_globals.printmutex:
+				if sys.version_info >= (3, 0):
+					output = output.decode("utf-8")
+					errors = errors.decode("utf-8")
 				sys.stdout.write( output )
 				sys.stderr.write( errors )
 
@@ -437,9 +440,12 @@ def chunked_build( ):
 		return
 
 	if totalChunks == 1 and not owningProject.unity:
+		chunk_names = "__".join( base_names( chunk ) )
+		if sys.version_info >= (3, 0):
+			chunk_names = chunk_names.encode()
 		chunkname = "{}_chunk_{}".format(
 			owningProject.output_name.split( '.' )[0],
-			hashlib.md5( "__".join( base_names( owningProject.chunks[0] ) ) ).hexdigest()
+			hashlib.md5( chunk_names ).hexdigest()
 		)
 
 		obj = "{0}/{1}_{2}.o".format( owningProject.obj_dir, chunkname,
@@ -476,10 +482,13 @@ def chunked_build( ):
 				outFile = "{0}/{1}_unity.cpp".format( project.csbuild_dir,
 					project.output_name )
 			else:
+				chunk_names = "__".join( _utils.base_names( chunk ) )
+				if sys.version_info >= (3, 0):
+					chunk_names = chunk_names.encode()
 				outFile = "{}/{}_chunk_{}.cpp".format(
 					project.csbuild_dir,
 					project.output_name.split( '.' )[0],
-					hashlib.md5( "__".join( base_names( chunk ) ) ).hexdigest( )
+					hashlib.md5( chunk_names ).hexdigest( )
 				)
 
 			#If only one or two sources in this chunk need to be built, we get no benefit from building it as a unit.
@@ -508,10 +517,13 @@ def chunked_build( ):
 				project.final_chunk_set.append( outFile )
 				project.chunksByFile.update( { outFile : [ os.path.basename(piece) for piece in chunk ] } )
 			elif len( sources_in_this_chunk ) > 0:
+				chunk_names = "__".join( _utils.base_names( chunk ) )
+				if sys.version_info >= (3, 0):
+					chunk_names = chunk_names.encode()
 
 				chunkname = "{}_chunk_{}".format(
 					project.output_name.split( '.' )[0],
-					hashlib.md5( "__".join( base_names( chunk ) ) ).hexdigest()
+					hashlib.md5( chunk_names ).hexdigest()
 				)
 
 				obj = "{0}/{1}_{2}.o".format( project.obj_dir, chunkname,

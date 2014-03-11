@@ -3,6 +3,8 @@ from distutils.sysconfig import get_python_lib
 
 with open("csbuild/version", "r") as f:
       csbuild_version=f.read()
+      csbuild_version = csbuild_version.replace("\n", "")
+      csbuild_version = csbuild_version.strip()
 
 setup(name='csbuild',
       version=csbuild_version,
