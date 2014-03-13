@@ -293,7 +293,7 @@ def check_version( ):
 			log.LOG_WARN( "Use 'sudo pip install csbuild --upgrade' to get the latest version." )
 
 
-def sortProjects( ):
+def sortProjects( projects_to_sort ):
 	ret = []
 
 	already_errored_link = { }
@@ -313,14 +313,14 @@ def sortProjects( ):
 					"Circular dependencies detected: {0} and {1} in linkDepends".format( depend.rsplit( "@", 1 )[0],
 						project.name ) )
 				csbuild.Exit( 1 )
-			if depend not in _shared_globals.projects:
+			if depend not in projects_to_sort:
 				if depend not in already_errored_link[project]:
 					log.LOG_ERROR( "Project {} references non-existent link dependency {}".format(
 						project.name, depend.rsplit( "@", 1 )[0] ) )
 					already_errored_link[project].add( depend )
 					del project.linkDepends[index]
 				continue
-			insert_depends( _shared_globals.projects[depend], already_inserted )
+			insert_depends( projects_to_sort[depend], already_inserted )
 
 		for index in range( len( project.srcDepends ) ):
 			depend = project.srcDepends[index]
@@ -329,20 +329,20 @@ def sortProjects( ):
 					"Circular dependencies detected: {0} and {1} in srcDepends".format( depend.rsplit( "@", 1 )[0],
 						project.name ) )
 				csbuild.Exit( 1 )
-			if depend not in _shared_globals.projects:
+			if depend not in projects_to_sort:
 				if depend not in already_errored_source[project]:
 					log.LOG_ERROR( "Project {} references non-existent source dependency {}".format(
 						project.name, depend.rsplit( "@", 1 )[0] ) )
 					already_errored_source[project].add( depend )
 					del project.srcDepends[index]
 				continue
-			insert_depends( _shared_globals.projects[depend], already_inserted )
+			insert_depends( projects_to_sort[depend], already_inserted )
 		if project not in ret:
 			ret.append( project )
 		already_inserted.remove( project.key )
 
 
-	for project in _shared_globals.projects.values( ):
+	for project in projects_to_sort.values( ):
 		insert_depends( project )
 
 	return ret

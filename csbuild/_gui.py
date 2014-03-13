@@ -35,6 +35,8 @@ import threading
 import time
 import math
 import signal
+import platform
+
 from csbuild import _shared_globals
 
 class TreeWidgetItem(QtGui.QTreeWidgetItem):
@@ -55,11 +57,13 @@ class TreeWidgetItem(QtGui.QTreeWidgetItem):
 			if sortCol in numericColumns:
 				myNumber = float(self.text(sortCol))
 				otherNumber = float(other.text(sortCol))
-				return myNumber < otherNumber
+				return myNumber > otherNumber
 		except:
 			pass
 
-		return QtGui.QTreeWidgetItem.__lt__(self, other)
+		myText = str(self.text(sortCol))
+		otherText = str(other.text(sortCol))
+		return myText > otherText #QtGui.QTreeWidgetItem.__gt__(self, other)
 
 class MainWindow( QMainWindow ):
 	def __init__(self, *args, **kwargs):
@@ -183,7 +187,7 @@ class MainWindow( QMainWindow ):
 		self.m_errorTree.setUniformRowHeights(True)
 		self.m_errorTree.setSortingEnabled(True)
 		self.m_errorTree.setAnimated(True)
-		self.m_errorTree.header().setStretchLastSection(False)
+		self.m_errorTree.header().setStretchLastSection(True)
 		self.innerLayout3.addWidget(self.m_errorTree)
 
 		self.innerWidget2.addTab(self.errorsPage, "Errors/Warnings")
@@ -241,6 +245,7 @@ class MainWindow( QMainWindow ):
 		QtCore.QMetaObject.connectSlotsByName(self)
 
 		self.readyToClose = False
+		self.exiting = False
 
 		self.marqueeValue = 0
 		self.marqueeInverted = True
@@ -261,8 +266,8 @@ class MainWindow( QMainWindow ):
 		if toggled:
 			self.m_splitter.setSizes( [ 1100, max( self.width() - 1100, 600 ) ] )
 			self.m_errorTree.setColumnWidth( 0, 50 )
-			self.m_errorTree.setColumnWidth( 1, max(250, self.m_errorTree.width() - 250) )
-			self.m_errorTree.setColumnWidth( 2, 100 )
+			self.m_errorTree.setColumnWidth( 1, max(250, self.m_errorTree.width() - 350) )
+			self.m_errorTree.setColumnWidth( 2, 200 )
 			self.m_errorTree.setColumnWidth( 3, 50 )
 			self.m_errorTree.setColumnWidth( 4, 50 )
 			self.m_pushButton.setText(u"▾ Output ▾")
@@ -276,8 +281,8 @@ class MainWindow( QMainWindow ):
 		if textBoxSize != 0:
 			self.m_splitter.setSizes( [ 1100, max( self.width() - 1100, 600 ) ] )
 			self.m_errorTree.setColumnWidth( 0, 50 )
-			self.m_errorTree.setColumnWidth( 1, max(250, self.m_errorTree.width() - 250) )
-			self.m_errorTree.setColumnWidth( 2, 100 )
+			self.m_errorTree.setColumnWidth( 1, max(250, self.m_errorTree.width() - 350) )
+			self.m_errorTree.setColumnWidth( 2, 200 )
 			self.m_errorTree.setColumnWidth( 3, 50 )
 			self.m_errorTree.setColumnWidth( 4, 50 )
 
@@ -295,8 +300,8 @@ class MainWindow( QMainWindow ):
 				self.m_pushButton.setChecked(True)
 				self.m_ignoreButton = False
 			self.m_errorTree.setColumnWidth( 0, 50 )
-			self.m_errorTree.setColumnWidth( 1, max(250, self.m_errorTree.width() - 250) )
-			self.m_errorTree.setColumnWidth( 2, 100 )
+			self.m_errorTree.setColumnWidth( 1, max(250, self.m_errorTree.width() - 350) )
+			self.m_errorTree.setColumnWidth( 2, 200 )
 			self.m_errorTree.setColumnWidth( 3, 50 )
 			self.m_errorTree.setColumnWidth( 4, 50 )
 			self.m_pushButton.setText(u"▾ Output ▾")
@@ -842,7 +847,8 @@ class MainWindow( QMainWindow ):
 
 			if successcount + failcount == len(_shared_globals.sortedProjects):
 				self.readyToClose = True
-				if _shared_globals.autoCloseGui:
+				if _shared_globals.autoCloseGui and failcount == 0:
+					self.exiting = True
 					self.close()
 		if self.animatingBars:
 			for bar in self.animatingBars:
@@ -891,8 +897,8 @@ class MainWindow( QMainWindow ):
 		self.m_treeHeader2.setColumnNumeric(3)
 		self.m_treeHeader2.setColumnNumeric(4)
 		self.m_errorTree.setColumnWidth( 0, 50 )
-		self.m_errorTree.setColumnWidth( 1, max(250, self.m_errorTree.width() - 250) )
-		self.m_errorTree.setColumnWidth( 2, 100 )
+		self.m_errorTree.setColumnWidth( 1, max(250, self.m_errorTree.width() - 350) )
+		self.m_errorTree.setColumnWidth( 2, 200 )
 		self.m_errorTree.setColumnWidth( 3, 50 )
 		self.m_errorTree.setColumnWidth( 4, 50 )
 
@@ -978,7 +984,7 @@ class MainWindow( QMainWindow ):
 			if answer == QtGui.QMessageBox.Yes:
 				QMainWindow.closeEvent(self, event)
 				self.timer.stop()
-				os.killpg(os.getpgrp(), signal.SIGINT)
+				os.kill(os.getpid(), signal.SIGINT)
 			else:
 				event.ignore()
 		else:

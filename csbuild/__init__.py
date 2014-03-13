@@ -156,12 +156,26 @@ ArchitectureAMD64 = ArchitectureX64
 ArchitectureWIN64 = ArchitectureType( "x86_64", "pc", "win32" )
 
 ArchitectureARM = ArchitectureType( "arm" )
+ArchitectureARMv5 = ArchitectureType( "armv5" )
+ArchitectureARMv6m = ArchitectureType( "armv6m" )
+ArchitectureARMv7a = ArchitectureType( "armv7a" )
+ArchitectureARMv7m = ArchitectureType( "armv7m" )
+
 ArchitectureXScale = ArchitectureARM
 ArchitectureAARCH64 = ArchitectureType( "aarch64" )
 
 ArchitecturePowerPC = ArchitectureType( "powerpc" )
 ArchitecturePowerPC64 = ArchitectureType( "powerpc64" )
 ArchitecturePPU = ArchitecturePowerPC64
+
+ArchitectureMips = ArchitectureType( "mips" )
+
+ArchitectureAndroidARM = ArchitectureType( "arm", abi="android" )
+ArchitectureAndroidARMv5 = ArchitectureType( "armv5", abi="android" )
+ArchitectureAndroidARMv6m = ArchitectureType( "armv6m", abi="android" )
+ArchitectureAndroidARMv7a = ArchitectureType( "armv7a", abi="android" )
+ArchitectureAndroidARMv7m = ArchitectureType( "armv7m", abi="android" )
+ArchitectureAndroidMips = ArchitectureType( "mips", abi="android" )
 
 def NoBuiltinTargets( ):
 	"""
@@ -1039,8 +1053,6 @@ def build( ):
 	_barWriter.start( )
 
 	built = False
-	_utils.chunked_build( )
-	_utils.prepare_precompiles( )
 
 	for project in _shared_globals.sortedProjects:
 		_shared_globals.total_compiles += len( project.final_chunk_set )
@@ -1063,225 +1075,7 @@ def build( ):
 
 	starttime = time.time( )
 
-	while pending_builds:
-		theseBuilds = pending_builds
-		pending_builds = []
-		for project in theseBuilds:
-			for depend in project.srcDepends:
-				if depend not in projects_done:
-					pending_builds.append( project )
-					continue
-			projects_in_flight.append( project )
-
-			os.chdir( project.workingDirectory )
-
-			projectSettings.currentProject = project
-
-			project.starttime = time.time( )
-
-			if project.preCompileStep:
-				log.LOG_BUILD( "Running pre-compile step for {} ({})".format( project.output_name, project.targetName ) )
-				project.preCompileStep( project )
-
-			log.LOG_BUILD( "Building {0} ({1})".format( project.output_name, project.targetName ) )
-			project.state = _shared_globals.ProjectState.BUILDING
-			project.startTime = time.time()
-
-			if project.precompile_headers( ):
-				if not os.path.exists( projectSettings.currentProject.obj_dir ):
-					os.makedirs( projectSettings.currentProject.obj_dir )
-
-				for chunk in projectSettings.currentProject.final_chunk_set:
-					#not set until here because final_chunk_set may be empty.
-					project.built_something = True
-
-					chunkFileStr = ""
-					if chunk in project.chunksByFile:
-						chunkFileStr = " {}".format(project.chunksByFile[chunk])
-
-					built = True
-					obj = "{0}/{1}_{2}.o".format( projectSettings.currentProject.obj_dir,
-						os.path.basename( chunk ).split( '.' )[0],
-						project.targetName )
-					if not _shared_globals.semaphore.acquire( False ):
-						if _shared_globals.max_threads != 1:
-							log.LOG_INFO( "Waiting for a build thread to become available..." )
-						_shared_globals.semaphore.acquire( True )
-
-					LinkedSomething = True
-					while LinkedSomething:
-						LinkedSomething = False
-						for otherProj in list( projects_in_flight ):
-							otherProj.mutex.acquire( )
-							complete = otherProj.compiles_completed
-							otherProj.mutex.release( )
-							if complete >= len( otherProj.final_chunk_set ) + int(
-									otherProj.needs_c_precompile ) + int(
-									otherProj.needs_cpp_precompile ):
-								totaltime = (time.time( ) - otherProj.starttime)
-								minutes = math.floor( totaltime / 60 )
-								seconds = round( totaltime % 60 )
-
-								if otherProj.final_chunk_set:
-									log.LOG_BUILD(
-										"Compile of {0} ({3}) took {1}:{2:02}".format( otherProj.output_name,
-											int( minutes ),
-											int( seconds ), otherProj.targetName ) )
-								projects_in_flight.remove( otherProj )
-								if otherProj.compile_failed:
-									log.LOG_ERROR(
-										"Build of {} ({}) failed! Finishing up non-dependent build tasks...".format(
-											otherProj.output_name, otherProj.targetName ) )
-									otherProj.state = _shared_globals.ProjectState.FAILED
-									continue
-
-								okToLink = True
-								if otherProj.linkDepends:
-									for depend in otherProj.linkDepends:
-										if depend not in projects_done:
-											okToLink = False
-											break
-								if okToLink:
-									otherProj.state = _shared_globals.ProjectState.LINKING
-									if not link( otherProj ):
-										_shared_globals.build_success = False
-										otherProj.state = _shared_globals.ProjectState.FAILED
-									else:
-										if otherProj.postCompileStep:
-											log.LOG_BUILD( "Running post-compile step for {} ({})".format( otherProj.output_name, otherProj.targetName ) )
-											otherProj.postCompileStep( otherProj )
-										otherProj.state = _shared_globals.ProjectState.FINISHED
-									otherProj.endTime = time.time()
-
-									LinkedSomething = True
-									log.LOG_BUILD(
-										"Finished {} ({})".format( otherProj.output_name, otherProj.targetName ) )
-
-									projects_done.add( otherProj.key )
-								else:
-									log.LOG_LINKER(
-										"Linking for {} ({}) deferred until all dependencies have finished building...".format(
-											otherProj.output_name, otherProj.targetName ) )
-									otherProj.state = _shared_globals.ProjectState.WAITING_FOR_LINK
-									pending_links.append( otherProj )
-
-						for otherProj in list( pending_links ):
-							okToLink = True
-							for depend in otherProj.linkDepends:
-								if depend not in projects_done:
-									okToLink = False
-									break
-							if okToLink:
-								otherProj.state = _shared_globals.ProjectState.LINKING
-								if not link( otherProj ):
-									_shared_globals.build_success = False
-									otherProj.state = _shared_globals.ProjectState.FAILED
-								else:
-									if otherProj.postCompileStep:
-										log.LOG_BUILD( "Running post-compile step for {} ({})".format( otherProj.output_name, otherProj.targetName ) )
-										otherProj.postCompileStep( otherProj )
-									otherProj.state = _shared_globals.ProjectState.FINISHED
-
-								otherProj.endTime = time.time()
-
-								LinkedSomething = True
-								log.LOG_BUILD(
-									"Finished {} ({})".format( otherProj.output_name, otherProj.targetName ) )
-								projects_done.add( otherProj.key )
-								pending_links.remove( otherProj )
-
-					if _shared_globals.interrupted:
-						Exit( 2 )
-					if not _shared_globals.build_success and _shared_globals.stopOnError:
-						log.LOG_ERROR("Errors encountered during build, finishing current tasks and exiting...")
-						_shared_globals.semaphore.release()
-						break
-					if _shared_globals.times:
-						totaltime = (time.time( ) - starttime)
-						_shared_globals.lastupdate = totaltime
-						minutes = math.floor( totaltime / 60 )
-						seconds = round( totaltime % 60 )
-						avgtime = sum( _shared_globals.times ) / (len( _shared_globals.times ))
-						esttime = totaltime + ((avgtime * (
-							_shared_globals.total_compiles - len(
-								_shared_globals.times ))) / _shared_globals.max_threads)
-						if esttime < totaltime:
-							esttime = totaltime
-							_shared_globals.esttime = esttime
-						estmin = math.floor( esttime / 60 )
-						estsec = round( esttime % 60 )
-						log.LOG_BUILD(
-							"Compiling {0}{7}... ({1}/{2}) - {3}:{4:02}/{5}:{6:02}".format( os.path.basename( obj ),
-								_shared_globals.current_compile, _shared_globals.total_compiles, int( minutes ),
-								int( seconds ), int( estmin ),
-								int( estsec ), chunkFileStr ) )
-					else:
-						totaltime = (time.time( ) - starttime)
-						minutes = math.floor( totaltime / 60 )
-						seconds = round( totaltime % 60 )
-						log.LOG_BUILD(
-							"Compiling {0}{5}... ({1}/{2}) - {3}:{4:02}".format( os.path.basename( obj ),
-								_shared_globals.current_compile,
-								_shared_globals.total_compiles, int( minutes ), int( seconds ), chunkFileStr ) )
-					_utils.threaded_build( chunk, obj, project ).start( )
-					_shared_globals.current_compile += 1
-			else:
-				projects_in_flight.remove( project )
-				log.LOG_ERROR( "Build of {} ({}) failed! Finishing up non-dependent build tasks...".format(
-					project.output_name, project.targetName ) )
-
-				# TODO:
-				# with project.mutex:
-				# 	for chunk in project.final_chunk_set:
-				# 		project.fileStatus[chunk] = _shared_globals.ProjectState.FAILED
-				# 	prev = project.compiles_completed
-				# 	project.compiles_completed = len(project.final_chunk_set) + int(project.needs_cpp_precompile) + int(project.needs_c_precompile)
-				# 	_shared_globals.current_compile += project.compiles_completed - prev
-
-				project.state = _shared_globals.ProjectState.FAILED
-
-			if not _shared_globals.build_success and _shared_globals.stopOnError:
-				break
-
-		#Wait until all threads are finished. Simple way to do this is acquire the semaphore until it's out of
-		# resources.
-		for j in range( _shared_globals.max_threads ):
-			if not _shared_globals.semaphore.acquire( False ):
-				if _shared_globals.max_threads != 1:
-					if _shared_globals.times:
-						totaltime = (time.time( ) - starttime)
-						_shared_globals.lastupdate = totaltime
-						minutes = math.floor( totaltime / 60 )
-						seconds = round( totaltime % 60 )
-						avgtime = sum( _shared_globals.times ) / (len( _shared_globals.times ))
-						esttime = totaltime + ((avgtime * (_shared_globals.total_compiles - len(
-							_shared_globals.times ))) / _shared_globals.max_threads)
-						if esttime < totaltime:
-							esttime = totaltime
-						estmin = math.floor( esttime / 60 )
-						estsec = round( esttime % 60 )
-						_shared_globals.esttime = esttime
-						log.LOG_THREAD(
-							"Waiting on {0} more build thread{1} to finish... ({2}:{3:02}/{4}:{5:02})".format(
-								_shared_globals.max_threads - j,
-								"s" if _shared_globals.max_threads - j != 1 else "", int( minutes ),
-								int( seconds ), int( estmin ), int( estsec ) ) )
-					else:
-						log.LOG_THREAD(
-							"Waiting on {0} more build thread{1} to finish...".format(
-								_shared_globals.max_threads - j,
-								"s" if _shared_globals.max_threads - j != 1 else "" ) )
-				_shared_globals.semaphore.acquire( True )
-				if _shared_globals.interrupted:
-					Exit( 2 )
-
-		#Then immediately release all the semaphores once we've reclaimed them.
-		#We're not using any more threads so we don't need them now.
-		for j in range( _shared_globals.max_threads ):
-			if _shared_globals.stopOnError:
-				projects_in_flight = set()
-			_shared_globals.semaphore.release( )
-
+	def ReconcilePostBuild():
 		LinkedSomething = True
 		while LinkedSomething:
 			LinkedSomething = False
@@ -1357,12 +1151,158 @@ def build( ):
 					projects_done.add( otherProj.key )
 					pending_links.remove( otherProj )
 
+	while pending_builds:
+		theseBuilds = pending_builds
+		pending_builds = []
+		for project in theseBuilds:
+			for depend in project.srcDepends:
+				if depend not in projects_done:
+					pending_builds.append( project )
+					continue
+			projects_in_flight.append( project )
+
+			os.chdir( project.workingDirectory )
+
+			projectSettings.currentProject = project
+
+			project.starttime = time.time( )
+
+			if project.preCompileStep:
+				log.LOG_BUILD( "Running pre-compile step for {} ({})".format( project.output_name, project.targetName ) )
+				project.preCompileStep( project )
+
+			log.LOG_BUILD( "Building {0} ({1})".format( project.output_name, project.targetName ) )
+			project.state = _shared_globals.ProjectState.BUILDING
+			project.startTime = time.time()
+
+			if project.precompile_headers( ):
+				if not os.path.exists( projectSettings.currentProject.obj_dir ):
+					os.makedirs( projectSettings.currentProject.obj_dir )
+
+				for chunk in projectSettings.currentProject.final_chunk_set:
+					#not set until here because final_chunk_set may be empty.
+					project.built_something = True
+
+					chunkFileStr = ""
+					if chunk in project.chunksByFile:
+						chunkFileStr = " {}".format(project.chunksByFile[chunk])
+
+					built = True
+					obj = "{0}/{1}_{2}.o".format( projectSettings.currentProject.obj_dir,
+						os.path.basename( chunk ).split( '.' )[0],
+						project.targetName )
+					if not _shared_globals.semaphore.acquire( False ):
+						if _shared_globals.max_threads != 1:
+							log.LOG_INFO( "Waiting for a build thread to become available..." )
+						_shared_globals.semaphore.acquire( True )
+
+					ReconcilePostBuild()
+
+					if _shared_globals.interrupted:
+						Exit( 2 )
+					if not _shared_globals.build_success and _shared_globals.stopOnError:
+						log.LOG_ERROR("Errors encountered during build, finishing current tasks and exiting...")
+						_shared_globals.semaphore.release()
+						break
+					if _shared_globals.times:
+						totaltime = (time.time( ) - starttime)
+						_shared_globals.lastupdate = totaltime
+						minutes = math.floor( totaltime / 60 )
+						seconds = round( totaltime % 60 )
+						avgtime = sum( _shared_globals.times ) / (len( _shared_globals.times ))
+						esttime = totaltime + ((avgtime * (
+							_shared_globals.total_compiles - len(
+								_shared_globals.times ))) / _shared_globals.max_threads)
+						if esttime < totaltime:
+							esttime = totaltime
+							_shared_globals.esttime = esttime
+						estmin = math.floor( esttime / 60 )
+						estsec = round( esttime % 60 )
+						log.LOG_BUILD(
+							"Compiling {0}{7}... ({1}/{2}) - {3}:{4:02}/{5}:{6:02}".format( os.path.basename( obj ),
+								_shared_globals.current_compile, _shared_globals.total_compiles, int( minutes ),
+								int( seconds ), int( estmin ),
+								int( estsec ), chunkFileStr ) )
+					else:
+						totaltime = (time.time( ) - starttime)
+						minutes = math.floor( totaltime / 60 )
+						seconds = round( totaltime % 60 )
+						log.LOG_BUILD(
+							"Compiling {0}{5}... ({1}/{2}) - {3}:{4:02}".format( os.path.basename( obj ),
+								_shared_globals.current_compile,
+								_shared_globals.total_compiles, int( minutes ), int( seconds ), chunkFileStr ) )
+					_utils.threaded_build( chunk, obj, project ).start( )
+					_shared_globals.current_compile += 1
+			else:
+				projects_in_flight.remove( project )
+				log.LOG_ERROR( "Build of {} ({}) failed! Finishing up non-dependent build tasks...".format(
+					project.output_name, project.targetName ) )
+
+				# TODO:
+				# with project.mutex:
+				# 	for chunk in project.final_chunk_set:
+				# 		project.fileStatus[chunk] = _shared_globals.ProjectState.FAILED
+				# 	prev = project.compiles_completed
+				# 	project.compiles_completed = len(project.final_chunk_set) + int(project.needs_cpp_precompile) + int(project.needs_c_precompile)
+				# 	_shared_globals.current_compile += project.compiles_completed - prev
+
+				project.endTime = time.time()
+				project.state = _shared_globals.ProjectState.FAILED
+
+			if not _shared_globals.build_success and _shared_globals.stopOnError:
+				break
+
+		#Wait until all threads are finished. Simple way to do this is acquire the semaphore until it's out of
+		# resources.
+		for j in range( _shared_globals.max_threads ):
+			if not _shared_globals.semaphore.acquire( False ):
+				if _shared_globals.max_threads != 1:
+					if _shared_globals.times:
+						totaltime = (time.time( ) - starttime)
+						_shared_globals.lastupdate = totaltime
+						minutes = math.floor( totaltime / 60 )
+						seconds = round( totaltime % 60 )
+						avgtime = sum( _shared_globals.times ) / (len( _shared_globals.times ))
+						esttime = totaltime + ((avgtime * (_shared_globals.total_compiles - len(
+							_shared_globals.times ))) / _shared_globals.max_threads)
+						if esttime < totaltime:
+							esttime = totaltime
+						estmin = math.floor( esttime / 60 )
+						estsec = round( esttime % 60 )
+						_shared_globals.esttime = esttime
+						log.LOG_THREAD(
+							"Waiting on {0} more build thread{1} to finish... ({2}:{3:02}/{4}:{5:02})".format(
+								_shared_globals.max_threads - j,
+								"s" if _shared_globals.max_threads - j != 1 else "", int( minutes ),
+								int( seconds ), int( estmin ), int( estsec ) ) )
+					else:
+						log.LOG_THREAD(
+							"Waiting on {0} more build thread{1} to finish...".format(
+								_shared_globals.max_threads - j,
+								"s" if _shared_globals.max_threads - j != 1 else "" ) )
+
+				ReconcilePostBuild()
+				_shared_globals.semaphore.acquire( True )
+				if _shared_globals.interrupted:
+					Exit( 2 )
+
+		#Then immediately release all the semaphores once we've reclaimed them.
+		#We're not using any more threads so we don't need them now.
+		for j in range( _shared_globals.max_threads ):
+			if _shared_globals.stopOnError:
+				projects_in_flight = set()
+			_shared_globals.semaphore.release( )
+
+		ReconcilePostBuild()
+
 	if projects_in_flight:
 		log.LOG_ERROR( "Could not complete all projects. This is probably very bad and should never happen."
 					   " Remaining projects: {0}".format( [p.key for p in projects_in_flight] ) )
 	if pending_links:
 		log.LOG_ERROR( "Could not link all projects. Do you have unmet dependencies in your makefile?"
 					   " Remaining projects: {0}".format( [p.key for p in pending_links] ) )
+		for p in pending_links:
+			p.state = _shared_globals.ProjectState.FAILED
 		_shared_globals.build_success = False
 
 	compiletime = time.time( ) - starttime
@@ -1677,6 +1617,7 @@ def Exit( code = 0 ):
 	@param code: Exit code to exit with
 	@type code: int
 	"""
+	global _guiModule
 	if _guiModule:
 		_guiModule.stop()
 
@@ -1798,17 +1739,6 @@ mainfile = ""
 
 def _run( ):
 
-	# Note:
-	# The reason for this line of code is that the import lock, in the way that CSBuild operates, prevents
-	# us from being able to call subprocess.Popen() or any other process execution function other than os.popen().
-	# This exists to prevent multiple threads from importing at the same time, so... Within csbuild, never import
-	# within any thread but the main thread. Any import statements used by threads should be in the module those
-	# thread objects are defined in so they're completed in full on the main thread before that thread starts.
-	#
-	# After this point, the LOCK IS RELEASED. Importing is NO LONGER THREAD-SAFE. DON'T DO IT.
-	if platform.system() != "Windows" and imp.lock_held():
-		imp.release_lock()
-
 	_setupdefaults( )
 
 	global args
@@ -1828,7 +1758,7 @@ def _run( ):
 			global helpMode
 			helpMode = True
 			_execfile( mainfile, _shared_globals.makefile_dict, _shared_globals.makefile_dict )
-			_shared_globals.sortedProjects = _utils.sortProjects( )
+			_shared_globals.sortedProjects = _utils.sortProjects( _shared_globals.tempprojects )
 
 	else:
 		log.LOG_ERROR( "CSB cannot be run from the interactive console." )
@@ -1980,6 +1910,17 @@ def _run( ):
 
 	args, remainder = parser.parse_known_args( )
 	args.remainder = remainder
+
+	# Note:
+	# The reason for this line of code is that the import lock, in the way that CSBuild operates, prevents
+	# us from being able to call subprocess.Popen() or any other process execution function other than os.popen().
+	# This exists to prevent multiple threads from importing at the same time, so... Within csbuild, never import
+	# within any thread but the main thread. Any import statements used by threads should be in the module those
+	# thread objects are defined in so they're completed in full on the main thread before that thread starts.
+	#
+	# After this point, the LOCK IS RELEASED. Importing is NO LONGER THREAD-SAFE. DON'T DO IT.
+	if platform.system() != "Windows" and imp.lock_held():
+		imp.release_lock()
 
 	if args.version:
 		print("CSBuild version {}".format( __version__ ))
@@ -2159,7 +2100,7 @@ def _run( ):
 			insert_depends( projData, newProjList )
 		_shared_globals.projects = newProjList
 
-	_shared_globals.sortedProjects = _utils.sortProjects( )
+	_shared_globals.sortedProjects = _utils.sortProjects( _shared_globals.projects )
 
 	for proj in _shared_globals.sortedProjects:
 		proj.prepareBuild( )
@@ -2169,13 +2110,16 @@ def _run( ):
 	totaltime = time.time( ) - _shared_globals.starttime
 	totalmin = math.floor( totaltime / 60 )
 	totalsec = round( totaltime % 60 )
+	_utils.chunked_build( )
+	_utils.prepare_precompiles( )
 	log.LOG_BUILD( "Task preparation took {0}:{1:02}".format( int( totalmin ), int( totalsec ) ) )
 
 	if args.gui:
 		_shared_globals.autoCloseGui = args.auto_close_gui
 		from csbuild import _gui
+		global _guiModule
 		_guiModule = _gui
-		_gui.run()
+		_guiModule.run()
 
 	if args.generate_solution is not None:
 		if not args.solution_path:
