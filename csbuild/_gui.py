@@ -592,7 +592,17 @@ class MainWindow( QMainWindow ):
 
 			if _shared_globals.ProjectState.BUILDING <= state < _shared_globals.ProjectState.FAILED:
 				if not forFile or state != _shared_globals.ProjectState.BUILDING:
-					progressBar.setValue( percent )
+					if state == _shared_globals.ProjectState.BUILDING:
+						if percent < 1:
+							percent = 1
+						value = progressBar.value()
+						quarter = max( 4.0, (percent - value) / 4.0 )
+						if value < percent - quarter:
+							progressBar.setValue( value + quarter )
+						else:
+							progressBar.setValue( percent )
+					else:
+						progressBar.setValue( percent )
 					progressBar.setTextVisible(True)
 					if widget.text(1) != str(percent):
 						widget.setText(1, str(percent))
