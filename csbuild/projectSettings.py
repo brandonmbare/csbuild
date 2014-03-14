@@ -498,6 +498,10 @@ class projectSettings( object ):
 		self.warningsByFile = {}
 		self.errorsByFile = {}
 
+		self.linkOutput = ""
+		self.linkErrors = ""
+		self.parsedLinkErrors = None
+
 
 	def prepareBuild( self ):
 		wd = os.getcwd( )
@@ -705,6 +709,9 @@ class projectSettings( object ):
 			"errors" : self.errors,
 			"warningsByFile" : self.warningsByFile,
 			"errorsByFile" : self.errorsByFile,
+			"linkOutput" : self.linkOutput,
+			"linkErrors" : self.linkErrors,
+			"parsedLinkErrors" : self.parsedLinkErrors,
 		}
 
 		for name in self.targets:
@@ -1154,13 +1161,8 @@ class projectSettings( object ):
 		"""Retrieves the chunk that a given file belongs to."""
 		for chunk in self.chunks:
 			if srcFile in chunk:
-				chunk_names = "__".join( _utils.base_names( chunk ) )
-				if sys.version_info >= (3, 0):
-					chunk_names = chunk_names.encode()
-				return "{}_chunk_{}".format(
-					self.output_name.split( '.' )[0],
-					hashlib.md5( chunk_names ).hexdigest( )
-				)
+				return _utils.get_chunk_name( self.output_name, chunk )
+		return None
 
 
 	def save_md5( self, inFile ):

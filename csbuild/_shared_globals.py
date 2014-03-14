@@ -122,6 +122,10 @@ class ProjectState( object ):
 	LINKING = 3
 	FINISHED = 4
 	FAILED = 5
+	LINK_FAILED = 6
+	UP_TO_DATE = 7
+	ABORTED = 8
+
 
 class OutputLevel( object ):
 	UNKNOWN = -1

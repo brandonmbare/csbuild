@@ -63,6 +63,7 @@ import time
 import platform
 import hashlib
 import imp
+import re
 
 
 class ProjectType( object ):
@@ -1040,6 +1041,10 @@ _shared_globals.starttime = time.time( )
 
 _barWriter = log.bar_writer( )
 
+class LinkStatus(object):
+	Fail = 0
+	Success = 1
+	UpToDate = 2
 
 def build( ):
 	"""
@@ -1098,6 +1103,7 @@ def build( ):
 						log.LOG_ERROR( "Build of {} ({}) failed! Finishing up non-dependent build tasks...".format(
 							otherProj.output_name, otherProj.targetName ) )
 						otherProj.state = _shared_globals.ProjectState.FAILED
+						otherProj.endTime = time.time()
 						continue
 
 					okToLink = True
@@ -1108,14 +1114,17 @@ def build( ):
 								break
 					if okToLink:
 						otherProj.state = _shared_globals.ProjectState.LINKING
-						if not link( otherProj ):
+						ret = link( otherProj )
+						if ret == LinkStatus.Fail:
 							_shared_globals.build_success = False
-							otherProj.state = _shared_globals.ProjectState.FAILED
-						else:
+							otherProj.state = _shared_globals.ProjectState.LINK_FAILED
+						elif ret == LinkStatus.Success:
 							if otherProj.postCompileStep:
 								log.LOG_BUILD( "Running post-compile step for {} ({})".format( otherProj.output_name, otherProj.targetName ) )
 								otherProj.postCompileStep( otherProj )
 							otherProj.state = _shared_globals.ProjectState.FINISHED
+						elif ret == LinkStatus.UpToDate:
+							otherProj.state = _shared_globals.ProjectState.UP_TO_DATE
 						otherProj.endTime = time.time()
 
 						LinkedSomething = True
@@ -1136,14 +1145,17 @@ def build( ):
 						break
 				if okToLink:
 					otherProj.state = _shared_globals.ProjectState.LINKING
-					if not link( otherProj ):
+					ret = link( otherProj )
+					if ret == LinkStatus.Fail:
 						_shared_globals.build_success = False
-						otherProj.state = _shared_globals.ProjectState.FAILED
-					else:
+						otherProj.state = _shared_globals.ProjectState.LINK_FAILED
+					elif ret == LinkStatus.Success:
 						if otherProj.postCompileStep:
 							log.LOG_BUILD( "Running post-compile step for {} ({})".format( otherProj.output_name, otherProj.targetName ) )
 							otherProj.postCompileStep( otherProj )
 						otherProj.state = _shared_globals.ProjectState.FINISHED
+					elif ret == LinkStatus.UpToDate:
+						otherProj.state = _shared_globals.ProjectState.UP_TO_DATE
 					otherProj.endTime = time.time()
 
 					LinkedSomething = True
@@ -1238,13 +1250,11 @@ def build( ):
 				log.LOG_ERROR( "Build of {} ({}) failed! Finishing up non-dependent build tasks...".format(
 					project.output_name, project.targetName ) )
 
-				# TODO:
-				# with project.mutex:
-				# 	for chunk in project.final_chunk_set:
-				# 		project.fileStatus[chunk] = _shared_globals.ProjectState.FAILED
-				# 	prev = project.compiles_completed
-				# 	project.compiles_completed = len(project.final_chunk_set) + int(project.needs_cpp_precompile) + int(project.needs_c_precompile)
-				# 	_shared_globals.current_compile += project.compiles_completed - prev
+				with project.mutex:
+					for chunk in project.final_chunk_set:
+						project.fileStatus[chunk] = _shared_globals.ProjectState.ABORTED
+
+				_shared_globals.total_compiles -= len(project.final_chunk_set)
 
 				project.endTime = time.time()
 				project.state = _shared_globals.ProjectState.FAILED
@@ -1302,7 +1312,7 @@ def build( ):
 		log.LOG_ERROR( "Could not link all projects. Do you have unmet dependencies in your makefile?"
 					   " Remaining projects: {0}".format( [p.key for p in pending_links] ) )
 		for p in pending_links:
-			p.state = _shared_globals.ProjectState.FAILED
+			p.state = _shared_globals.ProjectState.ABORTED
 		_shared_globals.build_success = False
 
 	compiletime = time.time( ) - starttime
@@ -1336,13 +1346,9 @@ def link( project, *objs ):
 	if not objs:
 		for chunk in project.chunks:
 			if not project.unity:
-				chunk_names = "__".join( _utils.base_names( chunk ) )
-				if sys.version_info >= (3, 0):
-					chunk_names = chunk_names.encode()
-				obj = "{}/{}_chunk_{}_{}.o".format(
+				obj = "{}/{}_{}.o".format(
 					project.obj_dir,
-					project.output_name.split( '.' )[0],
-					hashlib.md5( chunk_names ).hexdigest(),
+					_utils.get_chunk_name( project.output_name, chunk ),
 					project.targetName
 				)
 			else:
@@ -1359,7 +1365,7 @@ def link( project, *objs ):
 						else:
 							log.LOG_ERROR(
 								"Some object files are missing. Either the build failed, or you haven't built yet." )
-							return False
+							return LinkStatus.Fail
 				else:
 					obj = "{0}/{1}_{2}.o".format( project.obj_dir, os.path.basename( chunk ).split( '.' )[0],
 						project.targetName )
@@ -1368,10 +1374,10 @@ def link( project, *objs ):
 					else:
 						log.LOG_ERROR(
 							"Some object files are missing. Either the build failed, or you haven't built yet." )
-						return False
+						return LinkStatus.Fail
 
 	if not objs:
-		return True
+		return LinkStatus.UpToDate
 
 	if not project.built_something:
 		if os.path.exists( output ):
@@ -1400,7 +1406,7 @@ def link( project, *objs ):
 			if not project.built_something:
 				if not _shared_globals.called_something:
 					log.LOG_LINKER( "Nothing to link." )
-				return True
+				return LinkStatus.UpToDate
 
 	log.LOG_LINKER( "Linking {0}...".format( os.path.abspath( output ) ) )
 
@@ -1415,21 +1421,49 @@ def link( project, *objs ):
 	cmd = project.activeToolchain.get_link_command( project, output, objs )
 	if _shared_globals.show_commands:
 		print(cmd)
-	ret = subprocess.call( cmd, shell = True )
+
+	fd = subprocess.Popen( cmd, stdout = subprocess.PIPE, stderr = subprocess.PIPE, shell=True )
+
+	(output, errors) = fd.communicate( )
+	ret = fd.returncode
+	sys.stdout.flush( )
+	sys.stderr.flush( )
+	with _shared_globals.printmutex:
+		if sys.version_info >= (3, 0):
+			output = output.decode("utf-8")
+			errors = errors.decode("utf-8")
+		sys.stdout.write( output )
+		sys.stderr.write( errors )
+
+	with project.mutex:
+		ansi_escape = re.compile(r'\x1b[^m]*m')
+		stripped_errors = re.sub(ansi_escape, '', errors)
+		project.linkOutput = output
+		project.linkErrors = stripped_errors
+		errorlist = project.activeToolchain.parseOutput(stripped_errors)
+		errorcount = 0
+		warningcount = 0
+		if errorlist:
+			for error in errorlist:
+				if error.level == _shared_globals.OutputLevel.ERROR:
+					errorcount += 1
+				if error.level == _shared_globals.OutputLevel.WARNING:
+					warningcount += 1
+
+			project.errors += errorcount
+			project.warnings += warningcount
+			project.parsedLinkErrors = errorlist
+
 	if ret != 0:
 		log.LOG_ERROR( "Linking failed." )
-		return False
+		return LinkStatus.Fail
 
 	totaltime = time.time( ) - starttime
 	totalmin = math.floor( totaltime / 60 )
 	totalsec = round( totaltime % 60 )
 	log.LOG_LINKER( "Link time: {0}:{1:02}".format( int( totalmin ), int( totalsec ) ) )
-	#if _buildtime >= 0:
-	#    totaltime = totaltime + _buildtime
-	#    totalmin = math.floor(totaltime / 60)
-	#    totalsec = round(totaltime % 60)
-	#    log.LOG_BUILD("Total build time: {0}:{1:02}".format(int(totalmin), int(totalsec)))
-	return True
+
+	return LinkStatus.Success
 
 
 def clean( silent = False ):
@@ -1617,9 +1651,9 @@ def Exit( code = 0 ):
 	@param code: Exit code to exit with
 	@type code: int
 	"""
-	global _guiModule
-	if _guiModule:
-		_guiModule.stop()
+	#global _guiModule
+	#if _guiModule:
+	#	_guiModule.stop()
 
 	if platform.system() != "Windows":
 		imp.acquire_lock()

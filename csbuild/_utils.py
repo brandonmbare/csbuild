@@ -198,9 +198,7 @@ class threaded_build( threading.Thread ):
 
 				self.project.mutex.acquire( )
 				self.project.compile_failed = True
-				self.project.compiles_completed += 1
 				self.project.fileStatus[self.file] = _shared_globals.ProjectState.FAILED
-				self.project.fileEnd[self.file] = time.time()
 				self.project.updated = True
 				self.project.mutex.release( )
 		except Exception as e:
@@ -225,10 +223,10 @@ class threaded_build( threading.Thread ):
 			#if os.path.dirname(self.file) == _csbuild_dir:
 			#   os.remove(self.file)
 			#if inc or (not self.project.precompile and not self.project.chunk_precompile):
-			endtime = time.time( )
-			_shared_globals.sgmutex.acquire( )
+			#endtime = time.time( )
+			#_shared_globals.sgmutex.acquire( )
 			#_shared_globals.times.append( endtime - starttime )
-			_shared_globals.sgmutex.release( )
+			#_shared_globals.sgmutex.release( )
 
 			_shared_globals.semaphore.release( )
 
@@ -465,13 +463,7 @@ def chunked_build( ):
 		return
 
 	if totalChunks == 1 and not owningProject.unity:
-		chunk_names = "__".join( base_names( chunk ) )
-		if sys.version_info >= (3, 0):
-			chunk_names = chunk_names.encode()
-		chunkname = "{}_chunk_{}".format(
-			owningProject.output_name.split( '.' )[0],
-			hashlib.md5( chunk_names ).hexdigest()
-		)
+		chunkname = get_chunk_name( owningProject.output_name, chunks_to_build[0] )
 
 		obj = "{0}/{1}_{2}.o".format( owningProject.obj_dir, chunkname,
 			owningProject.targetName )
@@ -507,13 +499,9 @@ def chunked_build( ):
 				outFile = "{0}/{1}_unity.cpp".format( project.csbuild_dir,
 					project.output_name )
 			else:
-				chunk_names = "__".join( base_names( chunk ) )
-				if sys.version_info >= (3, 0):
-					chunk_names = chunk_names.encode()
-				outFile = "{}/{}_chunk_{}.cpp".format(
+				outFile = "{}/{}.cpp".format(
 					project.csbuild_dir,
-					project.output_name.split( '.' )[0],
-					hashlib.md5( chunk_names ).hexdigest( )
+					get_chunk_name( project.output_name, chunk )
 				)
 
 			#If only one or two sources in this chunk need to be built, we get no benefit from building it as a unit.
@@ -542,14 +530,7 @@ def chunked_build( ):
 				project.final_chunk_set.append( outFile )
 				project.chunksByFile.update( { outFile : [ os.path.basename(piece) for piece in chunk ] } )
 			elif len( sources_in_this_chunk ) > 0:
-				chunk_names = "__".join( base_names( chunk ) )
-				if sys.version_info >= (3, 0):
-					chunk_names = chunk_names.encode()
-
-				chunkname = "{}_chunk_{}".format(
-					project.output_name.split( '.' )[0],
-					hashlib.md5( chunk_names ).hexdigest()
-				)
+				chunkname = get_chunk_name( project.output_name, chunk )
 
 				obj = "{0}/{1}_{2}.o".format( project.obj_dir, chunkname,
 					project.targetName )
@@ -583,3 +564,12 @@ def chunked_build( ):
 				else:
 					log.LOG_INFO( "Going to build chunk {0} as individual files.".format( add_chunk ) )
 				project.final_chunk_set += add_chunk
+
+def get_chunk_name( projectName, chunk ):
+	chunk_names = "__".join( base_names( chunk ) )
+	if sys.version_info >= (3, 0):
+		chunk_names = chunk_names.encode()
+	return "{}_chunk_{}".format(
+		projectName.split( '.' )[0],
+		hashlib.md5( chunk_names ).hexdigest()
+	)

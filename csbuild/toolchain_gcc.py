@@ -320,6 +320,9 @@ class toolchain_gcc( toolchain.toolchainBase ):
 		command = re.compile("^clang(\\+\\+)?: +(fatal +)?(warning|error|note): (.*)$")
 		inLine = re.compile("^In (.*) included from (.*):(\\d+):$")
 		message = re.compile("^(<command line>|([A-Za-z]:)?[^:]+\\.[^:]+)(:(\\d+):(\\d+)|\\((\\d+)\\) *): +(fatal +)?(error|warning|note): (.*)$")
+
+		linkError = re.compile("^(<command line>|([A-Za-z]:)?[^:]+\\.[^:]+): (.*)$")
+		linkDetail = re.compile("^(<command line>|([A-Za-z]:)?[^:]+\\.[^:]+):\\([^)]*\\): (.*)$")
 		summary = re.compile("^\\d+ (warnings?|errors?)( and \\d (warnings?|errors?))? generated.$")
 		codesign = re.compile("^Code ?Sign error: (.*)$")
 
@@ -331,6 +334,12 @@ class toolchain_gcc( toolchain.toolchainBase ):
 		lastFile = ""
 		try:
 			for text in outputStr.split('\n'):
+				if not text.strip():
+					continue
+
+				if "linker command failed with exit code" in text:
+					continue
+
 				match = summary.match(text)
 				if match is not None:
 					return ret
@@ -404,6 +413,28 @@ class toolchain_gcc( toolchain.toolchainBase ):
 						ret.append(line)
 					continue
 
+				match = linkError.match(text)
+				if match is not None:
+					line = _shared_globals.OutputLine()
+					line.file = match.group(1)
+
+					line.level = _shared_globals.OutputLevel.ERROR
+
+					line.text = match.group(3)
+					line.details = detailsToAppend
+					detailsToAppend = []
+					ret.append(line)
+					continue
+
+				match = linkDetail.match(text)
+				if match is not None:
+					subline = _shared_globals.OutputLine()
+					subline.file = match.group(1)
+					subline.text = match.group(3)
+					subline.level = _shared_globals.OutputLevel.ERROR
+					line.details.append(subline)
+					continue
+
 				match = codesign.match(text)
 				if match is not None:
 					line = _shared_globals.OutputLine()
@@ -413,7 +444,6 @@ class toolchain_gcc( toolchain.toolchainBase ):
 					lastLine = -1
 					lastCol = -1
 					lastFile = ""
-
 					continue
 
 				if line:

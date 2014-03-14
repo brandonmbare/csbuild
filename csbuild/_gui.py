@@ -38,6 +38,7 @@ import signal
 import platform
 
 from csbuild import _shared_globals
+from csbuild import _utils
 
 class TreeWidgetItem(QtGui.QTreeWidgetItem):
 	def __init__(self, *args, **kwargs):
@@ -142,7 +143,7 @@ class MainWindow( QMainWindow ):
 		self.m_buildTree.setAnimated(True)
 		self.m_buildTree.header().setStretchLastSection(True)
 		self.m_buildTree.currentItemChanged.connect(self.SelectionChanged)
-		self.m_buildTree.expanded.connect(self.UpdateProjects)
+		self.m_buildTree.itemExpanded.connect(self.UpdateProjects)
 
 		self.verticalLayout.addWidget(self.m_buildTree)
 		
@@ -258,6 +259,7 @@ class MainWindow( QMainWindow ):
 		self.animatingBars = {}
 		self.projectToItem = {}
 		self.itemToProject = {}
+		self.warningErrorCount = 0
 
 	def ButtonClicked(self, toggled):
 		if self.m_ignoreButton:
@@ -329,20 +331,17 @@ class MainWindow( QMainWindow ):
 								outStr += "ERROR OUTPUT:\n\n" + errors + "\n\n"
 							if output:
 								outStr += "OUTPUT:\n\n" + output + "\n\n"
+					if project.linkErrors:
+						outStr += "LINK ERRORS:\n\n" + project.linkErrors + "\n\n"
+					if project.linkOutput:
+						outStr += "LINK OUTPUT:\n\n" + project.linkOutput + "\n\n"
 					project.mutex.release()
 					outStr += "\n\n"
 				if outStr != self.m_textEdit.toPlainText():
 					self.m_textEdit.setText(outStr)
 			else:
 				for project in _shared_globals.sortedProjects:
-					widget = None
-					for i in range(self.m_buildTree.topLevelItemCount()):
-						tempWidget = self.m_buildTree.topLevelItem(i)
-						name = tempWidget.text(3)
-						target = tempWidget.text(4)
-						if name == project.name and target == project.targetName:
-							widget = tempWidget
-							break
+					widget = self.projectToItem[project]
 					if not widget:
 						continue
 
@@ -362,6 +361,12 @@ class MainWindow( QMainWindow ):
 									outStr += "ERROR OUTPUT:\n\n" + errors + "\n\n"
 								if output:
 									outStr += "OUTPUT:\n\n" + output + "\n\n"
+
+						if project.linkErrors:
+							outStr += "LINK ERRORS:\n\n" + project.linkErrors + "\n\n"
+						if project.linkOutput:
+							outStr += "LINK OUTPUT:\n\n" + project.linkOutput + "\n\n"
+
 						if outStr != self.m_textEdit.toPlainText():
 							self.m_textEdit.setText(outStr)
 						project.mutex.release()
@@ -408,6 +413,9 @@ class MainWindow( QMainWindow ):
 					pass
 
 			def HandleError(datas):
+				if datas is None:
+					return
+
 				for data in datas:
 					exists = False
 					for i in range(self.m_errorTree.topLevelItemCount()):
@@ -509,16 +517,10 @@ class MainWindow( QMainWindow ):
 					with project.mutex:
 						for filename in project.parsedErrors:
 							HandleError(project.parsedErrors[filename])
+						HandleError(project.parsedLinkErrors)
 			else:
 				for project in _shared_globals.sortedProjects:
-					widget = None
-					for i in range(self.m_buildTree.topLevelItemCount()):
-						tempWidget = self.m_buildTree.topLevelItem(i)
-						name = tempWidget.text(3)
-						target = tempWidget.text(4)
-						if name == project.name and target == project.targetName:
-							widget = tempWidget
-							break
+					widget = self.projectToItem[project]
 					if not widget:
 						continue
 
@@ -526,6 +528,7 @@ class MainWindow( QMainWindow ):
 						with project.mutex:
 							for filename in project.parsedErrors:
 								HandleError(project.parsedErrors[filename])
+							HandleError(project.parsedLinkErrors)
 					elif widget.isExpanded():
 						def HandleChild( idx, file ):
 							childWidget = widget.child(idx)
@@ -549,13 +552,13 @@ class MainWindow( QMainWindow ):
 							idx += 1
 			self.m_errorTree.setSortingEnabled(True)
 
-	def UpdateProjects(self, expandedIndex = None):
+	def UpdateProjects(self, expandedItem = None):
 		updatedProjects = []
 
-		if expandedIndex is not None:
-			text = self.m_buildTree.itemFromIndex( expandedIndex ).text(0)
+		if expandedItem is not None:
+			text = str( expandedItem.text(0) )
 			if text and text in self.itemToProject:
-				updatedProjects = [ self.itemToProject[ text ] ]
+				updatedProjects = [ self.itemToProject[text] ]
 		else:
 			for project in _shared_globals.sortedProjects:
 				project.mutex.acquire()
@@ -563,6 +566,9 @@ class MainWindow( QMainWindow ):
 					updatedProjects.append(project)
 					project.updated = False
 				project.mutex.release()
+
+		class SharedLocals(object):
+			foundAnError = bool(self.warningErrorCount != 0)
 
 		def drawProgressBar( progressBar, widget, state, startTime, endTime, percent, forFile, warnings, errors ):
 			if warnings > 0:
@@ -578,10 +584,13 @@ class MainWindow( QMainWindow ):
 				widget.setForeground( 6, brush )
 				widget.setFont( 6, font )
 
-			if(
-				state >= _shared_globals.ProjectState.BUILDING and
-				state != _shared_globals.ProjectState.FAILED
-			):
+			if ( warnings > 0 or errors > 0 ) and not SharedLocals.foundAnError:
+				self.m_buildTree.setCurrentItem(widget)
+				if not self.m_pushButton.isChecked():
+					self.m_pushButton.setChecked(True)
+				SharedLocals.foundAnError = True
+
+			if _shared_globals.ProjectState.BUILDING <= state < _shared_globals.ProjectState.FAILED:
 				if not forFile or state != _shared_globals.ProjectState.BUILDING:
 					progressBar.setValue( percent )
 					progressBar.setTextVisible(True)
@@ -637,7 +646,7 @@ class MainWindow( QMainWindow ):
 						}}
 						""".format(self.pulseColor)
 					)
-			if state == _shared_globals.ProjectState.WAITING_FOR_LINK:
+			elif state == _shared_globals.ProjectState.WAITING_FOR_LINK:
 				if progressBar in self.animatingBars:
 					del self.animatingBars[progressBar]
 				widget.setText(2,"Link/Wait")
@@ -657,7 +666,7 @@ class MainWindow( QMainWindow ):
 					}
 					"""
 				)
-			if state == _shared_globals.ProjectState.LINKING:
+			elif state == _shared_globals.ProjectState.LINKING:
 				self.animatingBars[progressBar] = ( widget, state, startTime, endTime, percent, forFile, warnings, errors )
 				widget.setText(2, "Linking")
 				progressBar.setStyleSheet(
@@ -677,7 +686,7 @@ class MainWindow( QMainWindow ):
 					}}
 					""".format(self.pulseColor + 64)
 				)
-			if state == _shared_globals.ProjectState.FINISHED:
+			elif state == _shared_globals.ProjectState.FINISHED:
 				if progressBar in self.animatingBars:
 					del self.animatingBars[progressBar]
 				widget.setText(2, "Done!")
@@ -705,10 +714,10 @@ class MainWindow( QMainWindow ):
 				seconds = round( timeDiff % 60 )
 				widget.setText(9, "{0:2}:{1:02}".format( int(minutes), int(seconds) ) )
 
-			if state == _shared_globals.ProjectState.FAILED:
+			elif state == _shared_globals.ProjectState.FAILED or state == _shared_globals.ProjectState.LINK_FAILED:
 				if progressBar in self.animatingBars:
 					del self.animatingBars[progressBar]
-				widget.setText(2, "Failed!")
+				progressBar.setTextVisible(True)
 				progressBar.setStyleSheet(
 					"""
 					QProgressBar::chunk
@@ -726,13 +735,48 @@ class MainWindow( QMainWindow ):
 					"""
 				)
 				progressBar.setValue(100)
-				progressBar.setFormat("FAILED!")
+				if state == _shared_globals.ProjectState.FAILED:
+					widget.setText(2, "Failed!")
+					progressBar.setFormat("FAILED!")
+				else:
+					widget.setText(2, "Link Failed!")
+					progressBar.setFormat("LINK FAILED!")
 
 				widget.setText(8, time.asctime(time.localtime(endTime)))
 				timeDiff = endTime - startTime
 				minutes = math.floor( timeDiff / 60 )
 				seconds = round( timeDiff % 60 )
 				widget.setText(9, "{0:2}:{1:02}".format( int(minutes), int(seconds) ) )
+
+			elif state == _shared_globals.ProjectState.UP_TO_DATE:
+				self.SetProgressBarUpToDate( progressBar, widget, endTime, startTime, forFile )
+
+			elif state == _shared_globals.ProjectState.ABORTED:
+				if progressBar in self.animatingBars:
+					del self.animatingBars[progressBar]
+				widget.setText(2, "Aborted!")
+				progressBar.setTextVisible(True)
+				progressBar.setStyleSheet(
+					"""
+					QProgressBar::chunk
+					{
+						background-color: #800040;
+					}
+					QProgressBar
+					{
+						border: 1px solid black;
+						border-radius: 3px;
+						background: #505050;
+						padding: 0px;
+						text-align: center;
+					}
+					"""
+				)
+				progressBar.setValue(100)
+				if forFile:
+					progressBar.setFormat("ABORTED! (PCH Failed!)")
+				else:
+					progressBar.setFormat("ABORTED! (Dependency Failed!)")
 
 		if updatedProjects:
 
@@ -777,9 +821,13 @@ class MainWindow( QMainWindow ):
 				drawProgressBar( progressBar, widget, project.state, project.startTime, project.endTime, percent, False, project.warnings, project.errors )
 
 
-				if project.state == _shared_globals.ProjectState.FINISHED:
+				if project.state == _shared_globals.ProjectState.FINISHED or project.state == _shared_globals.ProjectState.UP_TO_DATE:
 					self.successfulBuilds.add(project.key)
-				elif project.state == _shared_globals.ProjectState.FAILED:
+				elif(
+					project.state == _shared_globals.ProjectState.FAILED
+					or project.state == _shared_globals.ProjectState.LINK_FAILED
+					or project.state == _shared_globals.ProjectState.ABORTED
+				):
 					self.failedBuilds.add(project.key)
 
 				if widget.isExpanded():
@@ -966,6 +1014,8 @@ class MainWindow( QMainWindow ):
 			palette.setColor( self.m_errorLabel.foregroundRole(), QtCore.Qt.red )
 			self.m_errorLabel.setPalette(palette)
 
+		self.warningErrorCount = warningcount + errorcount
+
 		if self.exitRequested:
 			self.timer.stop()
 			self.close()
@@ -990,6 +1040,38 @@ class MainWindow( QMainWindow ):
 		else:
 			QMainWindow.closeEvent(self, event)
 			self.timer.stop()
+
+	def SetProgressBarUpToDate( self, progressBar, widget, endTime, startTime, forFile ):
+		if progressBar in self.animatingBars:
+			del self.animatingBars[progressBar]
+		widget.setText(2, "Up-to-date!")
+		progressBar.setTextVisible(True)
+		progressBar.setStyleSheet(
+			"""
+			QProgressBar::chunk
+			{{
+				background-color: #{};
+			}}
+			QProgressBar
+			{{
+				border: 1px solid black;
+				border-radius: 3px;
+				background: #505050;
+				padding: 0px;
+				text-align: center;
+				color: black;
+			}}
+			""".format( "ADFFD0" if forFile else "00FF80" )
+		)
+		progressBar.setValue(100)
+		progressBar.setFormat("Up-to-date!")
+
+		if endTime != 0 and startTime != 0:
+			widget.setText(8, time.asctime(time.localtime(endTime)))
+			timeDiff = endTime - startTime
+			minutes = math.floor( timeDiff / 60 )
+			seconds = round( timeDiff % 60 )
+			widget.setText(9, "{0:2}:{1:02}".format( int(minutes), int(seconds) ) )
 
 
 
@@ -1134,12 +1216,31 @@ class GuiThread( threading.Thread ):
 					subChildItem.setToolTip( 0, header )
 					childItem.addChild(subChildItem)
 
-			for source in project.final_chunk_set:
+			used_chunks = set()
+			for source in project.allsources:
+				inThisBuild = False
+				if source not in project.final_chunk_set:
+					chunk = project.get_chunk( source )
+					if chunk in used_chunks:
+						continue
+					if chunk in project.final_chunk_set:
+						inThisBuild = True
+						source = chunk
+				else:
+					inThisBuild = True
+
+
 				idx += 1
 				childItem = TreeWidgetItem( widgetItem )
 				childItem.setText(0, "{}.{}".format(row, idx))
-				childItem.setText(1, "1000")
-				childItem.setText(2, "Pending...")
+
+				if inThisBuild:
+					childItem.setText(1, "1000")
+					childItem.setText(2, "Pending...")
+				else:
+					childItem.setText(1, "100")
+					#"Up-to-date!" text gets set by window.SetProgressBarUpToDate
+
 				childItem.setText(3, os.path.basename(source))
 				childItem.setToolTip(3, source)
 				childItem.setText(4, project.targetName)
@@ -1159,6 +1260,9 @@ class GuiThread( threading.Thread ):
 				childItem.setFont(9, font)
 
 				AddProgressBar( childItem )
+
+				if not inThisBuild:
+					window.SetProgressBarUpToDate( window.m_buildTree.itemWidget(childItem, 1), childItem, 0, 0, True )
 
 				widgetItem.addChild(childItem)
 
