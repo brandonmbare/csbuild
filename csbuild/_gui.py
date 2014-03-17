@@ -176,7 +176,11 @@ class SyntaxHighlighter( QtGui.QSyntaxHighlighter ):
 			else:
 				length = endIndex - startIndex
 			self.setFormat(startIndex, length, self.commentFormat)
-			startIndex = self.commentStart.search(line, endIndex)
+			match = self.commentStart.search(line, endIndex)
+			if match:
+				startIndex = match.start()
+			else:
+				startIndex = -1
 
 class LineNumberArea( QtGui.QWidget ):
 	def __init__(self, editor):
@@ -555,12 +559,21 @@ class MainWindow( QMainWindow ):
 			self.m_pushButton.setText(u"▴ Output ▴")
 
 	def OpenFileForEdit(self, item, column):
-		file = item.toolTip(2)
-		line = item.text(3)
-		col = item.text(4)
+		file = str(item.toolTip(2))
+		if(
+			not file.endswith(".o")
+			and not file.endswith(".so")
+			and not file.endswith(".a")
+			and not file.endswith(".exe")
+			and not file.endswith(".dll")
+			and not file.endswith(".lib")
+			and not file.endswith(".obj")
+		):
+			line = item.text(3)
+			col = item.text(4)
 
-		window = EditorWindow(file, line, col, self)
-		window.show()
+			window = EditorWindow(file, line, col, self)
+			window.show()
 
 	def resizeEvent(self, event):
 		QMainWindow.resizeEvent(self, event)
