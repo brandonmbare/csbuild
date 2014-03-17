@@ -1,4 +1,5 @@
 # coding=utf-8
+import re
 import csbuild
 from csbuild import log
 
@@ -35,10 +36,8 @@ import threading
 import time
 import math
 import signal
-import platform
 
 from csbuild import _shared_globals
-from csbuild import _utils
 
 class TreeWidgetItem(QtGui.QTreeWidgetItem):
 	def __init__(self, *args, **kwargs):
@@ -65,6 +64,283 @@ class TreeWidgetItem(QtGui.QTreeWidgetItem):
 		myText = str(self.text(sortCol))
 		otherText = str(other.text(sortCol))
 		return myText > otherText #QtGui.QTreeWidgetItem.__gt__(self, other)
+	
+class SyntaxHighlighter( QtGui.QSyntaxHighlighter ):
+	
+	class HighlightRule( object ):
+		def __init__(self, pattern, argument):
+			self.pattern = pattern
+			self.format = argument
+	
+	def __init__(self, *args):
+		QtGui.QSyntaxHighlighter.__init__(self, *args)
+		self.highlightRules = []
+		
+		self.commentStart = re.compile("/\\*")
+		self.commentEnd = re.compile("\\*/")
+		
+		self.keywordFormat = QtGui.QTextCharFormat()
+		self.commentFormat = QtGui.QTextCharFormat()
+		self.stringFormat = QtGui.QTextCharFormat()
+		self.functionFormat = QtGui.QTextCharFormat()
+		
+		self.keywordFormat.setForeground(QtGui.QColor("#800000"))
+		self.keywordFormat.setFontWeight(QtGui.QFont.Bold)
+		
+		for pattern in [
+			"\\bchar\\b",
+			"\\bclass\\b",
+			"\\bconst\\b",
+			"\\bdouble\\b",
+			"\\benum\\b",
+			"\\bexplicit\\b",
+			"\\bfriend\\b",
+			"\\binline\\b",
+			"\\bint\\b",
+			"\\blong\\b",
+			"\\bnamespace\\b",
+			"\\boperator\\b",
+			"\\bprivate\\b",
+			"\\bprotected\\b",
+			"\\bpublic\\b",
+			"\\bshort\\b",
+			"\\bsignals\\b",
+			"\\bsigned\\b",
+			"\\bslots\\b",
+			"\\bstatic\\b",
+			"\\bstruct\\b",
+			"\\btemplate\\b",
+			"\\btypedef\\b",
+			"\\btypename\\b",
+			"\\bunion\\b",
+			"\\bunsigned\\b",
+			"\\bvirtual\\b",
+			"\\bvoid\\b",
+			"\\bvolatile\\b"
+		]:
+			self.highlightRules.append(SyntaxHighlighter.HighlightRule(re.compile(pattern), self.keywordFormat))
+
+		#self.functionFormat.setForeground(QtCore.Qt.darkMagenta)
+		#self.highlightRules.append(SyntaxHighlighter.HighlightRule(re.compile("\\b[A-Za-z0-9_]+(?=\\()"), self.functionFormat))
+
+		self.numberFormat = QtGui.QTextCharFormat()
+		self.numberFormat.setForeground(QtGui.QColor("#008c00"))
+		self.highlightRules.append(SyntaxHighlighter.HighlightRule(re.compile("\\b\d+\\b"), self.numberFormat))
+
+		self.symbolFormat = QtGui.QTextCharFormat()
+		self.symbolFormat.setForeground(QtGui.QColor("#808030"))
+		self.highlightRules.append(SyntaxHighlighter.HighlightRule(re.compile("[\[\]\+\=\-\*/\(\)\{\}\;\,\.\<\>\?\&\^\%\!\~\|]"), self.symbolFormat))
+
+		self.commentFormat.setForeground(QtGui.QColor("#696969"))
+
+		self.highlightRules.append(SyntaxHighlighter.HighlightRule(re.compile("//[^\n]*"), self.commentFormat))
+
+		self.preprocessorFormat = QtGui.QTextCharFormat()
+		self.preprocessorFormat.setForeground(QtGui.QColor("#004a43"))
+		self.highlightRules.append(SyntaxHighlighter.HighlightRule(re.compile("^\s*#.*$"), self.preprocessorFormat))
+
+		self.stringFormat.setForeground(QtCore.Qt.darkCyan)
+		self.highlightRules.append(SyntaxHighlighter.HighlightRule(re.compile("\".*\""), self.stringFormat))
+
+
+
+		
+	
+	def highlightBlock(self, line):
+		for rule in self.highlightRules:
+			match = rule.pattern.search(line)
+			while match:
+				start, end = match.span()
+				length = end - start
+				self.setFormat(start, length, rule.format)
+				match = rule.pattern.search(line, end)
+
+		self.setCurrentBlockState(0)
+		startIndex = 0
+		if self.previousBlockState() != 1:
+			match = self.commentStart.search(line)
+			if match:
+				startIndex = match.start()
+			else:
+				startIndex = -1
+
+		while startIndex >= 0:
+			endIndex = -1
+			match = self.commentEnd.search(line, startIndex)
+			if match:
+				endIndex = match.end()
+			length = -1
+			if endIndex == -1:
+				self.setCurrentBlockState(1)
+				length = len(line) - startIndex
+			else:
+				length = endIndex - startIndex
+			self.setFormat(startIndex, length, self.commentFormat)
+			startIndex = self.commentStart.search(line, endIndex)
+
+class LineNumberArea( QtGui.QWidget ):
+	def __init__(self, editor):
+		QtGui.QWidget.__init__(self, editor)
+		self.editor = editor
+
+	def sizeHint(self):
+		return QtCore.QSize(self.editor.lineNumberAreaWidth(), 0)
+
+	def paintEvent(self, event):
+		self.editor.lineNumberAreaPaintEvent(event)
+
+class CodeEditor( QtGui.QPlainTextEdit ):
+	def __init__(self, parent = None):
+		QtGui.QPlainTextEdit.__init__(self, parent)
+
+		self.lineNumbers = LineNumberArea(self)
+
+		self.cursorPositionChanged.connect(self.highlightCurrentLine)
+		self.blockCountChanged.connect(self.updateLineNumberAreaWidth)
+		self.updateRequest.connect(self.updateLineNumberArea)
+
+		self.updateLineNumberAreaWidth(0)
+		self.highlightCurrentLine()
+
+	def lineNumberAreaPaintEvent(self, event):
+		painter = QtGui.QPainter(self.lineNumbers)
+		painter.fillRect(event.rect(), QtCore.Qt.lightGray)
+
+		block = self.firstVisibleBlock()
+		blockNum = block.blockNumber()
+		top = int(self.blockBoundingGeometry(block).translated(self.contentOffset()).top())
+		bottom = top + int(self.blockBoundingRect(block).height())
+
+		while block.isValid() and top <= event.rect().bottom():
+			if block.isVisible and bottom >= event.rect().top():
+				number = str(blockNum + 1)
+				painter.setPen(QtCore.Qt.black)
+				painter.drawText(0, top, self.lineNumbers.width(), self.fontMetrics().height(), QtCore.Qt.AlignRight, number)
+			block = block.next()
+			top = bottom
+			bottom = top + int(self.blockBoundingRect(block).height())
+			blockNum += 1
+
+
+	def lineNumberAreaWidth(self):
+		digits = 1
+		maxDigits = max(1, self.blockCount())
+		while maxDigits >= 10:
+			maxDigits /= 10
+			digits += 1
+
+		space = 3 + self.fontMetrics().width("9") * digits
+
+		return space
+
+	def resizeEvent(self, event):
+		QtGui.QPlainTextEdit.resizeEvent(self, event)
+
+		cr = self.contentsRect()
+		self.lineNumbers.setGeometry(QtCore.QRect(cr.left(), cr.top(), self.lineNumberAreaWidth(), cr.height()))
+
+	def updateLineNumberAreaWidth(self, blockCount):
+		self.setViewportMargins(self.lineNumberAreaWidth(), 0, 0, 0)
+
+	def highlightCurrentLine(self):
+		extraSelections = []
+
+		lineColor = "#DDEDEC"
+
+		selection = QtGui.QTextEdit.ExtraSelection()
+		selection.format.setBackground(QtGui.QColor(lineColor))
+		selection.format.setProperty(QtGui.QTextFormat.FullWidthSelection, True)
+		selection.cursor = self.textCursor()
+		selection.cursor.clearSelection()
+		extraSelections.append(selection)
+
+		self.setExtraSelections(extraSelections)
+
+	def updateLineNumberArea(self, rect, num):
+		pass
+
+class EditorWindow( QMainWindow ):
+	def __init__(self, sourceFile, line, column, *args, **kwargs):
+		QMainWindow.__init__(self, *args, **kwargs)
+
+		self.resize(1100, 600)
+
+		self.centralWidget = QtGui.QWidget(self)
+		self.centralWidget.setObjectName("centralWidget")
+
+		self.outerLayout = QtGui.QVBoxLayout(self.centralWidget)
+
+		self.editor = CodeEditor(self.centralWidget)
+		#self.editor.setFontFamily("monospace")
+		#self.editor.setTextColor(QtCore.Qt.black)
+
+		#palette = self.editor.palette()
+		#palette.setColor(QtGui.QPalette.Base, QtCore.Qt.white)
+		#self.editor.setPalette(palette)
+		self.editor.setStyleSheet(
+			"""
+			QPlainTextEdit
+			{
+				color: black;
+				background-color: white;
+			}
+			""")
+
+		self.highlighter = SyntaxHighlighter(self.editor.document())
+
+		with open(sourceFile, "r") as f:
+			self.editor.setPlainText(f.read())
+
+		self.editor.textChanged.connect(self.rehighlight)
+
+		self.statusBar = QtGui.QStatusBar()
+		self.setStatusBar(self.statusBar)
+
+		if line or column:
+			cursor = self.editor.textCursor()
+			if line:
+				line = int(line)
+				cursor.movePosition( QtGui.QTextCursor.Down, QtGui.QTextCursor.MoveAnchor, line - 1 )
+			if column:
+				column = int(column)
+				cursor.movePosition( QtGui.QTextCursor.NextCharacter, QtGui.QTextCursor.MoveAnchor, column - 1 )
+			self.editor.setTextCursor(cursor)
+
+		self.outerLayout.addWidget(self.editor)
+
+		self.innerLayout = QtGui.QHBoxLayout()
+		horizontalSpacer = QtGui.QSpacerItem(40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
+		self.innerLayout.addItem(horizontalSpacer)
+
+		self.saveButton = QtGui.QPushButton(self.centralWidget)
+		self.saveButton.setText("Save")
+		self.saveButton.pressed.connect(self.save)
+		self.innerLayout.addWidget(self.saveButton)
+
+		self.outerLayout.addLayout(self.innerLayout)
+
+		self.saveAction = QtGui.QAction(self)
+		self.saveAction.setShortcut( QtCore.Qt.CTRL | QtCore.Qt.Key_S )
+		self.saveAction.triggered.connect(self.save)
+		self.addAction(self.saveAction)
+
+		self.setCentralWidget(self.centralWidget)
+		self.setWindowTitle(sourceFile)
+		self.highlighting = False
+		self.sourceFile = sourceFile
+
+	def rehighlight(self):
+		if self.highlighting:
+			return
+		self.highlighting = True
+		self.highlighter.rehighlight()
+		self.highlighting = False
+
+	def save(self):
+		with open(self.sourceFile, "w") as f:
+			f.write(self.editor.toPlainText())
+		self.statusBar.showMessage("Saved.", 5000)
+
 
 class MainWindow( QMainWindow ):
 	def __init__(self, *args, **kwargs):
@@ -189,6 +465,7 @@ class MainWindow( QMainWindow ):
 		self.m_errorTree.setSortingEnabled(True)
 		self.m_errorTree.setAnimated(True)
 		self.m_errorTree.header().setStretchLastSection(True)
+		self.m_errorTree.itemDoubleClicked.connect(self.OpenFileForEdit)
 		self.innerLayout3.addWidget(self.m_errorTree)
 
 		self.innerWidget2.addTab(self.errorsPage, "Errors/Warnings")
@@ -276,6 +553,14 @@ class MainWindow( QMainWindow ):
 		else:
 			self.m_splitter.setSizes( [ 1, 0 ] )
 			self.m_pushButton.setText(u"▴ Output ▴")
+
+	def OpenFileForEdit(self, item, column):
+		file = item.toolTip(2)
+		line = item.text(3)
+		col = item.text(4)
+
+		window = EditorWindow(file, line, col, self)
+		window.show()
 
 	def resizeEvent(self, event):
 		QMainWindow.resizeEvent(self, event)
