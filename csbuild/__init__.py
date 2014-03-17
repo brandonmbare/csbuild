@@ -822,6 +822,15 @@ def OutputArchitecture( arch ):
 	projectSettings.currentProject.outputArchitecture = arch
 
 
+def ExtraFiles( *args ):
+	for arg in list( args ):
+		projectSettings.currentProject.extraFiles.append( os.path.abspath( arg ) )
+
+
+def ClearExtraFiles():
+	projectSettings.currentProject.extraFiles = []
+
+
 def EnableWarningsAsErrors( ):
 	"""
 	Promote all warnings to errors.
@@ -1197,7 +1206,7 @@ def build( ):
 
 					chunkFileStr = ""
 					if chunk in project.chunksByFile:
-						chunkFileStr = " {}".format(project.chunksByFile[chunk])
+						chunkFileStr = " {}".format( [ os.path.basename(piece) for piece in project.chunksByFile[chunk] ] )
 
 					built = True
 					obj = "{0}/{1}_{2}.o".format( projectSettings.currentProject.obj_dir,
@@ -1655,7 +1664,7 @@ def Exit( code = 0 ):
 	#if _guiModule:
 	#	_guiModule.stop()
 
-	if platform.system() != "Windows":
+	if platform.system() != "Windows" and not imp.lock_held():
 		imp.acquire_lock()
 
 	sys.exit( code )
@@ -2201,4 +2210,6 @@ try:
 	Exit( 0 )
 except:
 	_barWriter.stop( )
+	if platform.system() != "Windows" and not imp.lock_held():
+		imp.acquire_lock()
 	raise

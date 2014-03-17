@@ -444,15 +444,10 @@ def chunked_build( ):
 	for project in _shared_globals.projects.values( ):
 		for source in project.sources:
 			chunk = project.get_chunk( source )
-			if project.unity:
-				outFile = "{0}/{1}_unity.cpp".format( project.csbuild_dir,
-					project.output_name )
-			else:
-				outFile = "{0}/{1}.cpp".format( project.csbuild_dir, chunk )
-			if chunk not in chunks_to_build and os.path.exists( outFile ):
+			if chunk not in chunks_to_build:
 				chunks_to_build.append( chunk )
 
-		totalChunks += len( project.chunks )
+		totalChunks += len( chunks_to_build )
 
 		#if we never get a second chunk, we'll want to know about the project that made the first one
 		if totalChunks == 1:
@@ -528,7 +523,7 @@ def chunked_build( ):
 					f.write( "//Total size: {0} bytes".format( chunksize ) )
 
 				project.final_chunk_set.append( outFile )
-				project.chunksByFile.update( { outFile : [ os.path.basename(piece) for piece in chunk ] } )
+				project.chunksByFile.update( { outFile : chunk } )
 			elif len( sources_in_this_chunk ) > 0:
 				chunkname = get_chunk_name( project.output_name, chunk )
 

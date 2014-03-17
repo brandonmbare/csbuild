@@ -480,6 +480,8 @@ class projectSettings( object ):
 
 		self.parentGroup = currentGroup
 
+		self.extraFiles = []
+
 		#GUI support
 		self.state = _shared_globals.ProjectState.PENDING
 		self.startTime = 0
@@ -543,6 +545,7 @@ class projectSettings( object ):
 
 		if not self.chunks:
 			self.get_files( self.allsources, self.allheaders )
+			self.allsources += self.extraFiles
 
 			if not self.allsources:
 				os.chdir( wd )
@@ -693,6 +696,7 @@ class projectSettings( object ):
 			"preCompileStep" : self.preCompileStep,
 			"postCompileStep" : self.postCompileStep,
 			"parentGroup" : self.parentGroup,
+			"extraFiles": list(self.extraFiles),
 			"state" : self.state,
 			"startTime" : self.startTime,
 			"endTime" : self.endTime,

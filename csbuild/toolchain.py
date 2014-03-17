@@ -910,7 +910,8 @@ class toolchainBase( object ):
 		@type args: an arbitrary number of strings
 		@param args: The files to specify as C files.
 		"""
-		self.settingsOverrides["cheaders"] = []
+		if "cheaders" not in self.settingsOverrides:
+			self.settingsOverrides["cheaders"] = []
 		for arg in list( args ):
 			self.settingsOverrides["cheaders"].append( os.path.abspath( arg ) )
 
@@ -1002,3 +1003,13 @@ class toolchainBase( object ):
 			- csbuild.ArchitecturePPU
 		"""
 		self.settingsOverrides["outputArchitecture"] = arch
+
+	def ExtraFiles( self, *args ):
+		if "extraFiles" not in self.settingsOverrides:
+			self.settingsOverrides["extraFiles"] = []
+		for arg in list( args ):
+			self.settingsOverrides["extraFiles"].append( os.path.abspath( arg ) )
+
+
+	def ClearExtraFiles(self):
+		self.settingsOverrides["extraFiles"] = []

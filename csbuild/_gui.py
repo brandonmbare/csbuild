@@ -547,8 +547,23 @@ class MainWindow( QMainWindow ):
 							HandleChild( idx, project.cheaderfile )
 							idx += 1
 
-						for file in project.final_chunk_set:
-							HandleChild( idx, file )
+						used_chunks = set()
+						for source in project.allsources:
+							inThisBuild = False
+							if source not in project.final_chunk_set:
+								chunk = "{}/{}.cpp".format( project.csbuild_dir, project.get_chunk( source ) )
+								if chunk in used_chunks:
+									continue
+								if chunk in project.final_chunk_set:
+									inThisBuild = True
+									source = chunk
+									used_chunks.add(chunk)
+							else:
+								inThisBuild = True
+
+							if inThisBuild:
+								HandleChild( idx, source )
+
 							idx += 1
 			self.m_errorTree.setSortingEnabled(True)
 
@@ -883,8 +898,23 @@ class MainWindow( QMainWindow ):
 						HandleChildProgressBar( idx, project.cheaderfile )
 						idx += 1
 
-					for file in project.final_chunk_set:
-						HandleChildProgressBar( idx, file )
+					used_chunks = set()
+					for source in project.allsources:
+						inThisBuild = False
+						if source not in project.final_chunk_set:
+							chunk = "{}/{}.cpp".format( project.csbuild_dir, project.get_chunk( source ) )
+							if chunk in used_chunks:
+								continue
+							if chunk in project.final_chunk_set:
+								inThisBuild = True
+								source = chunk
+								used_chunks.add(chunk)
+						else:
+							inThisBuild = True
+
+						if inThisBuild:
+							HandleChildProgressBar( idx, source )
+
 						idx += 1
 
 			self.m_buildTree.setSortingEnabled(True)
@@ -1230,12 +1260,13 @@ class GuiThread( threading.Thread ):
 			for source in project.allsources:
 				inThisBuild = False
 				if source not in project.final_chunk_set:
-					chunk = project.get_chunk( source )
+					chunk = "{}/{}.cpp".format( project.csbuild_dir, project.get_chunk( source ) )
 					if chunk in used_chunks:
 						continue
 					if chunk in project.final_chunk_set:
 						inThisBuild = True
 						source = chunk
+						used_chunks.add(chunk)
 				else:
 					inThisBuild = True
 
@@ -1279,7 +1310,7 @@ class GuiThread( threading.Thread ):
 				if source in project.chunksByFile:
 					for piece in project.chunksByFile[source]:
 						subChildItem = TreeWidgetItem( childItem )
-						subChildItem.setText( 0, piece )
+						subChildItem.setText( 0, os.path.basename( piece ) )
 						subChildItem.setFirstColumnSpanned(True)
 						subChildItem.setToolTip( 0, piece )
 						childItem.addChild(subChildItem)
