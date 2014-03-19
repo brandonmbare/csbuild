@@ -204,7 +204,7 @@ class SyntaxHighlighter( QtGui.QSyntaxHighlighter ):
 			else:
 				length = endIndex - startIndex
 			self.setFormat(startIndex, length, self.commentFormat)
-			match = self.commentStart.search(line, endIndex)
+			match = self.commentStart.search(line, startIndex + length)
 			if match:
 				startIndex = match.start()
 			else:
@@ -224,6 +224,16 @@ class LineNumberArea( QtGui.QWidget ):
 class CodeEditor( QtGui.QPlainTextEdit ):
 	def __init__(self, parent = None):
 		QtGui.QPlainTextEdit.__init__(self, parent)
+
+		font = QtGui.QFont()
+		font.setFamily("monospace")
+		font.setFixedPitch(True)
+		font.setPointSize(10)
+
+		metrics = QtGui.QFontMetrics(font)
+		self.setTabStopWidth(4 * metrics.width(' '))
+
+		self.setFont(font)
 
 		self.lineNumbers = LineNumberArea(self)
 
@@ -289,7 +299,13 @@ class CodeEditor( QtGui.QPlainTextEdit ):
 		self.setExtraSelections(extraSelections)
 
 	def updateLineNumberArea(self, rect, num):
-		pass
+		if num:
+			self.lineNumbers.scroll(0, num)
+		else:
+			self.lineNumbers.update(0, rect.y(), self.lineNumbers.width(), rect.height())
+
+		if rect.contains(self.viewport().rect()):
+			self.updateLineNumberAreaWidth(0)
 
 class EditorWindow( QMainWindow ):
 	def __init__(self, sourceFile, line, column, *args, **kwargs):
@@ -324,19 +340,10 @@ class EditorWindow( QMainWindow ):
 			self.editor.setPlainText(f.read())
 
 		self.editor.textChanged.connect(self.rehighlight)
+		self.editor.setLineWrapMode(QtGui.QPlainTextEdit.NoWrap)
 
 		self.statusBar = QtGui.QStatusBar()
 		self.setStatusBar(self.statusBar)
-
-		if line or column:
-			cursor = self.editor.textCursor()
-			if line:
-				line = int(line)
-				cursor.movePosition( QtGui.QTextCursor.Down, QtGui.QTextCursor.MoveAnchor, line - 1 )
-			if column:
-				column = int(column)
-				cursor.movePosition( QtGui.QTextCursor.NextCharacter, QtGui.QTextCursor.MoveAnchor, column - 1 )
-			self.editor.setTextCursor(cursor)
 
 		self.outerLayout.addWidget(self.editor)
 
@@ -361,6 +368,18 @@ class EditorWindow( QMainWindow ):
 		self.highlighting = False
 		self.sourceFile = sourceFile
 
+	def ScrollTo(self, line, column):
+		if line or column:
+			cursor = self.editor.textCursor()
+			cursor.setPosition(0)
+			if line:
+				line = int(line)
+				cursor.movePosition( QtGui.QTextCursor.Down, QtGui.QTextCursor.MoveAnchor, line - 1 )
+			if column:
+				column = int(column)
+				cursor.movePosition( QtGui.QTextCursor.NextCharacter, QtGui.QTextCursor.MoveAnchor, column - 1 )
+			self.editor.setTextCursor(cursor)
+
 	def rehighlight(self):
 		if self.highlighting:
 			return
@@ -372,6 +391,10 @@ class EditorWindow( QMainWindow ):
 		with open(self.sourceFile, "w") as f:
 			f.write(self.editor.toPlainText())
 		self.statusBar.showMessage("Saved.", 5000)
+
+	def closeEvent(self, event):
+		del self.parent().openWindows[self.sourceFile]
+		QMainWindow.closeEvent(self, event)
 
 
 class MainWindow( QMainWindow ):
@@ -570,6 +593,8 @@ class MainWindow( QMainWindow ):
 		self.itemToProject = {}
 		self.warningErrorCount = 0
 
+		self.openWindows = {}
+
 	def ButtonClicked(self, toggled):
 		if self.m_ignoreButton:
 			return
@@ -588,6 +613,17 @@ class MainWindow( QMainWindow ):
 
 	def OpenFileForEdit(self, item, column):
 		file = str(item.toolTip(2))
+		line = item.text(3)
+		col = item.text(4)
+
+		if file in self.openWindows:
+			window = self.openWindows[file]
+			window.setWindowState(QtCore.Qt.WindowActive)
+			window.activateWindow()
+			window.raise_()
+			window.ScrollTo(line, col)
+			return
+
 		if(
 			not file.endswith(".o")
 			and not file.endswith(".so")
@@ -597,11 +633,10 @@ class MainWindow( QMainWindow ):
 			and not file.endswith(".lib")
 			and not file.endswith(".obj")
 		):
-			line = item.text(3)
-			col = item.text(4)
-
 			window = EditorWindow(file, line, col, self)
 			window.show()
+			window.ScrollTo(line, col)
+			self.openWindows[file] = window
 
 	def resizeEvent(self, event):
 		QMainWindow.resizeEvent(self, event)
