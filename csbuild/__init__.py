@@ -52,6 +52,7 @@ once that thread tries to use it. Long story short: Don't import modules within 
 """
 
 import argparse
+import glob
 import shutil
 import signal
 import math
@@ -824,7 +825,8 @@ def OutputArchitecture( arch ):
 
 def ExtraFiles( *args ):
 	for arg in list( args ):
-		projectSettings.currentProject.extraFiles.append( os.path.abspath( arg ) )
+		for file in glob.glob( arg ):
+			projectSettings.currentProject.extraFiles.append( os.path.abspath( file ) )
 
 
 def ClearExtraFiles():

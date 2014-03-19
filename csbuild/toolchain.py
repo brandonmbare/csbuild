@@ -27,6 +27,7 @@ Defines the base class for creating custom toolchains
 """
 
 from abc import abstractmethod
+import glob
 import os
 from csbuild import log
 import csbuild
@@ -1008,7 +1009,8 @@ class toolchainBase( object ):
 		if "extraFiles" not in self.settingsOverrides:
 			self.settingsOverrides["extraFiles"] = []
 		for arg in list( args ):
-			self.settingsOverrides["extraFiles"].append( os.path.abspath( arg ) )
+			for file in glob.glob( arg ):
+				self.settingsOverrides["extraFiles"].append( os.path.abspath( file ) )
 
 
 	def ClearExtraFiles(self):
