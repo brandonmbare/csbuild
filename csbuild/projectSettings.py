@@ -313,11 +313,11 @@ class projectSettings( object ):
 	@ivar mutex: A mutex used to control modification of project data across multiple threads
 	@type mutex: threading.Lock
 
-	@ivar preCompileStep: A function that will be executed before compile of this project begins
-	@type preCompileStep: function
+	@ivar preBuildStep: A function that will be executed before compile of this project begins
+	@type preBuildStep: function
 
-	@ivar postCompileStep: A function that will be executed after compile of this project ends
-	@type postCompileStep: function
+	@ivar postBuildStep: A function that will be executed after compile of this project ends
+	@type postBuildStep: function
 
 	@ivar parentGroup: The group this project is contained within
 	@type parentGroup: ProjectGroup
@@ -475,8 +475,13 @@ class projectSettings( object ):
 
 		self.mutex = threading.Lock( )
 
-		self.postCompileStep = None
-		self.preCompileStep = None
+		self.postBuildStep = None
+		self.preBuildStep = None
+		self.prePrepareBuildStep = None
+		self.postPrepareBuildStep = None
+		self.preLinkStep = None
+		self.preMakeStep = None
+		self.postMakeStep = None
 
 		self.parentGroup = currentGroup
 
@@ -522,6 +527,11 @@ class projectSettings( object ):
 			self.ext = self.activeToolchain.get_default_extension( self.type )
 
 		self.output_name += self.ext
+
+		if self.prePrepareBuildStep:
+			log.LOG_BUILD( "Running pre-PrepareBuild step for {} ({})".format( self.output_name, self.targetName ) )
+			self.prePrepareBuildStep(self)
+
 		log.LOG_BUILD( "Preparing tasks for {} ({})...".format( self.output_name, self.targetName ) )
 
 		if not os.path.exists( self.csbuild_dir ):
@@ -543,12 +553,29 @@ class projectSettings( object ):
 			with open( cmdfile, "w" ) as f:
 				f.write( self.cxxcmd + self.cccmd )
 
+
+		self.RediscoverFiles()
+
+		if not self.allsources:
+			os.chdir( wd )
+			return
+
+		if self.name not in self.parentGroup.projects:
+			self.parentGroup.projects[self.name] = {}
+		self.parentGroup.projects[self.name][self.targetName] = self
+
+		if self.postPrepareBuildStep:
+			log.LOG_BUILD( "Running post-PrepareBuild step for {} ({})".format( self.output_name, self.targetName ) )
+			self.postPrepareBuildStep(self)
+
+		os.chdir( wd )
+
+	def RediscoverFiles(self):
 		if not self.chunks:
 			self.get_files( self.allsources, self.allheaders )
 			self.allsources += self.extraFiles
 
 			if not self.allsources:
-				os.chdir( wd )
 				return
 
 			#We'll do this even if _use_chunks is false, because it simplifies the linker logic.
@@ -564,14 +591,7 @@ class projectSettings( object ):
 		else:
 			self.sources = list( self.allsources )
 
-		_shared_globals.allfiles += self.sources
-
-		if self.name not in self.parentGroup.projects:
-			self.parentGroup.projects[self.name] = {}
-		self.parentGroup.projects[self.name][self.targetName] = self
-
-		os.chdir( wd )
-
+		_shared_globals.allfiles |= set(self.sources)
 
 	def __getattribute__( self, name ):
 		activeToolchain = object.__getattribute__( self, "activeToolchain" )
@@ -693,8 +713,13 @@ class projectSettings( object ):
 			"library_mtimes": list( self.library_mtimes ),
 			"scriptPath": self.scriptPath,
 			"mutex": threading.Lock( ),
-			"preCompileStep" : self.preCompileStep,
-			"postCompileStep" : self.postCompileStep,
+			"preBuildStep" : self.preBuildStep,
+			"postBuildStep" : self.postBuildStep,
+			"prePrepareBuildStep" : self.prePrepareBuildStep,
+			"postPrepareBuildStep" : self.postPrepareBuildStep,
+			"preLinkStep" : self.preLinkStep,
+			"preMakeStep" : self.preMakeStep,
+			"postMakeStep" : self.postMakeStep,
 			"parentGroup" : self.parentGroup,
 			"extraFiles": list(self.extraFiles),
 			"state" : self.state,

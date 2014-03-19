@@ -1014,9 +1014,10 @@ def target( name, override = False ):
 	return wrap
 
 
-def preCompileStep( func ):
+def prePrepareBuildStep( func ):
 	"""
-	Decorator that creates a pre-compile step for the containing project.
+	Decorator that creates a pre-build step for the containing project. Pre-PrepareBuild steps run just before the project
+	begins preparing its build tasks.
 
 	@param func: (Implicit) The function wrapped by this decorator
 	@type func: (Implicit) function
@@ -1025,13 +1026,15 @@ def preCompileStep( func ):
 	L{csbuild.projectSettings.projectSettings}.
 	"""
 
-	projectSettings.currentProject.preCompileStep = func
+	projectSettings.currentProject.prePrepareBuildStep = func
 	return func
 
 
-def postCompileStep( func ):
+def postPrepareBuildStep( func ):
 	"""
-	Decorator that creates a post-compile step for the containing project.
+	Decorator that creates a post-compile step for the containing project. Post-PrepareBuild steps run just after the
+	project completes its build preparation. This is the only place where running project.RediscoverFiles() has any
+	appreciable effect.
 
 	@param func: (Implicit) The function wrapped by this decorator
 	@type func: (Implicit) function
@@ -1040,7 +1043,87 @@ def postCompileStep( func ):
 	L{csbuild.projectSettings.projectSettings}.
 	"""
 
-	projectSettings.currentProject.postCompileStep = func
+	projectSettings.currentProject.postPrepareBuildStep = func
+	return func
+
+
+def preMakeStep( func ):
+	"""
+	Decorator that creates a pre-make step for the containing project. Pre-make steps run after all projects' preparation
+	steps have completed and their final chunk sets have been collected, but before any compiling starts.
+
+	@param func: (Implicit) The function wrapped by this decorator
+	@type func: (Implicit) function
+
+	@note: The function this wraps should take a single argument, which will be of type
+	L{csbuild.projectSettings.projectSettings}.
+	"""
+
+	projectSettings.currentProject.preMakeStep = func
+	return func
+
+
+def postMakeStep( func ):
+	"""
+	Decorator that creates a post-make step for the containing project. Post-make steps run after all projects have
+	finished building and linking. This step will only run if the entire build process was successful.
+
+	@param func: (Implicit) The function wrapped by this decorator
+	@type func: (Implicit) function
+
+	@note: The function this wraps should take a single argument, which will be of type
+	L{csbuild.projectSettings.projectSettings}.
+	"""
+
+	projectSettings.currentProject.postMakeStep = func
+	return func
+
+
+def preBuildStep( func ):
+	"""
+	Decorator that creates a pre-build step for the containing project. Pre-build steps run just before the project
+	begins compiling.
+
+	@param func: (Implicit) The function wrapped by this decorator
+	@type func: (Implicit) function
+
+	@note: The function this wraps should take a single argument, which will be of type
+	L{csbuild.projectSettings.projectSettings}.
+	"""
+
+	projectSettings.currentProject.preBuildStep = func
+	return func
+
+
+def postBuildStep( func ):
+	"""
+	Decorator that creates a post-build step for the containing project. Post-build steps run after the project has
+	B{successfully} compiled B{and} linked.
+
+	@param func: (Implicit) The function wrapped by this decorator
+	@type func: (Implicit) function
+
+	@note: The function this wraps should take a single argument, which will be of type
+	L{csbuild.projectSettings.projectSettings}.
+	"""
+
+	projectSettings.currentProject.postBuildStep = func
+	return func
+
+
+def preLinkStep( func ):
+	"""
+	Decorator that creates a pre-link step for the containing project. Pre-link steps run after a successful compile of
+	the project, but before the project links.
+
+	@param func: (Implicit) The function wrapped by this decorator
+	@type func: (Implicit) function
+
+	@note: The function this wraps should take a single argument, which will be of type
+	L{csbuild.projectSettings.projectSettings}.
+	"""
+
+	projectSettings.currentProject.preLinkStep = func
 	return func
 
 
@@ -1079,6 +1162,11 @@ def build( ):
 	pending_links = []
 	pending_builds = _shared_globals.sortedProjects
 	#projects_needing_links = set()
+
+	for project in pending_builds:
+		if project.preMakeStep:
+			log.LOG_BUILD( "Running pre-make step for {} ({})".format( project.output_name, project.targetName ) )
+			project.preMakeStep(project)
 
 	for project in _shared_globals.sortedProjects:
 		log.LOG_BUILD( "Verifying libraries for {} ({})".format( project.output_name, project.targetName ) )
@@ -1128,9 +1216,9 @@ def build( ):
 							_shared_globals.build_success = False
 							otherProj.state = _shared_globals.ProjectState.LINK_FAILED
 						elif ret == LinkStatus.Success:
-							if otherProj.postCompileStep:
-								log.LOG_BUILD( "Running post-compile step for {} ({})".format( otherProj.output_name, otherProj.targetName ) )
-								otherProj.postCompileStep( otherProj )
+							if otherProj.postBuildStep:
+								log.LOG_BUILD( "Running post-build step for {} ({})".format( otherProj.output_name, otherProj.targetName ) )
+								otherProj.postBuildStep( otherProj )
 							otherProj.state = _shared_globals.ProjectState.FINISHED
 						elif ret == LinkStatus.UpToDate:
 							otherProj.state = _shared_globals.ProjectState.UP_TO_DATE
@@ -1159,9 +1247,9 @@ def build( ):
 						_shared_globals.build_success = False
 						otherProj.state = _shared_globals.ProjectState.LINK_FAILED
 					elif ret == LinkStatus.Success:
-						if otherProj.postCompileStep:
+						if otherProj.postBuildStep:
 							log.LOG_BUILD( "Running post-compile step for {} ({})".format( otherProj.output_name, otherProj.targetName ) )
-							otherProj.postCompileStep( otherProj )
+							otherProj.postBuildStep( otherProj )
 						otherProj.state = _shared_globals.ProjectState.FINISHED
 					elif ret == LinkStatus.UpToDate:
 						otherProj.state = _shared_globals.ProjectState.UP_TO_DATE
@@ -1188,9 +1276,9 @@ def build( ):
 
 			project.starttime = time.time( )
 
-			if project.preCompileStep:
-				log.LOG_BUILD( "Running pre-compile step for {} ({})".format( project.output_name, project.targetName ) )
-				project.preCompileStep( project )
+			if project.preBuildStep:
+				log.LOG_BUILD( "Running pre-build step for {} ({})".format( project.output_name, project.targetName ) )
+				project.preBuildStep( project )
 
 			log.LOG_BUILD( "Building {0} ({1})".format( project.output_name, project.targetName ) )
 			project.state = _shared_globals.ProjectState.BUILDING
@@ -1324,6 +1412,12 @@ def build( ):
 			p.state = _shared_globals.ProjectState.ABORTED
 		_shared_globals.build_success = False
 
+	if not projects_in_flight and not pending_links:
+		for project in pending_builds:
+			if project.postMakeStep:
+				log.LOG_BUILD( "Running post-make step for {} ({})".format( project.output_name, project.targetName ) )
+				project.postMakeStep(project)
+
 	compiletime = time.time( ) - starttime
 	totalmin = math.floor( compiletime / 60 )
 	totalsec = round( compiletime % 60 )
@@ -1346,6 +1440,10 @@ def link( project, *objs ):
 	This function also checks (if nothing was built) the modified times of all the required libraries, to see if we need
 	to relink anyway, even though nothing was compiled.
 	"""
+
+	if project.preLinkStep:
+		log.LOG_BUILD( "Running pre-link step for {} ({})".format( project.output_name, project.targetName ) )
+		project.preLinkStep(project)
 
 	starttime = time.time( )
 

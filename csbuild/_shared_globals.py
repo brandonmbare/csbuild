@@ -183,7 +183,7 @@ projects = { }
 finished_projects = set( )
 built_files = set( )
 
-allfiles = []
+allfiles = set()
 total_precompiles = 0
 precompiles_done = 0
 total_compiles = 0
