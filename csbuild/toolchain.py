@@ -1015,3 +1015,14 @@ class toolchainBase( object ):
 
 	def ClearExtraFiles(self):
 		self.settingsOverrides["extraFiles"] = []
+
+
+	def ExtraDirs( self, *args ):
+		if "extraDirs" not in self.settingsOverrides:
+			self.settingsOverrides["extraDirs"] = []
+		for arg in list( args ):
+			self.settingsOverrides["extraDirs"].append( os.path.abspath( arg ) )
+
+
+	def ClearExtraDirs(self):
+		self.settingsOverrides["extraDirs"] = []

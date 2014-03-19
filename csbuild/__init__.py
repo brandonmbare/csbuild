@@ -833,6 +833,15 @@ def ClearExtraFiles():
 	projectSettings.currentProject.extraFiles = []
 
 
+def ExtraDirs( *args ):
+	for arg in list( args ):
+		projectSettings.currentProject.extraDirs.append( os.path.abspath( arg ) )
+
+
+def ClearExtraDirs():
+	projectSettings.currentProject.extraDirs = []
+
+
 def EnableWarningsAsErrors( ):
 	"""
 	Promote all warnings to errors.

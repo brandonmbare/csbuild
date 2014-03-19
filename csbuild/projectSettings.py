@@ -486,6 +486,7 @@ class projectSettings( object ):
 		self.parentGroup = currentGroup
 
 		self.extraFiles = []
+		self.extraDirs = []
 
 		#GUI support
 		self.state = _shared_globals.ProjectState.PENDING
@@ -722,6 +723,7 @@ class projectSettings( object ):
 			"postMakeStep" : self.postMakeStep,
 			"parentGroup" : self.parentGroup,
 			"extraFiles": list(self.extraFiles),
+			"extraDirs": list(self.extraDirs),
 			"state" : self.state,
 			"startTime" : self.startTime,
 			"endTime" : self.endTime,
@@ -765,55 +767,56 @@ class projectSettings( object ):
 		for exclude in self.exclude_dirs:
 			exclude_dirs |= set( glob.glob( exclude ) )
 
-		for root, dirnames, filenames in os.walk( '.' ):
-			absroot = os.path.abspath( root )
-			if absroot in exclude_dirs:
-				if absroot != self.csbuild_dir:
-					log.LOG_INFO( "Skipping dir {0}".format( root ) )
-				continue
-			if ".csbuild" in root:
-				continue
-			if absroot == self.csbuild_dir or absroot.startswith( self.csbuild_dir ):
-				continue
-			bFound = False
-			for testDir in exclude_dirs:
-				if absroot.startswith( testDir ):
-					bFound = True
-					break
-			if bFound:
-				if not absroot.startswith( self.csbuild_dir ):
-					log.LOG_INFO( "Skipping dir {0}".format( root ) )
-				continue
-			log.LOG_INFO( "Looking in directory {0}".format( root ) )
-			if sources is not None:
-				for filename in fnmatch.filter( filenames, '*.cpp' ):
-					path = os.path.join( absroot, filename )
-					if path not in exclude_files:
-						sources.append( os.path.abspath( path ) )
-						self.hasCppFiles = True
-				for filename in fnmatch.filter( filenames, '*.c' ):
-					path = os.path.join( absroot, filename )
-					if path not in exclude_files:
-						sources.append( os.path.abspath( path ) )
+		for sourceDir in [ '.' ] + self.extraDirs:
+			for root, dirnames, filenames in os.walk( sourceDir ):
+				absroot = os.path.abspath( root )
+				if absroot in exclude_dirs:
+					if absroot != self.csbuild_dir:
+						log.LOG_INFO( "Skipping dir {0}".format( root ) )
+					continue
+				if ".csbuild" in root:
+					continue
+				if absroot == self.csbuild_dir or absroot.startswith( self.csbuild_dir ):
+					continue
+				bFound = False
+				for testDir in exclude_dirs:
+					if absroot.startswith( testDir ):
+						bFound = True
+						break
+				if bFound:
+					if not absroot.startswith( self.csbuild_dir ):
+						log.LOG_INFO( "Skipping dir {0}".format( root ) )
+					continue
+				log.LOG_INFO( "Looking in directory {0}".format( root ) )
+				if sources is not None:
+					for filename in fnmatch.filter( filenames, '*.cpp' ):
+						path = os.path.join( absroot, filename )
+						if path not in exclude_files:
+							sources.append( os.path.abspath( path ) )
+							self.hasCppFiles = True
+					for filename in fnmatch.filter( filenames, '*.c' ):
+						path = os.path.join( absroot, filename )
+						if path not in exclude_files:
+							sources.append( os.path.abspath( path ) )
 
-				sources.sort( key = str.lower )
+					sources.sort( key = str.lower )
 
-			if headers is not None:
-				for filename in fnmatch.filter( filenames, '*.hpp' ):
-					path = os.path.join( absroot, filename )
-					if path not in exclude_files:
-						headers.append( os.path.abspath( path ) )
-						self.hasCppFiles = True
-				for filename in fnmatch.filter( filenames, '*.h' ):
-					path = os.path.join( absroot, filename )
-					if path not in exclude_files:
-						headers.append( os.path.abspath( path ) )
-				for filename in fnmatch.filter( filenames, '*.inl' ):
-					path = os.path.join( absroot, filename )
-					if path not in exclude_files:
-						headers.append( os.path.abspath( path ) )
+				if headers is not None:
+					for filename in fnmatch.filter( filenames, '*.hpp' ):
+						path = os.path.join( absroot, filename )
+						if path not in exclude_files:
+							headers.append( os.path.abspath( path ) )
+							self.hasCppFiles = True
+					for filename in fnmatch.filter( filenames, '*.h' ):
+						path = os.path.join( absroot, filename )
+						if path not in exclude_files:
+							headers.append( os.path.abspath( path ) )
+					for filename in fnmatch.filter( filenames, '*.inl' ):
+						path = os.path.join( absroot, filename )
+						if path not in exclude_files:
+							headers.append( os.path.abspath( path ) )
 
-				headers.sort( key = str.lower )
+					headers.sort( key = str.lower )
 
 
 	def get_full_path( self, headerFile, relativeDir ):
