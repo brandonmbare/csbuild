@@ -145,6 +145,7 @@ class SyntaxHighlighter( QtGui.QSyntaxHighlighter ):
 			"\\bcatch\\b",
 			"\\braise\\b",
 			"\\bnoexcept\\b",
+			"\\bextern\\b",
 		]:
 			self.highlightRules.append(SyntaxHighlighter.HighlightRule(re.compile(pattern), self.keywordFormat))
 
