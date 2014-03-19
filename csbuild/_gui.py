@@ -1,5 +1,6 @@
 # coding=utf-8
 import re
+import stat
 import csbuild
 from csbuild import log
 
@@ -352,6 +353,16 @@ class EditorWindow( QMainWindow ):
 		horizontalSpacer = QtGui.QSpacerItem(40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
 		self.innerLayout.addItem(horizontalSpacer)
 
+		self.makeWriteable = QtGui.QPushButton(self.centralWidget)
+		self.makeWriteable.setText("Make Writeable")
+		self.makeWriteable.pressed.connect(self.MakeWriteable)
+		self.innerLayout.addWidget(self.makeWriteable)
+
+		if os.access(sourceFile, os.W_OK):
+			self.makeWriteable.hide()
+		else:
+			self.editor.setReadOnly(True)
+
 		self.saveButton = QtGui.QPushButton(self.centralWidget)
 		self.saveButton.setText("Save")
 		self.saveButton.pressed.connect(self.save)
@@ -387,6 +398,18 @@ class EditorWindow( QMainWindow ):
 		self.highlighting = True
 		self.highlighter.rehighlight()
 		self.highlighting = False
+
+	def MakeWriteable(self):
+		stats = os.stat(self.sourceFile)
+		mode = stats.st_mode
+		try:
+			os.chmod( self.sourceFile, mode | stat.S_IWRITE )
+		except:
+			self.statusBar.showMessage("Could not open file for writing. Permission error?.", 5000)
+		else:
+			self.makeWriteable.hide()
+			self.editor.setReadOnly(False)
+			self.statusBar.showMessage("File opened for writing.", 5000)
 
 	def save(self):
 		with open(self.sourceFile, "w") as f:
