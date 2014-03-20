@@ -83,13 +83,15 @@ class project_generator_qtcreator( project_generator.project_generator ):
 		launcherpath = os.path.join( projectpath, launcher )
 
 		with open( os.path.join( projectpath, "{}.pro".format( project.name ) ), "w" ) as f:
-			f.write( "SOURCES += \\\n" )
-			for source in project.allsources:
-				f.write( "\t{} \\\n".format( os.path.relpath( source, projectpath ) ) )
+			if project.allsources:
+				f.write( "SOURCES += \\\n" )
+				for source in project.allsources:
+					f.write( "\t{} \\\n".format( os.path.relpath( source, projectpath ) ) )
 
-			f.write( "\nHEADERS += \\\n" )
-			for header in project.allheaders:
-				f.write( "\t{} \\\n".format( os.path.relpath( header, projectpath ) ) )
+			if project.allheaders:
+				f.write( "\nHEADERS += \\\n" )
+				for header in project.allheaders:
+					f.write( "\t{} \\\n".format( os.path.relpath( header, projectpath ) ) )
 
 			f.write( "\nDESTDIR = {}\n\n".format( projectpath ) )
 

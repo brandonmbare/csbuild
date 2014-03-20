@@ -557,10 +557,6 @@ class projectSettings( object ):
 
 		self.RediscoverFiles()
 
-		if not self.allsources:
-			os.chdir( wd )
-			return
-
 		if self.name not in self.parentGroup.projects:
 			self.parentGroup.projects[self.name] = {}
 		self.parentGroup.projects[self.name][self.targetName] = self
