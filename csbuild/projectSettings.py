@@ -790,6 +790,11 @@ class projectSettings( object ):
 						if path not in exclude_files:
 							sources.append( os.path.abspath( path ) )
 							self.hasCppFiles = True
+					for filename in fnmatch.filter( filenames, '*.cc' ):
+						path = os.path.join( absroot, filename )
+						if path not in exclude_files:
+							sources.append( os.path.abspath( path ) )
+							self.hasCppFiles = True
 					for filename in fnmatch.filter( filenames, '*.c' ):
 						path = os.path.join( absroot, filename )
 						if path not in exclude_files:
