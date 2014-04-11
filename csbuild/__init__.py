@@ -868,6 +868,25 @@ def ClearExtraDirs():
 	projectSettings.currentProject.extraDirs = []
 
 
+def ExtraObjs( *args ):
+	"""
+	Adds additional objects to be passed to the linker that are not in the project directory.
+
+	@type args: an arbitrary number of strings
+	@param args: A list of objects to add.
+	"""
+	for arg in list( args ):
+		for file in glob.glob( arg ):
+			projectSettings.currentProject.extraObjs.append( os.path.abspath( file ) )
+
+
+def ClearExtraObjs():
+	"""
+	Clear the list of external objects to link.
+	"""
+	projectSettings.currentProject.extraObjs = []
+
+
 def EnableWarningsAsErrors( ):
 	"""
 	Promote all warnings to errors.
@@ -1544,6 +1563,12 @@ def link( project, *objs ):
 
 	if not objs:
 		return LinkStatus.UpToDate
+
+	for obj in project.extraObjs:
+		if not os.path.exists(obj):
+			log.LOG_ERROR("Could not find extra object {}".format(obj))
+
+	objs += project.extraObjs
 
 	if not project.built_something:
 		if os.path.exists( output ):

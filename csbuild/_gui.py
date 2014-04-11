@@ -481,10 +481,25 @@ class MainWindow( QMainWindow ):
 
 		self.horizontalLayout.addItem(horizontalSpacer_2)
 
+		self.m_filesCompletedLabel = QtGui.QLabel(self.centralWidget)
+		self.m_filesCompletedLabel.setObjectName("m_filesCompletedLabel")
+
+		self.horizontalLayout.addWidget(self.m_filesCompletedLabel)
 
 		self.verticalLayout.addLayout(self.horizontalLayout)
 
-		self.m_buildTree = QtGui.QTreeWidget(self.innerWidget)
+		self.m_mainProgressBar = QtGui.QProgressBar(self.centralWidget)
+		self.m_mainProgressBar.setObjectName("m_mainProgressBar")
+		self.m_mainProgressBar.setValue(0)
+
+		self.verticalLayout.addWidget(self.m_mainProgressBar)
+
+		self.topPane = QtGui.QTabWidget(self.innerWidget)
+
+		self.buildWidget = QtGui.QWidget(self.innerWidget)
+
+		verticalLayout = QtGui.QVBoxLayout(self.buildWidget)
+		self.m_buildTree = QtGui.QTreeWidget(self.buildWidget)
 		self.m_buildTree.setColumnCount(10)
 		self.m_buildTree.setUniformRowHeights(True)
 		
@@ -499,12 +514,54 @@ class MainWindow( QMainWindow ):
 		self.m_buildTree.header().setStretchLastSection(True)
 		self.m_buildTree.currentItemChanged.connect(self.SelectionChanged)
 		self.m_buildTree.itemExpanded.connect(self.UpdateProjects)
+		verticalLayout.addWidget(self.m_buildTree)
 
-		self.verticalLayout.addWidget(self.m_buildTree)
+		self.topPane.addTab(self.buildWidget, "Build Progress")
+
+		self.timelinePage = QtGui.QWidget(self.centralWidget)
+
+		verticalLayout = QtGui.QVBoxLayout(self.timelinePage)
+		self.timelineWidget = QtGui.QTreeWidget(self.timelinePage)
+
+
+		self.m_timelineHeader = TreeWidgetItem()
+		self.timelineWidget.setHeaderItem(self.m_timelineHeader)
+
+		self.timelineWidget.setFocusPolicy(QtCore.Qt.NoFocus)
+		self.timelineWidget.setEditTriggers(QtGui.QAbstractItemView.NoEditTriggers)
+		self.timelineWidget.setProperty("showDropIndicator", QtCore.QVariant(False))
+		self.timelineWidget.setSelectionMode(QtGui.QAbstractItemView.NoSelection)
+		self.timelineWidget.setAlternatingRowColors(True)
+		self.timelineWidget.setVerticalScrollMode(QtGui.QAbstractItemView.ScrollPerPixel)
+		self.timelineWidget.setAnimated(True)
+		self.timelineWidget.header().setDefaultSectionSize(30)
+		self.timelineWidget.header().setStretchLastSection(False)
+
+		self.timelineWidget.setStyleSheet(
+			"""
+			QTreeWidget::item
+			{
+			 	padding-top: 2px;
+			 	padding-bottom: 2px;
+			}
+
+			QTreeWidget::item:has-children
+			{
+			 	padding-top: 2px;
+			 	padding-bottom: 2px;
+			}
+			"""
+		)
+
+		verticalLayout.addWidget(self.timelineWidget)
+
+		self.topPane.addTab(self.timelinePage, "Build Timeline")
+
+		self.verticalLayout.addWidget(self.topPane)
 		
 		self.innerLayout.addLayout(self.verticalLayout)
 
-		self.m_pushButton =  QtGui.QPushButton(self.innerWidget)
+		self.m_pushButton =  QtGui.QPushButton(self.buildWidget)
 		self.m_pushButton.setObjectName("self.m_pushButton")
 		sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
 		sizePolicy.setHorizontalStretch(0)
@@ -565,31 +622,20 @@ class MainWindow( QMainWindow ):
 		self.mainLayout.addWidget(self.m_splitter)
 		self.outerLayout.addLayout(self.mainLayout)
 
-		self.m_mainProgressBar = QtGui.QProgressBar(self.centralWidget)
-		self.m_mainProgressBar.setObjectName("m_mainProgressBar")
-		self.m_mainProgressBar.setValue(0)
+		#self.horizontalLayout_2 = QtGui.QHBoxLayout()
+		#self.horizontalLayout_2.setObjectName("horizontalLayout_2")
 
-		self.outerLayout.addWidget(self.m_mainProgressBar)
+		#horizontalSpacer = QtGui.QSpacerItem(40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
 
-		self.horizontalLayout_2 = QtGui.QHBoxLayout()
-		self.horizontalLayout_2.setObjectName("horizontalLayout_2")
-
-		self.m_filesCompletedLabel = QtGui.QLabel(self.centralWidget)
-		self.m_filesCompletedLabel.setObjectName("m_filesCompletedLabel")
-
-		self.horizontalLayout_2.addWidget(self.m_filesCompletedLabel)
-
-		horizontalSpacer = QtGui.QSpacerItem(40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
-
-		self.horizontalLayout_2.addItem(horizontalSpacer)
+		#self.horizontalLayout_2.addItem(horizontalSpacer)
 
 		self.m_timeLeftLabel = QtGui.QLabel(self.centralWidget)
-		self.m_timeLeftLabel.setObjectName("m_timeLeftLabel")
+		#self.m_timeLeftLabel.setObjectName("m_timeLeftLabel")
 
 		#self.horizontalLayout_2.addWidget(self.m_timeLeftLabel)
 		self.m_timeLeftLabel.hide()
 
-		self.outerLayout.addLayout(self.horizontalLayout_2)
+		#self.outerLayout.addLayout(self.horizontalLayout_2)
 
 		self.setCentralWidget(self.centralWidget)
 
@@ -618,6 +664,8 @@ class MainWindow( QMainWindow ):
 		self.warningErrorCount = 0
 
 		self.openWindows = {}
+
+		self.tick = 0
 
 	def ButtonClicked(self, toggled):
 		if self.m_ignoreButton:
@@ -662,6 +710,7 @@ class MainWindow( QMainWindow ):
 			window.ScrollTo(line, col)
 			self.openWindows[file] = window
 
+
 	def resizeEvent(self, event):
 		QMainWindow.resizeEvent(self, event)
 		textBoxSize = self.m_splitter.sizes()[1]
@@ -672,6 +721,7 @@ class MainWindow( QMainWindow ):
 			self.m_errorTree.setColumnWidth( 2, 200 )
 			self.m_errorTree.setColumnWidth( 3, 50 )
 			self.m_errorTree.setColumnWidth( 4, 50 )
+
 
 	def SplitterMoved(self, index, pos):
 		textBoxSize = self.m_splitter.sizes()[1]
@@ -692,6 +742,7 @@ class MainWindow( QMainWindow ):
 			self.m_errorTree.setColumnWidth( 3, 50 )
 			self.m_errorTree.setColumnWidth( 4, 50 )
 			self.m_pushButton.setText(u"▾ Output ▾")
+
 
 	def SelectionChanged(self, current, previous):
 		if self.m_textEdit.isVisible():
@@ -965,6 +1016,100 @@ class MainWindow( QMainWindow ):
 
 	def UpdateProjects(self, expandedItem = None):
 		updatedProjects = []
+
+		if expandedItem is None:
+			font = QtGui.QFont()
+			font.setPointSize(5)
+			curtime = time.time( ) - _shared_globals.starttime
+			mult = 1
+			curtime *= mult
+			lastCol = int(curtime)
+			for i in range(int(curtime)):
+				self.m_timelineHeader.setFont(i + 1, font)
+				if i % (10*mult) == 0:
+					minutes = int(math.floor( i / (60*mult) ))
+					seconds = int(round( i % (60*mult) ))
+					self.m_timelineHeader.setText(i+1, "{}:{:02}".format(minutes, seconds/mult))
+				else:
+					self.m_timelineHeader.setText(i+1, "")
+
+			idx = 0
+			buildingBrush = QtGui.QBrush()
+			buildingBrush.setColor(QtGui.QColor(0, 65, 255, 255))
+			buildingBrush.setStyle(QtCore.Qt.SolidPattern)
+			pendingLinkBrush = QtGui.QBrush()
+			pendingLinkBrush.setColor(QtGui.QColor(0, 128, 128, 255))
+			pendingLinkBrush.setStyle(QtCore.Qt.SolidPattern)
+			linkingBrush = QtGui.QBrush()
+			linkingBrush.setColor(QtGui.QColor(0, 224, 128, 255))
+			linkingBrush.setStyle(QtCore.Qt.SolidPattern)
+			childBrush = QtGui.QBrush()
+			childBrush.setColor(QtGui.QColor(255, 190, 0, 255))
+			childBrush.setStyle(QtCore.Qt.SolidPattern)
+			for project in _shared_globals.sortedProjects:
+				item = self.timelineWidget.topLevelItem(idx)
+				if project.state == _shared_globals.ProjectState.BUILDING:
+					item.setBackground(lastCol, buildingBrush)
+				elif project.state == _shared_globals.ProjectState.WAITING_FOR_LINK:
+					item.setBackground(lastCol, pendingLinkBrush)
+				elif project.state == _shared_globals.ProjectState.LINKING:
+					item.setBackground(lastCol, linkingBrush)
+
+				if project.state == _shared_globals.ProjectState.BUILDING:
+					def HandleChildTimeline( idx2, file ):
+						childWidget = item.child(idx2)
+
+						project.mutex.acquire( )
+						try:
+							state = project.fileStatus[file]
+						except:
+							state = _shared_globals.ProjectState.PENDING
+
+						project.mutex.release( )
+
+						if state == _shared_globals.ProjectState.BUILDING:
+							childWidget.setBackground(lastCol, childBrush)
+
+
+					idx2 = 0
+					if project.needs_cpp_precompile:
+						HandleChildTimeline( idx2, project.cppheaderfile )
+						idx2 += 1
+
+					if project.needs_c_precompile:
+						HandleChildTimeline( idx2, project.cheaderfile )
+						idx2 += 1
+
+					used_chunks = set()
+					for source in project.allsources:
+						inThisBuild = False
+						if source not in project.final_chunk_set:
+							chunk = project.get_chunk( source )
+							if not chunk:
+								continue
+
+							extension = "." + source.rsplit(".", 1)[1]
+							if extension in project.cExtensions:
+								extension = ".c"
+							else:
+								extension = ".cpp"
+
+							chunk = "{}/{}{}".format( project.csbuild_dir, chunk, extension )
+
+							if chunk in used_chunks:
+								continue
+							if chunk in project.final_chunk_set:
+								inThisBuild = True
+								source = chunk
+								used_chunks.add(chunk)
+						else:
+							inThisBuild = True
+
+						if inThisBuild:
+							HandleChildTimeline( idx2, source )
+
+						idx2 += 1
+				idx += 1
 
 		if expandedItem is not None:
 			text = str( expandedItem.text(0) )
@@ -1384,6 +1529,9 @@ class MainWindow( QMainWindow ):
 		self.m_buildTree.setColumnWidth( 8, 175 )
 		self.m_buildTree.setColumnWidth( 9, 50 )
 
+		self.m_timelineHeader.setText(0, "Name")
+		self.timelineWidget.setColumnWidth(0,250)
+
 		self.m_treeHeader2.setText(0, "Type")
 		self.m_treeHeader2.setText(1, "Output")
 		self.m_treeHeader2.setText(2, "File")
@@ -1403,6 +1551,7 @@ class MainWindow( QMainWindow ):
 
 	def onTick(self):
 		self.UpdateProjects()
+		self.tick += 1
 
 		totalCompletedCompiles = 0
 		for project in _shared_globals.sortedProjects:
@@ -1560,6 +1709,10 @@ class GuiThread( threading.Thread ):
 			widgetItem.setText(5, "0")
 			widgetItem.setText(6, "0")
 
+			widgetItem2 = TreeWidgetItem()
+			window.timelineWidget.addTopLevelItem(widgetItem2)
+			widgetItem2.setText(0, "{} ({})".format(project.name, project.targetName))
+
 			window.projectToItem[project] = widgetItem
 			window.itemToProject[str(row)] = project
 
@@ -1621,12 +1774,24 @@ class GuiThread( threading.Thread ):
 
 				widgetItem.addChild(childItem)
 
+				timelineChild = TreeWidgetItem(widgetItem2)
+				timelineChild.setText(0, os.path.basename(project.cppheaderfile))
+				timelineChild.setToolTip(0, project.cppheaderfile)
+				widgetItem2.addChild(timelineChild)
+
 				for header in project.cpppchcontents:
 					subChildItem = TreeWidgetItem( childItem )
 					subChildItem.setText( 0, os.path.basename(header) )
 					subChildItem.setFirstColumnSpanned(True)
 					subChildItem.setToolTip( 0, header )
 					childItem.addChild(subChildItem)
+
+					timelineSubChild = TreeWidgetItem(timelineChild)
+					timelineSubChild.setText( 0, os.path.basename(header) )
+					timelineSubChild.setFirstColumnSpanned(True)
+					timelineSubChild.setToolTip( 0, header )
+					timelineChild.addChild(timelineSubChild)
+
 
 			if project.needs_c_precompile:
 				idx += 1
@@ -1656,12 +1821,23 @@ class GuiThread( threading.Thread ):
 
 				widgetItem.addChild(childItem)
 
+				timelineChild = TreeWidgetItem(widgetItem2)
+				timelineChild.setText(0, os.path.basename(project.cheaderfile))
+				timelineChild.setToolTip(0, project.cheaderfile)
+				widgetItem2.addChild(timelineChild)
+
 				for header in project.cpchcontents:
 					subChildItem = TreeWidgetItem( childItem )
 					subChildItem.setText( 0, os.path.basename(header) )
 					subChildItem.setFirstColumnSpanned(True)
 					subChildItem.setToolTip( 0, header )
 					childItem.addChild(subChildItem)
+
+					timelineSubChild = TreeWidgetItem(timelineChild)
+					timelineSubChild.setText( 0, os.path.basename(header) )
+					timelineSubChild.setFirstColumnSpanned(True)
+					timelineSubChild.setToolTip( 0, header )
+					timelineChild.addChild(timelineSubChild)
 
 			used_chunks = set()
 			for source in project.allsources:
@@ -1725,6 +1901,11 @@ class GuiThread( threading.Thread ):
 
 				widgetItem.addChild(childItem)
 
+				timelineChild = TreeWidgetItem(widgetItem2)
+				timelineChild.setText(0, os.path.basename(source))
+				timelineChild.setToolTip(0, source)
+				widgetItem2.addChild(timelineChild)
+
 				if source in project.chunksByFile:
 					for piece in project.chunksByFile[source]:
 						subChildItem = TreeWidgetItem( childItem )
@@ -1732,6 +1913,12 @@ class GuiThread( threading.Thread ):
 						subChildItem.setFirstColumnSpanned(True)
 						subChildItem.setToolTip( 0, piece )
 						childItem.addChild(subChildItem)
+
+						timelineSubChild = TreeWidgetItem(timelineChild)
+						timelineSubChild.setText( 0, os.path.basename(piece) )
+						timelineSubChild.setFirstColumnSpanned(True)
+						timelineSubChild.setToolTip( 0, piece )
+						timelineChild.addChild(timelineSubChild)
 
 		window.m_buildTree.setSortingEnabled(True)
 

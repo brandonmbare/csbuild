@@ -339,6 +339,10 @@ class projectSettings( object ):
 
 	@type extraDirs: list[str]
 	@ivar extraDirs: Extra directories used to search for files
+
+	@type extraObjs: list[str]
+	@ivar extraObjs: Extra objects to pass to the linker
+
 	@undocumented: prepareBuild
 	@undocumented: __getattribute__
 	@undocumented: __setattr__
@@ -499,6 +503,7 @@ class projectSettings( object ):
 
 		self.extraFiles = []
 		self.extraDirs = []
+		self.extraObjs = []
 
 		self.cExtensions = set([".c"])
 		self.cppExtensions = set([".cpp", ".cxx", ".cc", ".cp", ".c++"])
@@ -746,6 +751,7 @@ class projectSettings( object ):
 			"parentGroup" : self.parentGroup,
 			"extraFiles": list(self.extraFiles),
 			"extraDirs": list(self.extraDirs),
+			"extraObjs": list(self.extraObjs),
 			"state" : self.state,
 			"startTime" : self.startTime,
 			"endTime" : self.endTime,
