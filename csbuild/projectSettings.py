@@ -339,7 +339,6 @@ class projectSettings( object ):
 
 	@type extraDirs: list[str]
 	@ivar extraDirs: Extra directories used to search for files
-
 	@undocumented: prepareBuild
 	@undocumented: __getattribute__
 	@undocumented: __setattr__
@@ -509,7 +508,6 @@ class projectSettings( object ):
 		self.ambiguousHeaderExtensions = set([".h", ".inl"])
 
 		self.chunkMutexes = {}
-
 		#GUI support
 		self.state = _shared_globals.ProjectState.PENDING
 		self.startTime = 0
@@ -781,7 +779,6 @@ class projectSettings( object ):
 
 		for srcFile in self.chunkMutexes:
 			ret.chunkMutexes.update( { srcFile : set( self.chunkMutexes[srcFile] ) } )
-
 		return ret
 
 
@@ -845,7 +842,6 @@ class projectSettings( object ):
 							if path not in exclude_files:
 								headers.append( os.path.abspath( path ) )
 								self.hasCppFiles = True
-
 				if cheaders is not None:
 					for extension in self.cHeaderExtensions:
 						for filename in fnmatch.filter( filenames, '*'+extension ):
@@ -1234,8 +1230,6 @@ class projectSettings( object ):
 
 		return True
 
-
-
 	def make_chunks( self, l ):
 		""" Converts the list into a list of lists - i.e., "chunks"
 		Each chunk represents one compilation unit in the chunked build system.
@@ -1245,7 +1239,6 @@ class projectSettings( object ):
 
 		if self.unity:
 			return [l]
-
 		chunks = []
 		if self.chunk_filesize > 0:
 			sorted_list = sorted( l, key = os.path.getsize, reverse=True )
@@ -1255,15 +1248,12 @@ class projectSettings( object ):
 				chunk = [sorted_list[0]]
 				chunksize += os.path.getsize( sorted_list[0] )
 				sorted_list.pop( 0 )
-
 				for i in reversed(range(len(sorted_list))):
 					srcFile = sorted_list[i]
 					if not self.CanJoinChunk(chunk, srcFile):
 						remaining.append(srcFile)
 						continue
-
 					filesize = os.path.getsize( srcFile )
-
 					if chunksize + filesize > self.chunk_filesize:
 						chunks.append( chunk )
 						remaining += sorted_list[i::-1]
@@ -1274,7 +1264,6 @@ class projectSettings( object ):
 					else:
 						chunk.append( srcFile )
 						chunksize += filesize
-
 				if remaining:
 					sorted_list = sorted( remaining, key = os.path.getsize, reverse=True )
 				else:
