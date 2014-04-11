@@ -110,8 +110,10 @@ class threaded_build( threading.Thread ):
 			self.project.mutex.release( )
 			inc = ""
 			headerfile = ""
-			if self.file.endswith( ".c" ) or self.file == self.project.cheaderfile:
-				if self.project.cheaders and not self.forPrecompiledHeader:
+			extension = "." + self.file.rsplit(".", 1)[1]
+			if extension in self.project.cExtensions or self.file == self.project.cheaderfile:
+				if( (self.project.chunk_precompile and self.project.cheaders) or self.project.precompileAsC )\
+					and not self.forPrecompiledHeader:
 					headerfile = self.project.cheaderfile
 				baseCommand = self.project.cccmd
 			else:
@@ -379,7 +381,19 @@ def prepare_precompiles( ):
 					if header in precompile_exclude:
 						continue
 					externed = False
-					if forCpp and os.path.abspath( header ) in project.cheaders:
+
+					#TODO: This may no longer be relevant due to other changes, needs review.
+					isPlainC = False
+					if header in project.cheaders:
+						isPlainC = True
+					else:
+						extension = "." + header.rsplit(".", 1)[1]
+						if extension in project.cHeaderExtensions:
+							isPlainC = True
+						elif extension in project.ambiguousHeaderExtensions and not project.hasCppFiles:
+							isPlainC = True
+
+					if forCpp and isPlainC:
 						f.write( "extern \"C\"\n{\n\t" )
 						externed = True
 					f.write( '#include "{0}"\n'.format( os.path.abspath( header ) ) )
@@ -392,40 +406,42 @@ def prepare_precompiles( ):
 			return True, headerfile
 
 
-		if project.chunk_precompile or project.precompile:
-			allheaders = []
+		if project.chunk_precompile or project.precompile or project.precompileAsC:
 
 			if project.chunk_precompile:
-				project.get_files( headers = allheaders )
+				cppheaders = project.cppheaders
+				cheaders = project.cheaders
 			else:
-				allheaders = project.precompile
+				if not project.hasCppFiles:
+					cheaders = project.precompile + project.precompileAsC
+				else:
+					cppheaders = project.precompile
+					cheaders = project.precompileAsC
 
-			if not allheaders:
+			if cppheaders:
+				project.cppheaderfile = "{0}/{1}_cpp_precompiled_headers_{2}.hpp".format( project.csbuild_dir,
+					project.output_name.split( '.' )[0],
+					project.targetName )
+
+				project.needs_cpp_precompile, project.cppheaderfile = handleHeaderFile( project.cppheaderfile, cppheaders, True )
+
+				_shared_globals.total_precompiles += int( project.needs_cpp_precompile )
+			else:
 				project.needs_cpp_precompile = False
-				continue
 
-			if not project.precompile and not project.chunk_precompile:
-				project.needs_cpp_precompile = False
-				continue
+			if cheaders:
+				project.cheaderfile = "{0}/{1}_c_precompiled_headers_{2}.h".format( project.csbuild_dir,
+					project.output_name.split( '.' )[0],
+					project.targetName )
 
-			project.cppheaderfile = "{0}/{1}_cpp_precompiled_headers_{2}.hpp".format( project.csbuild_dir,
-				project.output_name.split( '.' )[0],
-				project.targetName )
+				project.needs_c_precompile, project.cheaderfile = handleHeaderFile( project.cheaderfile, cheaders, False )
 
-			project.needs_cpp_precompile, project.cppheaderfile = \
-				handleHeaderFile( project.cppheaderfile, allheaders, True )
+				_shared_globals.total_precompiles += int( project.needs_c_precompile )
+			else:
+				project.needs_c_precompile = False
 
-			_shared_globals.total_precompiles += int( project.needs_cpp_precompile )
 
-		if project.cheaders:
-			project.cheaderfile = "{0}/{1}_c_precompiled_headers_{2}.h".format( project.csbuild_dir,
-				project.output_name.split( '.' )[0],
-				project.targetName )
 
-			project.needs_c_precompile, project.cheaderfile = \
-				handleHeaderFile( project.cheaderfile, project.cheaders, False )
-
-			_shared_globals.total_precompiles += int( project.needs_c_precompile )
 	os.chdir( wd )
 
 
@@ -438,7 +454,7 @@ def chunked_build( ):
 	"""
 
 	chunks_to_build = []
-	totalChunks = 0
+	totalChunksWithMultipleFiles = 0
 	owningProject = None
 
 	for project in _shared_globals.projects.values( ):
@@ -446,18 +462,18 @@ def chunked_build( ):
 			chunk = project.get_chunk( source )
 			if chunk not in chunks_to_build:
 				chunks_to_build.append( chunk )
-
-		totalChunks += len( chunks_to_build )
+				if len(chunk) > 1:
+					totalChunksWithMultipleFiles += 1
 
 		#if we never get a second chunk, we'll want to know about the project that made the first one
-		if totalChunks == 1:
+		if totalChunksWithMultipleFiles == 1:
 			owningProject = project
 
 	#Not enough chunks being built, build as plain files.
-	if totalChunks == 0:
+	if totalChunksWithMultipleFiles == 0:
 		return
 
-	if totalChunks == 1 and not owningProject.unity:
+	if totalChunksWithMultipleFiles == 1 and not owningProject.unity:
 		chunkname = get_chunk_name( owningProject.output_name, chunks_to_build[0] )
 
 		obj = "{0}/{1}_{2}.o".format( owningProject.obj_dir, chunkname,
@@ -473,7 +489,7 @@ def chunked_build( ):
 	#If we have to build more than four chunks, or more than a quarter of the total number if that's less than four,
 	#then we're not dealing with a "small build" that we can piggyback on to split the chunks back up.
 	#Just build them as chunks for now; we'll split them up in another, smaller build.
-	if len( chunks_to_build ) > min( totalChunks / 4, 4 ):
+	if len( chunks_to_build ) > min( totalChunksWithMultipleFiles / 4, 4 ):
 		log.LOG_INFO( "Not splitting any existing chunks because we would have to build too many." )
 		dont_split_any = True
 
@@ -490,13 +506,24 @@ def chunked_build( ):
 
 			chunksize = get_size( sources_in_this_chunk )
 
-			if project.unity:
-				outFile = "{0}/{1}_unity.cpp".format( project.csbuild_dir,
-					project.output_name )
+			extension = "." + chunk[0].rsplit(".", 1)[1]
+
+			if extension in project.cExtensions:
+				extension = ".c"
 			else:
-				outFile = "{}/{}.cpp".format(
+				extension = ".cpp"
+
+			if project.unity:
+				outFile = "{}/{}_unity{}".format(
 					project.csbuild_dir,
-					get_chunk_name( project.output_name, chunk )
+					project.output_name,
+					extension
+				)
+			else:
+				outFile = "{}/{}{}".format(
+					project.csbuild_dir,
+					get_chunk_name( project.output_name, chunk ),
+					extension
 				)
 
 			#If only one or two sources in this chunk need to be built, we get no benefit from building it as a unit.

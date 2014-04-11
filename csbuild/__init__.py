@@ -33,6 +33,10 @@ anything that's imported and used by those threads should always be implemented 
 thread's execution starts. Otherwise, CSBuild does not guarantee that the import will have completed
 once that thread tries to use it. Long story short: Don't import modules within threads.
 
+@var ARG_NOT_SET: A unique variable returned from get_option() for an option that has never been added to the option list
+@var helpMode: True if the script has been executed with --help or -h
+
+@undocumented: _guiModule
 @undocumented: dummy
 @undocumented: _setupdefaults
 @undocumented: _execfile
@@ -622,6 +626,8 @@ def ChunkFilesize( i ):
 
 def ChunkTolerance( i ):
 	"""
+	Please see detailed description.
+
 	B{If building using ChunkSize():}
 
 	Set the number of modified files below which a chunk will be split into individual files.
@@ -732,9 +738,9 @@ def PrecompileAsC( *args ):
 	@type args: an arbitrary number of strings
 	@param args: The files to specify as C files.
 	"""
-	projectSettings.currentProject.cheaders = []
+	projectSettings.currentProject.precompileAsC = []
 	for arg in list( args ):
-		projectSettings.currentProject.cheaders.append( os.path.abspath( arg ) )
+		projectSettings.currentProject.precompileAsC.append( os.path.abspath( arg ) )
 
 
 def ChunkPrecompile( ):
@@ -762,6 +768,8 @@ def NoPrecompile( *args ):
 			projectSettings.currentProject.precompile_exclude += newargs
 	else:
 		projectSettings.currentProject.chunk_precompile = False
+		projectSettings.currentProject.precompile = []
+		projectSettings.currentProject.precompileAsC = []
 
 
 def EnableUnity( ):
@@ -824,21 +832,39 @@ def OutputArchitecture( arch ):
 
 
 def ExtraFiles( *args ):
+	"""
+	Adds additional files to be compiled that are not in the project directory.
+
+	@type args: an arbitrary number of strings
+	@param args: A list of files to add.
+	"""
 	for arg in list( args ):
 		for file in glob.glob( arg ):
 			projectSettings.currentProject.extraFiles.append( os.path.abspath( file ) )
 
 
 def ClearExtraFiles():
+	"""
+	Clear the list of external files to compile.
+	"""
 	projectSettings.currentProject.extraFiles = []
 
 
 def ExtraDirs( *args ):
+	"""
+	Adds additional directories to search for files in.
+
+	@type args: an arbitrary number of strings
+	@param args: A list of directories to search.
+	"""
 	for arg in list( args ):
 		projectSettings.currentProject.extraDirs.append( os.path.abspath( arg ) )
 
 
 def ClearExtraDirs():
+	"""
+	Clear the list of external directories to search.
+	"""
 	projectSettings.currentProject.extraDirs = []
 
 
@@ -854,6 +880,25 @@ def DisableWarningsAsErrors( ):
 	Disable the promotion of warnings to errors.
 	"""
 	projectSettings.currentProject.warnings_as_errors = False
+
+
+def DoNotChunkTogether(file1, file2):
+	"""
+	Makes the two given files mutually exclusive when building chunks.
+	file1 will never appear in the same chunk as file2, even if that means one of the two files
+	is forced into its own separate chunk.
+
+	@type file1: string
+	@param file1: Path to the first file
+	@type file2: string
+	@param file2: Path to the second file
+	"""
+	file1 = os.path.abspath(file1)
+	file2 = os.path.abspath(file2)
+	if file1 not in projectSettings.currentProject.chunkMutexes:
+		projectSettings.currentProject.chunkMutexes[file1] = set( [file2] )
+	else:
+		projectSettings.currentProject.chunkMutexes[file1].add(file2)
 
 
 def RegisterToolchain( name, toolchain ):
@@ -1145,6 +1190,9 @@ _shared_globals.starttime = time.time( )
 _barWriter = log.bar_writer( )
 
 class LinkStatus(object):
+	"""
+	Defines the current link status of a project.
+	"""
 	Fail = 0
 	Success = 1
 	UpToDate = 2
@@ -1659,8 +1707,12 @@ def install( ):
 				if not os.path.exists( install_dir ):
 					os.makedirs( install_dir )
 				headers = []
-				project.get_files( headers = headers )
+				cheaders = []
+				project.get_files( headers = headers, cheaders = cheaders )
 				for header in headers:
+					log.LOG_INSTALL( "Installing {0} to {1}...".format( header, install_dir ) )
+					shutil.copy( header, install_dir )
+				for header in cheaders:
 					log.LOG_INSTALL( "Installing {0} to {1}...".format( header, install_dir ) )
 					shutil.copy( header, install_dir )
 				install_something = True

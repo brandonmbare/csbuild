@@ -285,8 +285,11 @@ class projectSettings( object ):
 	@ivar force_32_bit: Whether or not to force a 32-bit build
 	@type force_32_bit: bool
 
-	@ivar cheaders: List of headers designated as being C and not C++
-	@type cheaders: bool
+	@ivar cppheaders: List of C++ headers
+	@type cppheaders: list[str]
+
+	@ivar cheaders: List of C headers
+	@type cheaders: list[str]
 
 	@ivar activeToolchainName: The name of the currently active toolchain
 	@type activeToolchainName: str
@@ -331,6 +334,12 @@ class projectSettings( object ):
 	@ivar endTime: The time the project build ended
 	@type endTime: float
 
+	@type extraFiles: list[str]
+	@ivar extraFiles: Extra files being compiled, these will be rolled into project.sources, so use that instead
+
+	@type extraDirs: list[str]
+	@ivar extraDirs: Extra directories used to search for files
+
 	@undocumented: prepareBuild
 	@undocumented: __getattribute__
 	@undocumented: __setattr__
@@ -346,6 +355,8 @@ class projectSettings( object ):
 	@undocumented: save_md5
 	@undocumented: save_md5s
 	@undocumented: precompile_headers
+	@undocumented: copy
+	@undocumented: CanJoinChunk
 
 	@note: Toolchains can define additional variables that will show up on this class's
 	instance variable list when that toolchain is active. See toolchain documentation for
@@ -411,8 +422,8 @@ class projectSettings( object ):
 		self.use_chunks = True
 		self.chunk_tolerance = 3
 		self.chunk_size = 0
-		self.chunk_filesize = 500000
-		self.chunk_size_tolerance = 150000
+		self.chunk_filesize = 512000
+		self.chunk_size_tolerance = 128000
 
 		self.header_recursion = 0
 		self.ignore_external_headers = False
@@ -421,6 +432,7 @@ class projectSettings( object ):
 
 		self.chunk_precompile = True
 		self.precompile = []
+		self.precompileAsC = []
 		self.precompile_exclude = []
 		self.cppheaderfile = ""
 		self.cheaderfile = ""
@@ -459,6 +471,7 @@ class projectSettings( object ):
 		self.force_32_bit = False
 
 		self.cheaders = []
+		self.cppheaders = []
 
 		self.activeToolchainName = None
 		self.activeToolchain = None
@@ -487,6 +500,15 @@ class projectSettings( object ):
 
 		self.extraFiles = []
 		self.extraDirs = []
+
+		self.cExtensions = set([".c"])
+		self.cppExtensions = set([".cpp", ".cxx", ".cc", ".cp", ".c++"])
+		self.asmExtensions = set([".s", ".asm"])
+		self.cHeaderExtensions = set()
+		self.cppHeaderExtensions = set([".hpp", ".hxx", ".hh", ".hp", ".h++"])
+		self.ambiguousHeaderExtensions = set([".h", ".inl"])
+
+		self.chunkMutexes = {}
 
 		#GUI support
 		self.state = _shared_globals.ProjectState.PENDING
@@ -568,8 +590,12 @@ class projectSettings( object ):
 		os.chdir( wd )
 
 	def RediscoverFiles(self):
+		"""
+		Force a re-run of the file discovery process. Useful if a postPrepareBuild step adds additional files to the project.
+		This will have no effect when called from any place other than a postPrepareBuild step.
+		"""
 		if not self.chunks:
-			self.get_files( self.allsources, self.allheaders )
+			self.get_files( self.allsources, self.cppheaders, self.cheaders )
 			self.allsources += self.extraFiles
 
 			if not self.allsources:
@@ -681,6 +707,7 @@ class projectSettings( object ):
 			"default_target": self.default_target,
 			"chunk_precompile": self.chunk_precompile,
 			"precompile": list( self.precompile ),
+			"precompileAsC": list( self.precompileAsC ),
 			"precompile_exclude": list( self.precompile_exclude ),
 			"cppheaderfile": self.cppheaderfile,
 			"cheaderfile": self.cheaderfile,
@@ -702,6 +729,7 @@ class projectSettings( object ):
 			"force_64_bit": self.force_64_bit,
 			"force_32_bit": self.force_32_bit,
 			"cheaders": list( self.cheaders ),
+			"cppheaders": list( self.cppheaders ),
 			"activeToolchainName": self.activeToolchainName,
 			"activeToolchain": None,
 			"warnings_as_errors": self.warnings_as_errors,
@@ -739,15 +767,25 @@ class projectSettings( object ):
 			"linkOutput" : self.linkOutput,
 			"linkErrors" : self.linkErrors,
 			"parsedLinkErrors" : self.parsedLinkErrors,
+			"cExtensions" : set(self.cExtensions),
+			"cppExtensions" : set(self.cppExtensions),
+			"asmExtensions" : set(self.asmExtensions),
+			"cHeaderExtensions" : set(self.cHeaderExtensions),
+			"cppHeaderExtensions" : set(self.cppHeaderExtensions),
+			"ambiguousHeaderExtensions" : set(self.ambiguousHeaderExtensions),
+			"chunkMutexes" : {},
 		}
 
 		for name in self.targets:
-			ret.targets.update( { name: list( self.targets[name] ) } )
+			ret.targets.update( { name : list( self.targets[name] ) } )
+
+		for srcFile in self.chunkMutexes:
+			ret.chunkMutexes.update( { srcFile : set( self.chunkMutexes[srcFile] ) } )
 
 		return ret
 
 
-	def get_files( self, sources = None, headers = None ):
+	def get_files( self, sources = None, headers = None, cheaders = None ):
 		"""
 		Steps through the current directory tree and finds all of the source and header files, and returns them as a list.
 		Accepts two lists as arguments, which it populates. If sources or headers are excluded from the parameters, it will
@@ -756,6 +794,7 @@ class projectSettings( object ):
 
 		exclude_files = set( )
 		exclude_dirs = set( )
+		ambiguousHeaders = set()
 
 		for exclude in self.exclude_files:
 			exclude_files |= set( glob.glob( exclude ) )
@@ -785,34 +824,48 @@ class projectSettings( object ):
 					continue
 				log.LOG_INFO( "Looking in directory {0}".format( root ) )
 				if sources is not None:
-					for filename in fnmatch.filter( filenames, '*.cpp' ):
-						path = os.path.join( absroot, filename )
-						if path not in exclude_files:
-							sources.append( os.path.abspath( path ) )
-							self.hasCppFiles = True
-					for filename in fnmatch.filter( filenames, '*.c' ):
-						path = os.path.join( absroot, filename )
-						if path not in exclude_files:
-							sources.append( os.path.abspath( path ) )
+					for extension in self.cppExtensions:
+						for filename in fnmatch.filter( filenames, '*'+extension ):
+							path = os.path.join( absroot, filename )
+							if path not in exclude_files:
+								sources.append( os.path.abspath( path ) )
+								self.hasCppFiles = True
+					for extension in self.cExtensions:
+						for filename in fnmatch.filter( filenames, '*'+extension ):
+							path = os.path.join( absroot, filename )
+							if path not in exclude_files:
+								sources.append( os.path.abspath( path ) )
 
 					sources.sort( key = str.lower )
 
 				if headers is not None:
-					for filename in fnmatch.filter( filenames, '*.hpp' ):
-						path = os.path.join( absroot, filename )
-						if path not in exclude_files:
-							headers.append( os.path.abspath( path ) )
-							self.hasCppFiles = True
-					for filename in fnmatch.filter( filenames, '*.h' ):
-						path = os.path.join( absroot, filename )
-						if path not in exclude_files:
-							headers.append( os.path.abspath( path ) )
-					for filename in fnmatch.filter( filenames, '*.inl' ):
-						path = os.path.join( absroot, filename )
-						if path not in exclude_files:
-							headers.append( os.path.abspath( path ) )
+					for extension in self.cppHeaderExtensions:
+						for filename in fnmatch.filter( filenames, '*'+extension ):
+							path = os.path.join( absroot, filename )
+							if path not in exclude_files:
+								headers.append( os.path.abspath( path ) )
+								self.hasCppFiles = True
 
-					headers.sort( key = str.lower )
+				if cheaders is not None:
+					for extension in self.cHeaderExtensions:
+						for filename in fnmatch.filter( filenames, '*'+extension ):
+							path = os.path.join( absroot, filename )
+							if path not in exclude_files:
+								cheaders.append( os.path.abspath( path ) )
+
+				if headers is not None or cheaders is not None:
+					for extension in self.ambiguousHeaderExtensions:
+						for filename in fnmatch.filter( filenames, '*'+extension ):
+							path = os.path.join( absroot, filename )
+							if path not in exclude_files:
+								ambiguousHeaders.add( os.path.abspath( path ) )
+
+		if self.hasCppFiles:
+			headers += list(ambiguousHeaders)
+		else:
+			cheaders += list(ambiguousHeaders)
+
+		headers.sort( key = str.lower )
 
 
 	def get_full_path( self, headerFile, relativeDir ):
@@ -1006,8 +1059,16 @@ class projectSettings( object ):
 					newmd5 = _utils.get_md5( f )
 				_shared_globals.newmd5s.update( { srcFile: newmd5 } )
 
-			md5file = "{0}/md5s/{1}.md5".format( self.csbuild_dir,
-				os.path.abspath( srcFile ) )
+			if platform.system( ) == "Windows":
+				srcFile = srcFile[2:]
+
+			if sys.version_info >= (3,0):
+				srcFile = srcFile.encode("utf-8")
+				baseName = os.path.basename( srcFile ).decode("utf-8")
+			else:
+				baseName = os.path.basename( srcFile )
+
+			md5file = "{}.md5".format( os.path.join( self.csbuild_dir, "md5s", hashlib.md5( srcFile ).hexdigest(), baseName ) )
 
 			if os.path.exists( md5file ):
 				try:
@@ -1051,8 +1112,16 @@ class projectSettings( object ):
 				newmd5 = 0
 				oldmd5 = 1
 
-				md5file = "{0}/md5s/{1}.md5".format( self.csbuild_dir,
-					os.path.abspath( path ) )
+				if platform.system( ) == "Windows":
+					srcFile = srcFile[2:]
+
+				if sys.version_info >= (3,0):
+					srcFile = srcFile.encode("utf-8")
+					baseName = os.path.basename( srcFile ).decode("utf-8")
+				else:
+					baseName = os.path.basename( srcFile )
+
+				md5file = "{}.md5".format( os.path.join( self.csbuild_dir, "md5s", hashlib.md5( srcFile ).hexdigest(), baseName ) )
 
 				if os.path.exists( md5file ):
 					try:
@@ -1143,45 +1212,103 @@ class projectSettings( object ):
 		log.LOG_INFO( "Libraries OK!" )
 		return True
 
+	def CanJoinChunk(self, chunk, newFile):
+		if not chunk:
+			return True
+
+		extension = "." + chunk[0].rsplit(".", 1)[1]
+		newFileExtension = "." + newFile.rsplit(".", 1)[1]
+		if(
+			(extension in self.cExtensions and newFileExtension in self.cppExtensions) or
+			(extension in self.cppExtensions and newFileExtension in self.cExtensions)
+		):
+			return False
+
+		for sourceFile in chunk:
+			if newFile in self.chunkMutexes and sourceFile in self.chunkMutexes[newFile]:
+				log.LOG_INFO("Rejecting {} for this chunk because it is labeled as mutually exclusive with {} for chunking".format(newFile, sourceFile))
+				return False
+			if sourceFile in self.chunkMutexes and newFile in self.chunkMutexes[sourceFile]:
+				log.LOG_INFO("Rejecting {} for this chunk because it is labeled as mutually exclusive with {} for chunking".format(newFile, sourceFile))
+				return False
+
+		return True
+
+
 
 	def make_chunks( self, l ):
 		""" Converts the list into a list of lists - i.e., "chunks"
 		Each chunk represents one compilation unit in the chunked build system.
 		"""
-		if _shared_globals.disable_chunks:
+		if _shared_globals.disable_chunks or not self.use_chunks:
 			return l
 
-		sorted_list = sorted( l, key = os.path.getsize, reverse = True )
-		if self.unity or not self.use_chunks:
+		if self.unity:
 			return [l]
+
 		chunks = []
 		if self.chunk_filesize > 0:
-			chunksize = 0
-			chunk = []
+			sorted_list = sorted( l, key = os.path.getsize, reverse=True )
 			while sorted_list:
+				remaining = []
 				chunksize = 0
 				chunk = [sorted_list[0]]
 				chunksize += os.path.getsize( sorted_list[0] )
 				sorted_list.pop( 0 )
-				for srcFile in reversed( sorted_list ):
+
+				for i in reversed(range(len(sorted_list))):
+					srcFile = sorted_list[i]
+					if not self.CanJoinChunk(chunk, srcFile):
+						remaining.append(srcFile)
+						continue
+
 					filesize = os.path.getsize( srcFile )
+
 					if chunksize + filesize > self.chunk_filesize:
 						chunks.append( chunk )
+						remaining += sorted_list[i::-1]
 						log.LOG_INFO( "Made chunk: {0}".format( chunk ) )
 						log.LOG_INFO( "Chunk size: {0}".format( chunksize ) )
+						chunk = []
 						break
 					else:
 						chunk.append( srcFile )
 						chunksize += filesize
-						sorted_list.pop( )
-			chunks.append( chunk )
-			log.LOG_INFO( "Made chunk: {0}".format( chunk ) )
-			log.LOG_INFO( "Chunk size: {0}".format( chunksize ) )
+
+				if remaining:
+					sorted_list = sorted( remaining, key = os.path.getsize, reverse=True )
+				else:
+					sorted_list = None
+
+				if chunk:
+					chunks.append( chunk )
+					log.LOG_INFO( "Made chunk: {0}".format( chunk ) )
+					log.LOG_INFO( "Chunk size: {0}".format( chunksize ) )
 		elif self.chunk_size > 0:
-			for i in range( 0, len( l ), self.chunk_size ):
-				chunks.append( l[i:i + self.chunk_size] )
+			tempList = l
+			while tempList:
+				chunk = []
+				remaining = []
+				for i in range(len(tempList)):
+					srcFile = tempList[i]
+					if not self.CanJoinChunk(chunk, srcFile):
+						remaining.append(srcFile)
+						continue
+
+					chunk.append(srcFile)
+
+					if len(chunk) == self.chunk_size:
+						remaining += tempList[i+1:]
+						chunks.append( chunk )
+						log.LOG_INFO( "Made chunk: {0}".format( chunk ) )
+						chunk = []
+						break
+				tempList = remaining
+				if chunk:
+					chunks.append( chunk )
+					log.LOG_INFO( "Made chunk: {0}".format( chunk ) )
 		else:
-			return [l]
+			return l
 		return chunks
 
 

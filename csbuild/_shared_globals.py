@@ -44,6 +44,9 @@ and stepping on each other
 @var projects: Full list of all projects
 @type projects: dict[str, csbuild.projectSettings.projectSettings]
 
+@var install_prefix: The base location that files will be installed to (defaults to /usr/local)
+@type install_prefix: str
+
 @var project_build_list: Projects the user has requested to build
 @type project_build_list: set[str]
 
@@ -57,7 +60,7 @@ and stepping on each other
 @type alltargets: set[str]
 
 @var alltoolchains: All toolchains that have been registered
-@type alltollchains: dict[str, csbuild.toolchain.toolchainBase]
+@type alltoolchains: dict[str, L{csbuild.toolchain.toolchainBase}]
 
 @var allgenerators: All project generators that have been registered
 @type allgenerators: dict[str, csbuild.project_generator.project_generator]
@@ -113,7 +116,7 @@ from csbuild import terminfo
 
 class ProjectState( object ):
 	"""
-	Defines the state for a project. A subset of these values (PENDING, BUILDING, FINISHED, FAILED) is also used to define
+	Defines the state for a project. A subset of these values (PENDING, BUILDING, FINISHED, FAILED, UP_TO_DATE) is also used to define
 	state for individual files.
 	"""
 	PENDING = 0
@@ -128,12 +131,36 @@ class ProjectState( object ):
 
 
 class OutputLevel( object ):
+	"""
+	Used in GUI display, indicates the type of message that a given OutputLine contains.
+	"""
 	UNKNOWN = -1
 	NOTE = 0
 	WARNING = 1
 	ERROR = 2
 
 class OutputLine( object ):
+	"""
+	Defines a line of parsed output from the compiler.
+
+	@type level: L{OutputLevel}
+	@ivar level: the output level associated with this line
+
+	@type text: str
+	@ivar text: The actual text of the message
+
+	@type file: str
+	@ivar file: The file that generated the message, as indicated by the compiler
+
+	@type line: int
+	@ivar line: The line that the message occurred on. -1 if this information is not available.
+
+	@type column: int
+	@ivar column: The column that the message occurred on. -1 if this information is not available.
+
+	@type details: list[L{OutputLine}]
+	@ivar details: Additional details (such as callstacks, macro expansions, or notes) related to this line of output
+	"""
 	def __init__(self):
 		self.level = OutputLevel.UNKNOWN
 		self.text = ""

@@ -911,10 +911,9 @@ class toolchainBase( object ):
 		@type args: an arbitrary number of strings
 		@param args: The files to specify as C files.
 		"""
-		if "cheaders" not in self.settingsOverrides:
-			self.settingsOverrides["cheaders"] = []
+		self.settingsOverrides["precompileAsC"] = []
 		for arg in list( args ):
-			self.settingsOverrides["cheaders"].append( os.path.abspath( arg ) )
+			self.settingsOverrides["precompileAsC"].append( os.path.abspath( arg ) )
 
 
 	def ChunkPrecompile( self ):
@@ -945,6 +944,8 @@ class toolchainBase( object ):
 				self.settingsOverrides["precompile_exclude"] += newargs
 		else:
 			self.settingsOverrides["chunk_precompile"] = False
+			self.settingsOverrides["precompile"] = []
+			self.settingsOverrides["precompileAsC"] = []
 
 
 	def EnableUnity( self ):
@@ -1006,6 +1007,12 @@ class toolchainBase( object ):
 		self.settingsOverrides["outputArchitecture"] = arch
 
 	def ExtraFiles( self, *args ):
+		"""
+		Adds additional files to be compiled that are not in the project directory.
+
+		@type args: an arbitrary number of strings
+		@param args: A list of files to add.
+		"""
 		if "extraFiles" not in self.settingsOverrides:
 			self.settingsOverrides["extraFiles"] = []
 		for arg in list( args ):
@@ -1014,10 +1021,19 @@ class toolchainBase( object ):
 
 
 	def ClearExtraFiles(self):
+		"""
+		Clear the list of external files to compile.
+		"""
 		self.settingsOverrides["extraFiles"] = []
 
 
 	def ExtraDirs( self, *args ):
+		"""
+		Adds additional directories to search for files in.
+
+		@type args: an arbitrary number of strings
+		@param args: A list of directories to search.
+		"""
 		if "extraDirs" not in self.settingsOverrides:
 			self.settingsOverrides["extraDirs"] = []
 		for arg in list( args ):
@@ -1025,4 +1041,28 @@ class toolchainBase( object ):
 
 
 	def ClearExtraDirs(self):
+		"""
+		Clear the list of external directories to search.
+		"""
 		self.settingsOverrides["extraDirs"] = []
+
+
+	def DoNotChunkTogether(self, file1, file2):
+		"""
+		Makes the two given files mutually exclusive when building chunks.
+		file1 will never appear in the same chunk as file2, even if that means one of the two files
+		is forced into its own separate chunk.
+
+		@type file1: string
+		@param file1: Path to the first file
+		@type file2: string
+		@param file2: Path to the second file
+		"""
+		file1 = os.path.abspath(file1)
+		file2 = os.path.abspath(file2)
+		if "chunkMutexes" not in self.settingsOverrides:
+			self.settingsOverrides["chunkMutexes"] = {}
+		if file1 not in self.settingsOverrides["chunkMutexes"]:
+			self.settingsOverrides["chunkMutexes"][file1] = set( [file2] )
+		else:
+			self.settingsOverrides["chunkMutexes"][file1].add(file2)

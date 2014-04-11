@@ -936,7 +936,18 @@ class MainWindow( QMainWindow ):
 						for source in project.allsources:
 							inThisBuild = False
 							if source not in project.final_chunk_set:
-								chunk = "{}/{}.cpp".format( project.csbuild_dir, project.get_chunk( source ) )
+								chunk = project.get_chunk( source )
+								if not chunk:
+									continue
+
+								extension = "." + source.rsplit(".", 1)[1]
+								if extension in project.cExtensions:
+									extension = ".c"
+								else:
+									extension = ".cpp"
+
+								chunk = "{}/{}{}".format( project.csbuild_dir, chunk, extension )
+
 								if chunk in used_chunks:
 									continue
 								if chunk in project.final_chunk_set:
@@ -1287,7 +1298,18 @@ class MainWindow( QMainWindow ):
 					for source in project.allsources:
 						inThisBuild = False
 						if source not in project.final_chunk_set:
-							chunk = "{}/{}.cpp".format( project.csbuild_dir, project.get_chunk( source ) )
+							chunk = project.get_chunk( source )
+							if not chunk:
+								continue
+
+							extension = "." + source.rsplit(".", 1)[1]
+							if extension in project.cExtensions:
+								extension = ".c"
+							else:
+								extension = ".cpp"
+
+							chunk = "{}/{}{}".format( project.csbuild_dir, chunk, extension )
+
 							if chunk in used_chunks:
 								continue
 							if chunk in project.final_chunk_set:
@@ -1645,7 +1667,18 @@ class GuiThread( threading.Thread ):
 			for source in project.allsources:
 				inThisBuild = False
 				if source not in project.final_chunk_set:
-					chunk = "{}/{}.cpp".format( project.csbuild_dir, project.get_chunk( source ) )
+					chunk = project.get_chunk( source )
+					if not chunk:
+						continue
+
+					extension = "." + source.rsplit(".", 1)[1]
+					if extension in project.cExtensions:
+						extension = ".c"
+					else:
+						extension = ".cpp"
+
+					chunk = "{}/{}{}".format( project.csbuild_dir, chunk, extension )
+
 					if chunk in used_chunks:
 						continue
 					if chunk in project.final_chunk_set:

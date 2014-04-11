@@ -193,7 +193,7 @@ class project_generator_qtcreator( project_generator.project_generator ):
 		allsubprojects = set( )
 
 		solutionpath = os.path.join( grouppath, "{}.pro".format( solutionname ) )
-		log.LOG_INFO( "Creating subdirs project {}.pro".format( solutionpath ) )
+		log.LOG_INFO( "Creating subdirs project {}".format( solutionpath ) )
 
 		with open( solutionpath, "w" ) as f:
 			f.write( "TEMPLATE = subdirs\n\n" )

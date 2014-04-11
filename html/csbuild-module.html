@@ -102,8 +102,10 @@
     <li class="private"> <strong class="uidlink"><a href="csbuild.projectSettings-module.html">csbuild.projectSettings</a></strong>: <em class="summary"><b>ProjectSettings module</b></em>    </li>
     <li class="private"> <strong class="uidlink"><a href="csbuild.project_generator-module.html">csbuild.project_generator</a></strong>: <em class="summary"><b>Project Generator Module</b></em>    </li>
     <li class="private"> <strong class="uidlink"><a href="csbuild.project_generator_qtcreator-module.html">csbuild.project_generator_qtcreator</a></strong>    </li>
+    <li class="private"> <strong class="uidlink"><a href="csbuild.project_generator_slickedit-module.html">csbuild.project_generator_slickedit</a></strong>    </li>
     <li> <strong class="uidlink"><a href="csbuild.terminfo-module.html">csbuild.terminfo</a></strong>: <em class="summary"><b>Provides info about the terminal the makefile's being run in</b></em>    </li>
     <li class="private"> <strong class="uidlink"><a href="csbuild.toolchain-module.html">csbuild.toolchain</a></strong>: <em class="summary"><b>Toolchain Module</b></em>    </li>
+    <li> <strong class="uidlink"><a href="csbuild.toolchain_android-module.html">csbuild.toolchain_android</a></strong>: <em class="summary">Contains a plugin class for interfacing with GCC</em>    </li>
     <li class="private"> <strong class="uidlink"><a href="csbuild.toolchain_gcc-module.html">csbuild.toolchain_gcc</a></strong>: <em class="summary">Contains a plugin class for interfacing with GCC</em>    </li>
     <li class="private"> <strong class="uidlink"><a href="csbuild.toolchain_msvc-module.html">csbuild.toolchain_msvc</a></strong>: <em class="summary">Contains a plugin class for interfacing with MSVC</em>    </li>
   </ul></td></tr>
@@ -142,6 +144,14 @@
         <a href="csbuild.ArchitectureType-class.html" class="summary-name" onclick="show_private();">ArchitectureType</a><br />
       ArchitectureType encompasses architecture in a cross-platform, 
         cross-toolchain way.
+    </td>
+  </tr>
+<tr class="private">
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+        <a href="csbuild.LinkStatus-class.html" class="summary-name" onclick="show_private();">LinkStatus</a><br />
+      Defines the current link status of a project.
     </td>
   </tr>
 </table>
@@ -911,7 +921,7 @@
       <table width="100%" cellpadding="0" cellspacing="0" border="0">
         <tr>
           <td><span class="summary-sig"><a href="csbuild-module.html#ChunkTolerance" class="summary-sig-name" onclick="show_private();">ChunkTolerance</a>(<span class="summary-sig-arg">i</span>)</span><br />
-      <b>If building using ChunkSize():</b></td>
+      Please see detailed description.</td>
           <td align="right" valign="top">
             <span class="codelink"><a href="csbuild-pysrc.html#ChunkTolerance">source&nbsp;code</a></span>
             
@@ -1204,6 +1214,75 @@
     </td><td class="summary">
       <table width="100%" cellpadding="0" cellspacing="0" border="0">
         <tr>
+          <td><span class="summary-sig"><a href="csbuild-module.html#ExtraFiles" class="summary-sig-name" onclick="show_private();">ExtraFiles</a>(<span class="summary-sig-arg">*args</span>)</span><br />
+      Adds additional files to be compiled that are not in the project 
+      directory.</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="csbuild-pysrc.html#ExtraFiles">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr class="private">
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="ClearExtraFiles"></a><span class="summary-sig-name">ClearExtraFiles</span>()</span><br />
+      Clear the list of external files to compile.</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="csbuild-pysrc.html#ClearExtraFiles">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr class="private">
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a href="csbuild-module.html#ExtraDirs" class="summary-sig-name" onclick="show_private();">ExtraDirs</a>(<span class="summary-sig-arg">*args</span>)</span><br />
+      Adds additional directories to search for files in.</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="csbuild-pysrc.html#ExtraDirs">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr class="private">
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="ClearExtraDirs"></a><span class="summary-sig-name">ClearExtraDirs</span>()</span><br />
+      Clear the list of external directories to search.</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="csbuild-pysrc.html#ClearExtraDirs">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr class="private">
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
           <td><span class="summary-sig"><a name="EnableWarningsAsErrors"></a><span class="summary-sig-name">EnableWarningsAsErrors</span>()</span><br />
       Promote all warnings to errors.</td>
           <td align="right" valign="top">
@@ -1225,6 +1304,24 @@
       Disable the promotion of warnings to errors.</td>
           <td align="right" valign="top">
             <span class="codelink"><a href="csbuild-pysrc.html#DisableWarningsAsErrors">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr class="private">
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a href="csbuild-module.html#DoNotChunkTogether" class="summary-sig-name" onclick="show_private();">DoNotChunkTogether</a>(<span class="summary-sig-arg">file1</span>,
+        <span class="summary-sig-arg">file2</span>)</span><br />
+      Makes the two given files mutually exclusive when building chunks.</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="csbuild-pysrc.html#DoNotChunkTogether">source&nbsp;code</a></span>
             
           </td>
         </tr>
@@ -1363,10 +1460,10 @@
     </td><td class="summary">
       <table width="100%" cellpadding="0" cellspacing="0" border="0">
         <tr>
-          <td><span class="summary-sig"><a href="csbuild-module.html#preCompileStep" class="summary-sig-name" onclick="show_private();">preCompileStep</a>(<span class="summary-sig-arg">func</span>)</span><br />
-      Decorator that creates a pre-compile step for the containing project.</td>
+          <td><span class="summary-sig"><a href="csbuild-module.html#prePrepareBuildStep" class="summary-sig-name" onclick="show_private();">prePrepareBuildStep</a>(<span class="summary-sig-arg">func</span>)</span><br />
+      Decorator that creates a pre-build step for the containing project.</td>
           <td align="right" valign="top">
-            <span class="codelink"><a href="csbuild-pysrc.html#preCompileStep">source&nbsp;code</a></span>
+            <span class="codelink"><a href="csbuild-pysrc.html#prePrepareBuildStep">source&nbsp;code</a></span>
             
           </td>
         </tr>
@@ -1380,11 +1477,96 @@
     </td><td class="summary">
       <table width="100%" cellpadding="0" cellspacing="0" border="0">
         <tr>
-          <td><span class="summary-sig"><a href="csbuild-module.html#postCompileStep" class="summary-sig-name" onclick="show_private();">postCompileStep</a>(<span class="summary-sig-arg">func</span>)</span><br />
+          <td><span class="summary-sig"><a href="csbuild-module.html#postPrepareBuildStep" class="summary-sig-name" onclick="show_private();">postPrepareBuildStep</a>(<span class="summary-sig-arg">func</span>)</span><br />
       Decorator that creates a post-compile step for the containing 
       project.</td>
           <td align="right" valign="top">
-            <span class="codelink"><a href="csbuild-pysrc.html#postCompileStep">source&nbsp;code</a></span>
+            <span class="codelink"><a href="csbuild-pysrc.html#postPrepareBuildStep">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr class="private">
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a href="csbuild-module.html#preMakeStep" class="summary-sig-name" onclick="show_private();">preMakeStep</a>(<span class="summary-sig-arg">func</span>)</span><br />
+      Decorator that creates a pre-make step for the containing project.</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="csbuild-pysrc.html#preMakeStep">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr class="private">
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a href="csbuild-module.html#postMakeStep" class="summary-sig-name" onclick="show_private();">postMakeStep</a>(<span class="summary-sig-arg">func</span>)</span><br />
+      Decorator that creates a post-make step for the containing project.</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="csbuild-pysrc.html#postMakeStep">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr class="private">
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a href="csbuild-module.html#preBuildStep" class="summary-sig-name" onclick="show_private();">preBuildStep</a>(<span class="summary-sig-arg">func</span>)</span><br />
+      Decorator that creates a pre-build step for the containing project.</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="csbuild-pysrc.html#preBuildStep">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr class="private">
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a href="csbuild-module.html#postBuildStep" class="summary-sig-name" onclick="show_private();">postBuildStep</a>(<span class="summary-sig-arg">func</span>)</span><br />
+      Decorator that creates a post-build step for the containing project.</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="csbuild-pysrc.html#postBuildStep">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr class="private">
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a href="csbuild-module.html#preLinkStep" class="summary-sig-name" onclick="show_private();">preLinkStep</a>(<span class="summary-sig-arg">func</span>)</span><br />
+      Decorator that creates a pre-link step for the containing project.</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="csbuild-pysrc.html#preLinkStep">source&nbsp;code</a></span>
             
           </td>
         </tr>
@@ -1449,7 +1631,7 @@
     </td><td class="summary">
       <table width="100%" cellpadding="0" cellspacing="0" border="0">
         <tr>
-          <td><span class="summary-sig"><a name="Done"></a><span class="summary-sig-name">Done</span>()</span><br />
+          <td><span class="summary-sig"><a href="csbuild-module.html#Done" class="summary-sig-name" onclick="show_private();">Done</a>(<span class="summary-sig-arg">code</span>=<span class="summary-sig-default">0</span>)</span><br />
       Exit the build process early</td>
           <td align="right" valign="top">
             <span class="codelink"><a href="csbuild-pysrc.html#Done">source&nbsp;code</a></span>
@@ -1466,7 +1648,7 @@
     </td><td class="summary">
       <table width="100%" cellpadding="0" cellspacing="0" border="0">
         <tr>
-          <td><span class="summary-sig"><a name="Exit"></a><span class="summary-sig-name">Exit</span>()</span><br />
+          <td><span class="summary-sig"><a href="csbuild-module.html#Exit" class="summary-sig-name" onclick="show_private();">Exit</a>(<span class="summary-sig-arg">code</span>=<span class="summary-sig-default">0</span>)</span><br />
       Exit the build process early</td>
           <td align="right" valign="top">
             <span class="codelink"><a href="csbuild-pysrc.html#Exit">source&nbsp;code</a></span>
@@ -1627,6 +1809,34 @@
     <td width="15%" align="right" valign="top" class="summary">
       <span class="summary-type">&nbsp;</span>
     </td><td class="summary">
+        <a name="ArchitectureARMv5"></a><span class="summary-name">ArchitectureARMv5</span> = <code title="ArchitectureType(&quot;armv5&quot;)">ArchitectureType(&quot;armv5&quot;)</code>
+    </td>
+  </tr>
+<tr class="private">
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+        <a name="ArchitectureARMv6m"></a><span class="summary-name">ArchitectureARMv6m</span> = <code title="ArchitectureType(&quot;armv6m&quot;)">ArchitectureType(&quot;armv6m&quot;)</code>
+    </td>
+  </tr>
+<tr class="private">
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+        <a name="ArchitectureARMv7a"></a><span class="summary-name">ArchitectureARMv7a</span> = <code title="ArchitectureType(&quot;armv7a&quot;)">ArchitectureType(&quot;armv7a&quot;)</code>
+    </td>
+  </tr>
+<tr class="private">
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+        <a name="ArchitectureARMv7m"></a><span class="summary-name">ArchitectureARMv7m</span> = <code title="ArchitectureType(&quot;armv7m&quot;)">ArchitectureType(&quot;armv7m&quot;)</code>
+    </td>
+  </tr>
+<tr class="private">
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
         <a name="ArchitectureXScale"></a><span class="summary-name">ArchitectureXScale</span> = <code title="ArchitectureType(&quot;arm&quot;)">ArchitectureType(&quot;arm&quot;)</code>
     </td>
   </tr>
@@ -1662,14 +1872,66 @@
     <td width="15%" align="right" valign="top" class="summary">
       <span class="summary-type">&nbsp;</span>
     </td><td class="summary">
-        <a name="ARG_NOT_SET"></a><span class="summary-name">ARG_NOT_SET</span> = <code title="type(&quot;ArgNotSetType&quot;, (), {})()">type(&quot;ArgNotSetType&quot;, (), {})()</code>
+        <a name="ArchitectureMips"></a><span class="summary-name">ArchitectureMips</span> = <code title="ArchitectureType(&quot;mips&quot;)">ArchitectureType(&quot;mips&quot;)</code>
     </td>
   </tr>
 <tr class="private">
     <td width="15%" align="right" valign="top" class="summary">
       <span class="summary-type">&nbsp;</span>
     </td><td class="summary">
-        <a name="helpMode"></a><span class="summary-name">helpMode</span> = <code title="False">False</code>
+        <a name="ArchitectureAndroidARM"></a><span class="summary-name">ArchitectureAndroidARM</span> = <code title="ArchitectureType(&quot;arm&quot;, abi= &quot;android&quot;)">ArchitectureType(&quot;arm&quot;, abi= &quot;android&quot;)</code>
+    </td>
+  </tr>
+<tr class="private">
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+        <a href="csbuild-module.html#ArchitectureAndroidARMv5" class="summary-name" onclick="show_private();">ArchitectureAndroidARMv5</a> = <code title="ArchitectureType(&quot;armv5&quot;, abi= &quot;android&quot;)">ArchitectureType(&quot;armv5&quot;, abi= &quot;and<code class="variable-ellipsis">...</code></code>
+    </td>
+  </tr>
+<tr class="private">
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+        <a href="csbuild-module.html#ArchitectureAndroidARMv6m" class="summary-name" onclick="show_private();">ArchitectureAndroidARMv6m</a> = <code title="ArchitectureType(&quot;armv6m&quot;, abi= &quot;android&quot;)">ArchitectureType(&quot;armv6m&quot;, abi= &quot;a<code class="variable-ellipsis">...</code></code>
+    </td>
+  </tr>
+<tr class="private">
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+        <a href="csbuild-module.html#ArchitectureAndroidARMv7a" class="summary-name" onclick="show_private();">ArchitectureAndroidARMv7a</a> = <code title="ArchitectureType(&quot;armv7a&quot;, abi= &quot;android&quot;)">ArchitectureType(&quot;armv7a&quot;, abi= &quot;a<code class="variable-ellipsis">...</code></code>
+    </td>
+  </tr>
+<tr class="private">
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+        <a href="csbuild-module.html#ArchitectureAndroidARMv7m" class="summary-name" onclick="show_private();">ArchitectureAndroidARMv7m</a> = <code title="ArchitectureType(&quot;armv7m&quot;, abi= &quot;android&quot;)">ArchitectureType(&quot;armv7m&quot;, abi= &quot;a<code class="variable-ellipsis">...</code></code>
+    </td>
+  </tr>
+<tr class="private">
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+        <a href="csbuild-module.html#ArchitectureAndroidMips" class="summary-name" onclick="show_private();">ArchitectureAndroidMips</a> = <code title="ArchitectureType(&quot;mips&quot;, abi= &quot;android&quot;)">ArchitectureType(&quot;mips&quot;, abi= &quot;andro<code class="variable-ellipsis">...</code></code>
+    </td>
+  </tr>
+<tr class="private">
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+        <a name="ARG_NOT_SET"></a><span class="summary-name">ARG_NOT_SET</span> = <code title="type(&quot;ArgNotSetType&quot;, (), {})()">type(&quot;ArgNotSetType&quot;, (), {})()</code><br />
+      A unique variable returned from get_option() for an option that has 
+      never been added to the option list
+    </td>
+  </tr>
+<tr class="private">
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+        <a name="helpMode"></a><span class="summary-name">helpMode</span> = <code title="False">False</code><br />
+      True if the script has been executed with --help or -h
     </td>
   </tr>
 <tr class="private">
@@ -2416,6 +2678,7 @@
     </td>
   </tr></table>
   
+  <p>Please see detailed description.</p>
   <p><b>If building using ChunkSize():</b></p>
   <p>Set the number of modified files below which a chunk will be split 
   into individual files.</p>
@@ -2675,6 +2938,80 @@
   </dl>
 </td></tr></table>
 </div>
+<a name="ExtraFiles"></a>
+<div class="private">
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr><td>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr valign="top"><td>
+  <h3 class="epydoc"><span class="sig"><span class="sig-name">ExtraFiles</span>(<span class="sig-arg">*args</span>)</span>
+  </h3>
+  </td><td align="right" valign="top"
+    ><span class="codelink"><a href="csbuild-pysrc.html#ExtraFiles">source&nbsp;code</a></span>&nbsp;
+    </td>
+  </tr></table>
+  
+  <p>Adds additional files to be compiled that are not in the project 
+  directory.</p>
+  <dl class="fields">
+    <dt>Parameters:</dt>
+    <dd><ul class="nomargin-top">
+        <li><strong class="pname"><code>args</code></strong> (an arbitrary number of strings) - A list of files to add.</li>
+    </ul></dd>
+  </dl>
+</td></tr></table>
+</div>
+<a name="ExtraDirs"></a>
+<div class="private">
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr><td>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr valign="top"><td>
+  <h3 class="epydoc"><span class="sig"><span class="sig-name">ExtraDirs</span>(<span class="sig-arg">*args</span>)</span>
+  </h3>
+  </td><td align="right" valign="top"
+    ><span class="codelink"><a href="csbuild-pysrc.html#ExtraDirs">source&nbsp;code</a></span>&nbsp;
+    </td>
+  </tr></table>
+  
+  <p>Adds additional directories to search for files in.</p>
+  <dl class="fields">
+    <dt>Parameters:</dt>
+    <dd><ul class="nomargin-top">
+        <li><strong class="pname"><code>args</code></strong> (an arbitrary number of strings) - A list of directories to search.</li>
+    </ul></dd>
+  </dl>
+</td></tr></table>
+</div>
+<a name="DoNotChunkTogether"></a>
+<div class="private">
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr><td>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr valign="top"><td>
+  <h3 class="epydoc"><span class="sig"><span class="sig-name">DoNotChunkTogether</span>(<span class="sig-arg">file1</span>,
+        <span class="sig-arg">file2</span>)</span>
+  </h3>
+  </td><td align="right" valign="top"
+    ><span class="codelink"><a href="csbuild-pysrc.html#DoNotChunkTogether">source&nbsp;code</a></span>&nbsp;
+    </td>
+  </tr></table>
+  
+  <p>Makes the two given files mutually exclusive when building chunks. 
+  file1 will never appear in the same chunk as file2, even if that means 
+  one of the two files is forced into its own separate chunk.</p>
+  <dl class="fields">
+    <dt>Parameters:</dt>
+    <dd><ul class="nomargin-top">
+        <li><strong class="pname"><code>file1</code></strong> (string) - Path to the first file</li>
+        <li><strong class="pname"><code>file2</code></strong> (string) - Path to the second file</li>
+    </ul></dd>
+  </dl>
+</td></tr></table>
+</div>
 <a name="RegisterToolchain"></a>
 <div class="private">
 <table class="details" border="1" cellpadding="3"
@@ -2871,22 +3208,23 @@
   </dl>
 </td></tr></table>
 </div>
-<a name="preCompileStep"></a>
+<a name="prePrepareBuildStep"></a>
 <div class="private">
 <table class="details" border="1" cellpadding="3"
        cellspacing="0" width="100%" bgcolor="white">
 <tr><td>
   <table width="100%" cellpadding="0" cellspacing="0" border="0">
   <tr valign="top"><td>
-  <h3 class="epydoc"><span class="sig"><span class="sig-name">preCompileStep</span>(<span class="sig-arg">func</span>)</span>
+  <h3 class="epydoc"><span class="sig"><span class="sig-name">prePrepareBuildStep</span>(<span class="sig-arg">func</span>)</span>
   </h3>
   </td><td align="right" valign="top"
-    ><span class="codelink"><a href="csbuild-pysrc.html#preCompileStep">source&nbsp;code</a></span>&nbsp;
+    ><span class="codelink"><a href="csbuild-pysrc.html#prePrepareBuildStep">source&nbsp;code</a></span>&nbsp;
     </td>
   </tr></table>
   
-  <p>Decorator that creates a pre-compile step for the containing 
-  project.</p>
+  <p>Decorator that creates a pre-build step for the containing project. 
+  Pre-PrepareBuild steps run just before the project begins preparing its 
+  build tasks.</p>
   <dl class="fields">
     <dt>Parameters:</dt>
     <dd><ul class="nomargin-top">
@@ -2901,22 +3239,180 @@
       </p>
 </div></td></tr></table>
 </div>
-<a name="postCompileStep"></a>
+<a name="postPrepareBuildStep"></a>
 <div class="private">
 <table class="details" border="1" cellpadding="3"
        cellspacing="0" width="100%" bgcolor="white">
 <tr><td>
   <table width="100%" cellpadding="0" cellspacing="0" border="0">
   <tr valign="top"><td>
-  <h3 class="epydoc"><span class="sig"><span class="sig-name">postCompileStep</span>(<span class="sig-arg">func</span>)</span>
+  <h3 class="epydoc"><span class="sig"><span class="sig-name">postPrepareBuildStep</span>(<span class="sig-arg">func</span>)</span>
   </h3>
   </td><td align="right" valign="top"
-    ><span class="codelink"><a href="csbuild-pysrc.html#postCompileStep">source&nbsp;code</a></span>&nbsp;
+    ><span class="codelink"><a href="csbuild-pysrc.html#postPrepareBuildStep">source&nbsp;code</a></span>&nbsp;
     </td>
   </tr></table>
   
-  <p>Decorator that creates a post-compile step for the containing 
-  project.</p>
+  <p>Decorator that creates a post-compile step for the containing project.
+  Post-PrepareBuild steps run just after the project completes its build 
+  preparation. This is the only place where running 
+  project.RediscoverFiles() has any appreciable effect.</p>
+  <dl class="fields">
+    <dt>Parameters:</dt>
+    <dd><ul class="nomargin-top">
+        <li><strong class="pname"><code>func</code></strong> ((Implicit) function) - (Implicit) The function wrapped by this decorator</li>
+    </ul></dd>
+  </dl>
+<div class="fields">      <p><strong>Note:</strong>
+        The function this wraps should take a single argument, which will 
+        be of type <a 
+        href="csbuild.projectSettings.projectSettings-class.html" 
+        class="link">csbuild.projectSettings.projectSettings</a>.
+      </p>
+</div></td></tr></table>
+</div>
+<a name="preMakeStep"></a>
+<div class="private">
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr><td>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr valign="top"><td>
+  <h3 class="epydoc"><span class="sig"><span class="sig-name">preMakeStep</span>(<span class="sig-arg">func</span>)</span>
+  </h3>
+  </td><td align="right" valign="top"
+    ><span class="codelink"><a href="csbuild-pysrc.html#preMakeStep">source&nbsp;code</a></span>&nbsp;
+    </td>
+  </tr></table>
+  
+  <p>Decorator that creates a pre-make step for the containing project. 
+  Pre-make steps run after all projects' preparation steps have completed 
+  and their final chunk sets have been collected, but before any compiling 
+  starts.</p>
+  <dl class="fields">
+    <dt>Parameters:</dt>
+    <dd><ul class="nomargin-top">
+        <li><strong class="pname"><code>func</code></strong> ((Implicit) function) - (Implicit) The function wrapped by this decorator</li>
+    </ul></dd>
+  </dl>
+<div class="fields">      <p><strong>Note:</strong>
+        The function this wraps should take a single argument, which will 
+        be of type <a 
+        href="csbuild.projectSettings.projectSettings-class.html" 
+        class="link">csbuild.projectSettings.projectSettings</a>.
+      </p>
+</div></td></tr></table>
+</div>
+<a name="postMakeStep"></a>
+<div class="private">
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr><td>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr valign="top"><td>
+  <h3 class="epydoc"><span class="sig"><span class="sig-name">postMakeStep</span>(<span class="sig-arg">func</span>)</span>
+  </h3>
+  </td><td align="right" valign="top"
+    ><span class="codelink"><a href="csbuild-pysrc.html#postMakeStep">source&nbsp;code</a></span>&nbsp;
+    </td>
+  </tr></table>
+  
+  <p>Decorator that creates a post-make step for the containing project. 
+  Post-make steps run after all projects have finished building and 
+  linking. This step will only run if the entire build process was 
+  successful.</p>
+  <dl class="fields">
+    <dt>Parameters:</dt>
+    <dd><ul class="nomargin-top">
+        <li><strong class="pname"><code>func</code></strong> ((Implicit) function) - (Implicit) The function wrapped by this decorator</li>
+    </ul></dd>
+  </dl>
+<div class="fields">      <p><strong>Note:</strong>
+        The function this wraps should take a single argument, which will 
+        be of type <a 
+        href="csbuild.projectSettings.projectSettings-class.html" 
+        class="link">csbuild.projectSettings.projectSettings</a>.
+      </p>
+</div></td></tr></table>
+</div>
+<a name="preBuildStep"></a>
+<div class="private">
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr><td>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr valign="top"><td>
+  <h3 class="epydoc"><span class="sig"><span class="sig-name">preBuildStep</span>(<span class="sig-arg">func</span>)</span>
+  </h3>
+  </td><td align="right" valign="top"
+    ><span class="codelink"><a href="csbuild-pysrc.html#preBuildStep">source&nbsp;code</a></span>&nbsp;
+    </td>
+  </tr></table>
+  
+  <p>Decorator that creates a pre-build step for the containing project. 
+  Pre-build steps run just before the project begins compiling.</p>
+  <dl class="fields">
+    <dt>Parameters:</dt>
+    <dd><ul class="nomargin-top">
+        <li><strong class="pname"><code>func</code></strong> ((Implicit) function) - (Implicit) The function wrapped by this decorator</li>
+    </ul></dd>
+  </dl>
+<div class="fields">      <p><strong>Note:</strong>
+        The function this wraps should take a single argument, which will 
+        be of type <a 
+        href="csbuild.projectSettings.projectSettings-class.html" 
+        class="link">csbuild.projectSettings.projectSettings</a>.
+      </p>
+</div></td></tr></table>
+</div>
+<a name="postBuildStep"></a>
+<div class="private">
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr><td>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr valign="top"><td>
+  <h3 class="epydoc"><span class="sig"><span class="sig-name">postBuildStep</span>(<span class="sig-arg">func</span>)</span>
+  </h3>
+  </td><td align="right" valign="top"
+    ><span class="codelink"><a href="csbuild-pysrc.html#postBuildStep">source&nbsp;code</a></span>&nbsp;
+    </td>
+  </tr></table>
+  
+  <p>Decorator that creates a post-build step for the containing project. 
+  Post-build steps run after the project has <b>successfully</b> compiled 
+  <b>and</b> linked.</p>
+  <dl class="fields">
+    <dt>Parameters:</dt>
+    <dd><ul class="nomargin-top">
+        <li><strong class="pname"><code>func</code></strong> ((Implicit) function) - (Implicit) The function wrapped by this decorator</li>
+    </ul></dd>
+  </dl>
+<div class="fields">      <p><strong>Note:</strong>
+        The function this wraps should take a single argument, which will 
+        be of type <a 
+        href="csbuild.projectSettings.projectSettings-class.html" 
+        class="link">csbuild.projectSettings.projectSettings</a>.
+      </p>
+</div></td></tr></table>
+</div>
+<a name="preLinkStep"></a>
+<div class="private">
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr><td>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr valign="top"><td>
+  <h3 class="epydoc"><span class="sig"><span class="sig-name">preLinkStep</span>(<span class="sig-arg">func</span>)</span>
+  </h3>
+  </td><td align="right" valign="top"
+    ><span class="codelink"><a href="csbuild-pysrc.html#preLinkStep">source&nbsp;code</a></span>&nbsp;
+    </td>
+  </tr></table>
+  
+  <p>Decorator that creates a pre-link step for the containing project. 
+  Pre-link steps run after a successful compile of the project, but before 
+  the project links.</p>
   <dl class="fields">
     <dt>Parameters:</dt>
     <dd><ul class="nomargin-top">
@@ -2966,6 +3462,52 @@
         location of the AddScript() call.
       </p>
 </div></td></tr></table>
+</div>
+<a name="Done"></a>
+<div class="private">
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr><td>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr valign="top"><td>
+  <h3 class="epydoc"><span class="sig"><span class="sig-name">Done</span>(<span class="sig-arg">code</span>=<span class="sig-default">0</span>)</span>
+  </h3>
+  </td><td align="right" valign="top"
+    ><span class="codelink"><a href="csbuild-pysrc.html#Done">source&nbsp;code</a></span>&nbsp;
+    </td>
+  </tr></table>
+  
+  <p>Exit the build process early</p>
+  <dl class="fields">
+    <dt>Parameters:</dt>
+    <dd><ul class="nomargin-top">
+        <li><strong class="pname"><code>code</code></strong> (int) - Exit code to exit with</li>
+    </ul></dd>
+  </dl>
+</td></tr></table>
+</div>
+<a name="Exit"></a>
+<div class="private">
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr><td>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr valign="top"><td>
+  <h3 class="epydoc"><span class="sig"><span class="sig-name">Exit</span>(<span class="sig-arg">code</span>=<span class="sig-default">0</span>)</span>
+  </h3>
+  </td><td align="right" valign="top"
+    ><span class="codelink"><a href="csbuild-pysrc.html#Exit">source&nbsp;code</a></span>&nbsp;
+    </td>
+  </tr></table>
+  
+  <p>Exit the build process early</p>
+  <dl class="fields">
+    <dt>Parameters:</dt>
+    <dd><ul class="nomargin-top">
+        <li><strong class="pname"><code>code</code></strong> (int) - Exit code to exit with</li>
+    </ul></dd>
+  </dl>
+</td></tr></table>
 </div>
 <a name="get_option"></a>
 <div class="private">
@@ -3107,6 +3649,96 @@
   </td>
 </tr>
 </table>
+<a name="ArchitectureAndroidARMv5"></a>
+<div class="private">
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr><td>
+  <h3 class="epydoc">ArchitectureAndroidARMv5</h3>
+  
+  <dl class="fields">
+  </dl>
+  <dl class="fields">
+    <dt>Value:</dt>
+      <dd><table><tr><td><pre class="variable">
+ArchitectureType(&quot;armv5&quot;, abi= &quot;android&quot;)
+</pre></td></tr></table>
+</dd>
+  </dl>
+</td></tr></table>
+</div>
+<a name="ArchitectureAndroidARMv6m"></a>
+<div class="private">
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr><td>
+  <h3 class="epydoc">ArchitectureAndroidARMv6m</h3>
+  
+  <dl class="fields">
+  </dl>
+  <dl class="fields">
+    <dt>Value:</dt>
+      <dd><table><tr><td><pre class="variable">
+ArchitectureType(&quot;armv6m&quot;, abi= &quot;android&quot;)
+</pre></td></tr></table>
+</dd>
+  </dl>
+</td></tr></table>
+</div>
+<a name="ArchitectureAndroidARMv7a"></a>
+<div class="private">
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr><td>
+  <h3 class="epydoc">ArchitectureAndroidARMv7a</h3>
+  
+  <dl class="fields">
+  </dl>
+  <dl class="fields">
+    <dt>Value:</dt>
+      <dd><table><tr><td><pre class="variable">
+ArchitectureType(&quot;armv7a&quot;, abi= &quot;android&quot;)
+</pre></td></tr></table>
+</dd>
+  </dl>
+</td></tr></table>
+</div>
+<a name="ArchitectureAndroidARMv7m"></a>
+<div class="private">
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr><td>
+  <h3 class="epydoc">ArchitectureAndroidARMv7m</h3>
+  
+  <dl class="fields">
+  </dl>
+  <dl class="fields">
+    <dt>Value:</dt>
+      <dd><table><tr><td><pre class="variable">
+ArchitectureType(&quot;armv7m&quot;, abi= &quot;android&quot;)
+</pre></td></tr></table>
+</dd>
+  </dl>
+</td></tr></table>
+</div>
+<a name="ArchitectureAndroidMips"></a>
+<div class="private">
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr><td>
+  <h3 class="epydoc">ArchitectureAndroidMips</h3>
+  
+  <dl class="fields">
+  </dl>
+  <dl class="fields">
+    <dt>Value:</dt>
+      <dd><table><tr><td><pre class="variable">
+ArchitectureType(&quot;mips&quot;, abi= &quot;android&quot;)
+</pre></td></tr></table>
+</dd>
+  </dl>
+</td></tr></table>
+</div>
 <a name="mainfile"></a>
 <div class="private">
 <table class="details" border="1" cellpadding="3"
@@ -3155,7 +3787,7 @@
 <table border="0" cellpadding="0" cellspacing="0" width="100%%">
   <tr>
     <td align="left" class="footer">
-    Generated by Epydoc 3.0.1 on Mon Mar 10 10:56:44 2014
+    Generated by Epydoc 3.0.1 on Thu Apr 10 22:15:45 2014
     </td>
     <td align="right" class="footer">
       <a target="mainFrame" href="http://epydoc.sourceforge.net"

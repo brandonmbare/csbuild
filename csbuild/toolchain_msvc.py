@@ -381,7 +381,7 @@ class toolchain_msvc( toolchain.toolchainBase ):
 		else:
 			pch = ""
 
-		return '{}/Fo"{}" "{}" {} {} {}'.format(
+		return '{} /Fo"{}" "{}" {} {} {}'.format(
 			base_cmd,
 			output_obj,
 			input_file,
@@ -391,7 +391,7 @@ class toolchain_msvc( toolchain.toolchainBase ):
 
 
 	def getExtendedPrecompilerArgs( self, base_cmd, force_include_file, output_obj, input_file ):
-		return '{}/Yc"{}" /Fp"{}" /FI"{}" "{}"'.format(
+		return '{} /Yc"{}" /Fp"{}" /FI"{}" "{}"'.format(
 			base_cmd,
 			input_file,
 			output_obj,

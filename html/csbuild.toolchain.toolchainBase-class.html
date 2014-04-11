@@ -106,6 +106,23 @@ object --+
   </tr>
 <tr>
     <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="parseOutput"></a><span class="summary-sig-name">parseOutput</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">outputStr</span>)</span></td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="csbuild.toolchain-pysrc.html#toolchainBase.parseOutput">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
       <span class="summary-type">str</span>
     </td><td class="summary">
       <table width="100%" cellpadding="0" cellspacing="0" border="0">
@@ -1368,6 +1385,96 @@ object --+
       Set the output architecture.</td>
           <td align="right" valign="top">
             <span class="codelink"><a href="csbuild.toolchain-pysrc.html#toolchainBase.OutputArchitecture">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a href="csbuild.toolchain.toolchainBase-class.html#ExtraFiles" class="summary-sig-name">ExtraFiles</a>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">*args</span>)</span><br />
+      Adds additional files to be compiled that are not in the project 
+      directory.</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="csbuild.toolchain-pysrc.html#toolchainBase.ExtraFiles">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="ClearExtraFiles"></a><span class="summary-sig-name">ClearExtraFiles</span>(<span class="summary-sig-arg">self</span>)</span><br />
+      Clear the list of external files to compile.</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="csbuild.toolchain-pysrc.html#toolchainBase.ClearExtraFiles">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a href="csbuild.toolchain.toolchainBase-class.html#ExtraDirs" class="summary-sig-name">ExtraDirs</a>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">*args</span>)</span><br />
+      Adds additional directories to search for files in.</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="csbuild.toolchain-pysrc.html#toolchainBase.ExtraDirs">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="ClearExtraDirs"></a><span class="summary-sig-name">ClearExtraDirs</span>(<span class="summary-sig-arg">self</span>)</span><br />
+      Clear the list of external directories to search.</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="csbuild.toolchain-pysrc.html#toolchainBase.ClearExtraDirs">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a href="csbuild.toolchain.toolchainBase-class.html#DoNotChunkTogether" class="summary-sig-name">DoNotChunkTogether</a>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">file1</span>,
+        <span class="summary-sig-arg">file2</span>)</span><br />
+      Makes the two given files mutually exclusive when building chunks.</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="csbuild.toolchain-pysrc.html#toolchainBase.DoNotChunkTogether">source&nbsp;code</a></span>
             
           </td>
         </tr>
@@ -3037,6 +3144,83 @@ object --+
   </dl>
 </td></tr></table>
 </div>
+<a name="ExtraFiles"></a>
+<div>
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr><td>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr valign="top"><td>
+  <h3 class="epydoc"><span class="sig"><span class="sig-name">ExtraFiles</span>(<span class="sig-arg">self</span>,
+        <span class="sig-arg">*args</span>)</span>
+  </h3>
+  </td><td align="right" valign="top"
+    ><span class="codelink"><a href="csbuild.toolchain-pysrc.html#toolchainBase.ExtraFiles">source&nbsp;code</a></span>&nbsp;
+    </td>
+  </tr></table>
+  
+  <p>Adds additional files to be compiled that are not in the project 
+  directory.</p>
+  <dl class="fields">
+    <dt>Parameters:</dt>
+    <dd><ul class="nomargin-top">
+        <li><strong class="pname"><code>args</code></strong> (an arbitrary number of strings) - A list of files to add.</li>
+    </ul></dd>
+  </dl>
+</td></tr></table>
+</div>
+<a name="ExtraDirs"></a>
+<div>
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr><td>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr valign="top"><td>
+  <h3 class="epydoc"><span class="sig"><span class="sig-name">ExtraDirs</span>(<span class="sig-arg">self</span>,
+        <span class="sig-arg">*args</span>)</span>
+  </h3>
+  </td><td align="right" valign="top"
+    ><span class="codelink"><a href="csbuild.toolchain-pysrc.html#toolchainBase.ExtraDirs">source&nbsp;code</a></span>&nbsp;
+    </td>
+  </tr></table>
+  
+  <p>Adds additional directories to search for files in.</p>
+  <dl class="fields">
+    <dt>Parameters:</dt>
+    <dd><ul class="nomargin-top">
+        <li><strong class="pname"><code>args</code></strong> (an arbitrary number of strings) - A list of directories to search.</li>
+    </ul></dd>
+  </dl>
+</td></tr></table>
+</div>
+<a name="DoNotChunkTogether"></a>
+<div>
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr><td>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr valign="top"><td>
+  <h3 class="epydoc"><span class="sig"><span class="sig-name">DoNotChunkTogether</span>(<span class="sig-arg">self</span>,
+        <span class="sig-arg">file1</span>,
+        <span class="sig-arg">file2</span>)</span>
+  </h3>
+  </td><td align="right" valign="top"
+    ><span class="codelink"><a href="csbuild.toolchain-pysrc.html#toolchainBase.DoNotChunkTogether">source&nbsp;code</a></span>&nbsp;
+    </td>
+  </tr></table>
+  
+  <p>Makes the two given files mutually exclusive when building chunks. 
+  file1 will never appear in the same chunk as file2, even if that means 
+  one of the two files is forced into its own separate chunk.</p>
+  <dl class="fields">
+    <dt>Parameters:</dt>
+    <dd><ul class="nomargin-top">
+        <li><strong class="pname"><code>file1</code></strong> (string) - Path to the first file</li>
+        <li><strong class="pname"><code>file2</code></strong> (string) - Path to the second file</li>
+    </ul></dd>
+  </dl>
+</td></tr></table>
+</div>
 <br />
 <!-- ==================== NAVIGATION BAR ==================== -->
 <table class="navbar" border="0" width="100%" cellpadding="0"
@@ -3064,7 +3248,7 @@ object --+
 <table border="0" cellpadding="0" cellspacing="0" width="100%%">
   <tr>
     <td align="left" class="footer">
-    Generated by Epydoc 3.0.1 on Mon Mar 10 10:56:44 2014
+    Generated by Epydoc 3.0.1 on Thu Apr 10 22:15:45 2014
     </td>
     <td align="right" class="footer">
       <a target="mainFrame" href="http://epydoc.sourceforge.net"
