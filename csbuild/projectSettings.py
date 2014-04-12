@@ -516,6 +516,8 @@ class projectSettings( object ):
 		#GUI support
 		self.state = _shared_globals.ProjectState.PENDING
 		self.startTime = 0
+		self.buildEnd = 0
+		self.linkStart = 0
 		self.endTime = 0
 		self.compileOutput = {}
 		self.compileErrors = {}
@@ -754,6 +756,8 @@ class projectSettings( object ):
 			"extraObjs": list(self.extraObjs),
 			"state" : self.state,
 			"startTime" : self.startTime,
+			"buildEnd" : self.buildEnd,
+			"linkStart" : self.linkStart,
 			"endTime" : self.endTime,
 			"compileOutput" : dict(self.compileOutput),
 			"compileErrors" : dict(self.compileErrors),

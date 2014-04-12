@@ -1273,6 +1273,7 @@ def build( ):
 					log.LOG_BUILD(
 						"Compile of {0} ({3}) took {1}:{2:02}".format( otherProj.output_name, int( minutes ),
 							int( seconds ), otherProj.targetName ) )
+					otherProj.buildEnd = time.time()
 					projects_in_flight.remove( otherProj )
 					if otherProj.compile_failed:
 						log.LOG_ERROR( "Build of {} ({}) failed! Finishing up non-dependent build tasks...".format(
@@ -1518,6 +1519,8 @@ def link( project, *objs ):
 	This function also checks (if nothing was built) the modified times of all the required libraries, to see if we need
 	to relink anyway, even though nothing was compiled.
 	"""
+
+	project.linkStart = time.time()
 
 	if project.preLinkStep:
 		log.LOG_BUILD( "Running pre-link step for {} ({})".format( project.output_name, project.targetName ) )
