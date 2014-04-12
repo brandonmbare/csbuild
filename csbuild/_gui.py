@@ -117,7 +117,7 @@ class TreeWidgetWithBarGraph(QtGui.QTreeWidgetItem):
 
 
 		if not isFile:
-			self.linkWaitProgressBar = QtGui.QProgressBar(parent)
+			self.linkWaitProgressBar = QtGui.QProgressBar(renderParent)
 			self.linkWaitProgressBar.hide()
 			self.linkWaitProgressBar.setValue(100)
 			self.linkWaitProgressBar.setFormat("")
@@ -138,7 +138,7 @@ class TreeWidgetWithBarGraph(QtGui.QTreeWidgetItem):
 				"""
 			)
 
-			self.linkProgressBar = QtGui.QProgressBar(parent)
+			self.linkProgressBar = QtGui.QProgressBar(renderParent)
 			self.linkProgressBar.hide()
 			self.linkProgressBar.setValue(100)
 			self.linkProgressBar.setFormat("")
@@ -160,6 +160,7 @@ class TreeWidgetWithBarGraph(QtGui.QTreeWidgetItem):
 			)
 
 		self.m_childrenShowing = False
+		self.renderParent = renderParent
 
 	def setChildrenShowing(self, showing):
 		self.m_childrenShowing = showing
@@ -197,7 +198,7 @@ class TreeWidgetWithBarGraph(QtGui.QTreeWidgetItem):
 
 				bar.resize(math.ceil((endTime - startTime) * 30), rect.height())
 				point = rect.topLeft()
-				offset = 24
+				offset = self.renderParent.header().height()
 				if self.isFile:
 					offset += 20
 				if point.y() < 0:
