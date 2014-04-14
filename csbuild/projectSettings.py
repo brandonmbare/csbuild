@@ -1066,15 +1066,17 @@ class projectSettings( object ):
 				_shared_globals.newmd5s.update( { srcFile: newmd5 } )
 
 			if platform.system( ) == "Windows":
-				srcFile = srcFile[2:]
+				src = srcFile[2:]
+			else:
+				src = srcFile
 
 			if sys.version_info >= (3,0):
-				srcFile = srcFile.encode("utf-8")
-				baseName = os.path.basename( srcFile ).decode("utf-8")
+				src = src.encode("utf-8")
+				baseName = os.path.basename( src ).decode("utf-8")
 			else:
-				baseName = os.path.basename( srcFile )
+				baseName = os.path.basename( src )
 
-			md5file = "{}.md5".format( os.path.join( self.csbuild_dir, "md5s", hashlib.md5( srcFile ).hexdigest(), baseName ) )
+			md5file = "{}.md5".format( os.path.join( self.csbuild_dir, "md5s", hashlib.md5( src ).hexdigest(), baseName ) )
 
 			if os.path.exists( md5file ):
 				try:
@@ -1086,9 +1088,7 @@ class projectSettings( object ):
 
 			if oldmd5 != newmd5:
 				log.LOG_INFO(
-					"Going to recompile {0} because it has been modified since the last successful build.".format(
-
-						srcFile ) )
+					"Going to recompile {0} because it has been modified since the last successful build.".format(srcFile ) )
 				return True
 
 		#Fourth check: Header files
@@ -1119,15 +1119,15 @@ class projectSettings( object ):
 				oldmd5 = 1
 
 				if platform.system( ) == "Windows":
-					srcFile = srcFile[2:]
+					header = header[2:]
 
 				if sys.version_info >= (3,0):
-					srcFile = srcFile.encode("utf-8")
-					baseName = os.path.basename( srcFile ).decode("utf-8")
+					header = header.encode("utf-8")
+					baseName = os.path.basename( header ).decode("utf-8")
 				else:
-					baseName = os.path.basename( srcFile )
+					baseName = os.path.basename( header )
 
-				md5file = "{}.md5".format( os.path.join( self.csbuild_dir, "md5s", hashlib.md5( srcFile ).hexdigest(), baseName ) )
+				md5file = "{}.md5".format( os.path.join( self.csbuild_dir, "md5s", hashlib.md5( header ).hexdigest(), baseName ) )
 
 				if os.path.exists( md5file ):
 					try:

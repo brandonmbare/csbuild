@@ -91,6 +91,8 @@ class threaded_build( threading.Thread ):
 		"""Initialize the object. Also handles above-mentioned bug with dummy threads."""
 		threading.Thread.__init__( self )
 		self.file = infile
+
+		self.originalIn = infile
 		self.obj = os.path.abspath( inobj )
 		self.project = proj
 		self.forPrecompiledHeader = forPrecompiledHeader
@@ -136,8 +138,20 @@ class threaded_build( threading.Thread ):
 			if os.path.exists( self.obj ):
 				os.remove( self.obj )
 
+			errors = ""
+			output = ""
+			last = time.time()
 			fd = subprocess.Popen( cmd, stdout = subprocess.PIPE, stderr = subprocess.PIPE, shell=True )
-			(output, errors) = fd.communicate( )
+			while fd.poll():
+				line = fd.stderr.readline()
+				errors += line
+
+			while True:
+				line = fd.stderr.readline()
+				if not line:
+					break
+				errors += line
+
 			ret = fd.returncode
 			sys.stdout.flush( )
 			sys.stderr.flush( )
@@ -462,12 +476,12 @@ def chunked_build( ):
 			chunk = project.get_chunk( source )
 			if chunk not in chunks_to_build:
 				chunks_to_build.append( chunk )
-				if len(chunk) > 1:
-					totalChunksWithMultipleFiles += 1
 
-		#if we never get a second chunk, we'll want to know about the project that made the first one
-		if totalChunksWithMultipleFiles == 1:
-			owningProject = project
+			totalChunksWithMultipleFiles += len( chunks_to_build )
+
+			#if we never get a second chunk, we'll want to know about the project that made the first one
+			if totalChunksWithMultipleFiles == 1:
+				owningProject = project
 
 	#Not enough chunks being built, build as plain files.
 	if totalChunksWithMultipleFiles == 0:
@@ -479,10 +493,13 @@ def chunked_build( ):
 		obj = "{0}/{1}_{2}.o".format( owningProject.obj_dir, chunkname,
 			owningProject.targetName )
 		if os.path.exists( obj ):
+			os.remove(obj)
 			log.LOG_WARN_NOPUSH(
 				"Breaking chunk ({0}) into individual files to improve future iteration turnaround.".format(
 					owningProject.chunks[0] ) )
-		owningProject.final_chunk_set = owningProject.sources
+			owningProject.final_chunk_set = owningProject.allsources
+		else:
+			owningProject.final_chunk_set = owningProject.sources
 		return
 
 	dont_split_any = False
