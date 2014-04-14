@@ -545,7 +545,7 @@ def chunked_build( ):
 
 			#If only one or two sources in this chunk need to be built, we get no benefit from building it as a unit.
 			# Split unless we're told not to.
-			if project.use_chunks and len( chunk ) > 1 and (
+			if project.use_chunks and not _shared_globals.disable_chunks and len( chunk ) > 1 and (
 						(project.chunk_size > 0 and len(
 								sources_in_this_chunk ) > project.chunk_tolerance) or (
 								project.chunk_filesize > 0 and chunksize > project
@@ -583,16 +583,16 @@ def chunked_build( ):
 					#incremental builds (except on the first build after the chunk)
 					os.remove( obj )
 					add_chunk = chunk
-					if project.use_chunks:
-						log.LOG_INFO(
-							"Keeping chunk ({0}) broken up because chunking has been disabled for this project".format(
-								chunk ) )
-					else:
+					if project.use_chunks and not _shared_globals.disable_chunks:
 						log.LOG_WARN_NOPUSH(
 							"Breaking chunk ({0}) into individual files to improve future iteration turnaround.".format(
 								chunk ) )
 				else:
 					add_chunk = sources_in_this_chunk
+					if project.use_chunks and not _shared_globals.disable_chunks:
+						log.LOG_INFO(
+							"Keeping chunk ({0}) broken up because chunking has been disabled for this project".format(
+								chunk ) )
 				if len( add_chunk ) == 1:
 					if len( chunk ) == 1:
 						log.LOG_INFO(

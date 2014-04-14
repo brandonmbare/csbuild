@@ -1541,7 +1541,7 @@ def link( project, *objs ):
 				)
 			else:
 				obj = "{0}/{1}_unity_{2}.o".format( project.obj_dir, project.output_name, project.targetName )
-			if project.use_chunks and os.path.exists( obj ):
+			if project.use_chunks and not _shared_globals.disable_chunks and os.path.exists( obj ):
 				objs.append( obj )
 			else:
 				if type( chunk ) == list:

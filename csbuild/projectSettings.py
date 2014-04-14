@@ -1029,7 +1029,7 @@ class projectSettings( object ):
 			ofile = "{0}/{1}_{2}.o".format( self.obj_dir, basename,
 				self.targetName )
 
-		if self.use_chunks:
+		if self.use_chunks and not _shared_globals.disable_chunks:
 			chunk = self.get_chunk( srcFile )
 			chunkfile = "{0}/{1}_{2}.o".format( self.obj_dir, chunk,
 				self.targetName )
@@ -1245,7 +1245,7 @@ class projectSettings( object ):
 		Each chunk represents one compilation unit in the chunked build system.
 		"""
 		if _shared_globals.disable_chunks or not self.use_chunks:
-			return l
+			return [l]
 
 		if self.unity:
 			return [l]
@@ -1307,7 +1307,7 @@ class projectSettings( object ):
 					chunks.append( chunk )
 					log.LOG_INFO( "Made chunk: {0}".format( chunk ) )
 		else:
-			return l
+			return [l]
 		return chunks
 
 
