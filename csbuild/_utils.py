@@ -176,8 +176,6 @@ class threaded_build( threading.Thread ):
 				errors += line
 
 			ret = fd.returncode
-			sys.stdout.flush( )
-			sys.stderr.flush( )
 			with _shared_globals.printmutex:
 				sys.stdout.write( output )
 				sys.stderr.write( errors )
