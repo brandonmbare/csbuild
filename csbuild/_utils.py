@@ -144,28 +144,35 @@ class threaded_build( threading.Thread ):
 			last = time.time()
 			fd = subprocess.Popen( shlex.split(cmd), stdout = subprocess.PIPE, stderr = subprocess.STDOUT )
 			while fd.poll():
-				line = fd.stdout.readline()
+				try:
+					line = fd.stdout.readline()
+				except IOError as e:
+					continue
+
 				for source in self.project.final_chunk_set:
 					if line == os.path.basename(source):
 						continue
+
 				errors += line
 
 			while True:
-				line = fd.stdout.readline()
+				try:
+					line = fd.stdout.readline()
+				except IOError as e:
+					continue
 				if not line:
 					break
+
 				for source in self.project.final_chunk_set:
 					if line == os.path.basename(source):
 						continue
+
 				errors += line
 
 			ret = fd.returncode
 			sys.stdout.flush( )
 			sys.stderr.flush( )
 			with _shared_globals.printmutex:
-				if sys.version_info >= (3, 0):
-					output = output.decode("utf-8")
-					errors = errors.decode("utf-8")
 				sys.stdout.write( output )
 				sys.stderr.write( errors )
 

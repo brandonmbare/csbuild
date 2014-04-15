@@ -706,8 +706,8 @@ class MainWindow( QMainWindow ):
 
 		self.timelineWidget.horizontalScrollBar().valueChanged.connect(self.TimelineScrolled)
 		self.timelineWidget.verticalScrollBar().valueChanged.connect(self.TimelineScrolled)
-		self.timelineWidget.itemExpanded.connect(self.UpdateTimeline)
-		self.timelineWidget.itemCollapsed.connect(self.UpdateTimeline)
+		self.timelineWidget.itemExpanded.connect(self.TimelineItemExpended)
+		self.timelineWidget.itemCollapsed.connect(self.TimelineItemExpended)
 
 		self.timelineWidget.setItemDelegate(GridLineDelegate(self.timelineWidget))
 
@@ -1174,6 +1174,9 @@ class MainWindow( QMainWindow ):
 			self.m_errorTree.setSortingEnabled(True)
 
 	def TimelineScrolled(self, value):
+		self.UpdateTimeline(False)
+
+	def TimelineItemExpended(self, item):
 		self.UpdateTimeline(False)
 
 	def UpdateTimeline(self, addTime = False):
