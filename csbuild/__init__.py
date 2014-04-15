@@ -2397,9 +2397,10 @@ def _run( ):
 try:
 	_run( )
 	Exit( 0 )
-except:
+except Exception as e:
 	_barWriter.stop( )
 	if platform.system() != "Windows" and not imp.lock_held():
 		imp.acquire_lock()
-	traceback.print_exc()
+	if not isinstance(e, SystemExit):
+		traceback.print_exc()
 	raise
