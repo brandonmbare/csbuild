@@ -70,6 +70,7 @@ import platform
 import hashlib
 import imp
 import re
+import traceback
 
 
 class ProjectType( object ):
@@ -2400,4 +2401,5 @@ except:
 	_barWriter.stop( )
 	if platform.system() != "Windows" and not imp.lock_held():
 		imp.acquire_lock()
+	traceback.print_exc()
 	raise

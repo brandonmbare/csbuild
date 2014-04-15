@@ -28,6 +28,7 @@ import time
 import sys
 import datetime
 import glob
+import traceback
 
 import csbuild
 from csbuild import log
@@ -253,6 +254,7 @@ class threaded_build( threading.Thread ):
 			self.project.updated = True
 			self.project.mutex.release( )
 
+			traceback.print_exc()
 			raise e
 		else:
 			#if os.path.dirname(self.file) == _csbuild_dir:
