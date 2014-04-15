@@ -1,11 +1,13 @@
 from distutils.core import setup
 from distutils.sysconfig import get_python_lib
+import datetime
 
-with open("csbuild/version", "r") as f:
-      csbuild_version=f.read()
-      csbuild_version = csbuild_version.replace("\n", "")
-      csbuild_version = csbuild_version.strip()
+csbuild_version = "Dev-{:%Y.%m.%d-%H%M%S}".format(datetime.datetime.utcnow())
 
+with open("csbuild/version", "w") as f:
+      f.write(csbuild_version)
+      f.write("\n")
+	  
 setup(name='csbuild',
       version=csbuild_version,
       #py_modules=['csbuild'],

@@ -143,17 +143,22 @@ class threaded_build( threading.Thread ):
 			output = ""
 			last = time.time()
 			fd = subprocess.Popen( shlex.split(cmd), stdout = subprocess.PIPE, stderr = subprocess.STDOUT )
-			while fd.poll():
+			while True:
 				try:
-					line = fd.stdout.readline()
+					while fd.poll():
+						try:
+							line = fd.stdout.readline()
+						except IOError as e:
+							continue
+
+						for source in self.project.final_chunk_set:
+							if line == os.path.basename(source):
+								continue
+
+						errors += line
+					break
 				except IOError as e:
 					continue
-
-				for source in self.project.final_chunk_set:
-					if line == os.path.basename(source):
-						continue
-
-				errors += line
 
 			while True:
 				try:
