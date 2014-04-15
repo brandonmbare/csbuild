@@ -855,7 +855,7 @@ class MainWindow( QMainWindow ):
 			return
 
 		if(
-			not file.endswith(".o")
+			not file.endswith(".obj")
 			and not file.endswith(".so")
 			and not file.endswith(".a")
 			and not file.endswith(".exe")

@@ -841,12 +841,12 @@ class toolchainBase( object ):
 		relativel to the script's location, NOT the project working directory. Each list will be built as one chunk.
 		"""
 		chunks = list( chunks )
-		self.settingsOverrides["chunks"] = chunks
+		self.settingsOverrides["forceChunks"] = chunks
 
 
 	def ClearChunks( self ):
 		"""Clears the explicitly set list of chunks and returns the behavior to the default."""
-		self.settingsOverrides["chunks"] = []
+		self.settingsOverrides["forceChunks"] = []
 
 
 	def HeaderRecursionLevel( self, i ):

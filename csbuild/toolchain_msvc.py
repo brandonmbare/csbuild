@@ -34,6 +34,7 @@ import sys
 
 from csbuild import toolchain
 from csbuild import _shared_globals
+from csbuild import log
 import csbuild
 
 ### Reference: http://msdn.microsoft.com/en-us/library/f35ctcxw.aspx
@@ -182,8 +183,26 @@ class toolchain_msvc( toolchain.toolchainBase ):
 
 			HAS_SET_VC_VARS = True
 
-		self._include_path.append( os.path.join( WINDOWS_SDK_DIR, "include" ) )
-		self._lib_path.append( os.path.join( WINDOWS_SDK_DIR, "lib", "x64" if self._build_64_bit else "" ) )
+		sdkInclude = os.path.join( WINDOWS_SDK_DIR, "include" )
+		self._include_path.append( sdkInclude )
+		includeShared = os.path.join( sdkInclude, "Shared" )
+		includeUm = os.path.join( sdkInclude, "um" )
+		includeWinRT = os.path.join( sdkInclude, "WinRT" )
+
+		if os.path.exists(includeShared):
+			self._include_path.append(includeShared)
+		if os.path.exists(includeUm):
+			self._include_path.append(includeUm)
+		if os.path.exists(includeWinRT):
+			self._include_path.append(includeWinRT)
+
+		libPath = os.path.join( WINDOWS_SDK_DIR, "lib", "x64" if self._build_64_bit else "" )
+		sdk8path = os.path.join( WINDOWS_SDK_DIR, "lib", "win8", "um", "x64" if self._build_64_bit else "x86" )
+
+		if os.path.exists(sdk8path):
+			self._lib_path.append( sdk8path )
+		else:
+			self._lib_path.append( libPath )
 
 
 	### Private methods ###
@@ -198,7 +217,7 @@ class toolchain_msvc( toolchain.toolchainBase ):
 
 
 	def _get_default_compiler_args( self ):
-		return "/nologo /c /arch:AVX "
+		return "/nologo /c "
 
 
 	def _get_default_linker_args( self ):
@@ -227,7 +246,7 @@ class toolchain_msvc( toolchain.toolchainBase ):
 
 
 	def _get_linker_args( self, output_file, obj_list ):
-		return "{}{}{}{}{}{}{}{}{}".format(
+		return "/ERRORREPORT:NONE {}{}{}{}{}{}{}{}{}".format(
 			self._get_default_linker_args( ),
 			self._get_non_static_library_linker_args( ),
 			self._get_subsystem_arg( ),
@@ -308,9 +327,9 @@ class toolchain_msvc( toolchain.toolchainBase ):
 					_shared_globals.projects[depend].output_name.startswith( "lib{}.".format( lib ) )
 				):
 					found = True
-					args += "{} ".format( _shared_globals.projects[depend].output_name )
+					args += '"{}" '.format( _shared_globals.projects[depend].output_name )
 			if not found:
-				args += '{} '.format( self._actual_library_names[lib] )
+				args += '"{}" '.format( self._actual_library_names[lib] )
 
 		return args
 
@@ -381,7 +400,7 @@ class toolchain_msvc( toolchain.toolchainBase ):
 		else:
 			pch = ""
 
-		return '{} /Fo"{}" "{}" {} {} {}'.format(
+		return '{} /Fo"{}" /Gm- /errorReport:none "{}" {} {} {}'.format(
 			base_cmd,
 			output_obj,
 			input_file,
@@ -391,17 +410,26 @@ class toolchain_msvc( toolchain.toolchainBase ):
 
 
 	def getExtendedPrecompilerArgs( self, base_cmd, force_include_file, output_obj, input_file ):
-		return '{} /Yc"{}" /Fp"{}" /FI"{}" "{}"'.format(
+		split = input_file.rsplit(".", 1)
+		srcFile = os.path.join("{}.{}".format(split[0], "c" if split[1] == "h" else "cpp"))
+		with open(srcFile, "w") as f:
+			f.write("#include \"{}\"\n".format(input_file))
+		objFile = "{}.obj".format(split[0])
+
+		self._project_settings.extraObjs.append("{}.obj".format(split[0]))
+		return '{} /Yc"{}" /Gm- /errorReport:none /Fp"{}" /FI"{}" /Fo"{}" "{}"'.format(
 			base_cmd,
 			input_file,
 			output_obj,
 			input_file,
-			'" "'.join( self._project_settings.allsources ) )
+			objFile,
+			srcFile )
 
 
 	def getLinkerCommand( self, output_file, obj_list ):
-		return "{}{}{}".format(
+		return "{}{}{}{}".format(
 			self._get_linker_exe( ),
+			"/NXCOMPAT /DYNAMICBASE " if self._project_settings.type != csbuild.ProjectType.StaticLibrary else "",
 			self._get_linker_args( output_file, obj_list ),
 			" ".join( self._project_settings.linker_flags ) )
 
@@ -411,18 +439,29 @@ class toolchain_msvc( toolchain.toolchainBase ):
 	def find_library( self, project, library, library_dirs, force_static, force_shared ):
 		libfile = "{}.lib".format( library )
 
-		for lib_dir in library_dirs:
+		for lib_dir in self._lib_path:
+			log.LOG_INFO("Looking for library {} in directory {}...".format(libfile, lib_dir))
 			lib_file_path = os.path.join( lib_dir, libfile )
 			# Do a simple check to see if the file exists.
 			if os.path.exists( lib_file_path ):
-				self._actual_library_names.update( { library, libfile } )
+				self._actual_library_names.update( { library : libfile } )
 				return lib_file_path
 
-			#Compatibility with Linux's way of adding lib- to the front of its libraries
-			libfile = "lib{}".format( libfile )
+		for lib_dir in library_dirs:
+			log.LOG_INFO("Looking for library {} in directory {}...".format(libfile, lib_dir))
 			lib_file_path = os.path.join( lib_dir, libfile )
+			# Do a simple check to see if the file exists.
 			if os.path.exists( lib_file_path ):
-				self._actual_library_names.update( { library, libfile } )
+				self._actual_library_names.update( { library : libfile } )
+				return lib_file_path
+
+		for lib_dir in library_dirs:
+			#Compatibility with Linux's way of adding lib- to the front of its libraries
+			libfileCompat = "lib{}".format( libfile )
+			log.LOG_INFO("Looking for library {} in directory {}...".format(libfileCompat, lib_dir))
+			lib_file_path = os.path.join( lib_dir, libfileCompat )
+			if os.path.exists( lib_file_path ):
+				self._actual_library_names.update( { library : libfileCompat } )
 				return lib_file_path
 
 		# The library wasn't found.

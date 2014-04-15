@@ -21,6 +21,7 @@
 import os
 import re
 import hashlib
+import shlex
 import subprocess
 import threading
 import time
@@ -141,15 +142,21 @@ class threaded_build( threading.Thread ):
 			errors = ""
 			output = ""
 			last = time.time()
-			fd = subprocess.Popen( cmd, stdout = subprocess.PIPE, stderr = subprocess.PIPE, shell=True )
+			fd = subprocess.Popen( shlex.split(cmd), stdout = subprocess.PIPE, stderr = subprocess.STDOUT )
 			while fd.poll():
-				line = fd.stderr.readline()
+				line = fd.stdout.readline()
+				for source in self.project.final_chunk_set:
+					if line == os.path.basename(source):
+						continue
 				errors += line
 
 			while True:
-				line = fd.stderr.readline()
+				line = fd.stdout.readline()
 				if not line:
 					break
+				for source in self.project.final_chunk_set:
+					if line == os.path.basename(source):
+						continue
 				errors += line
 
 			ret = fd.returncode
@@ -490,7 +497,7 @@ def chunked_build( ):
 	if totalChunksWithMultipleFiles == 1 and not owningProject.unity:
 		chunkname = get_chunk_name( owningProject.output_name, chunks_to_build[0] )
 
-		obj = "{0}/{1}_{2}.o".format( owningProject.obj_dir, chunkname,
+		obj = "{0}/{1}_{2}.obj".format( owningProject.obj_dir, chunkname,
 			owningProject.targetName )
 		if os.path.exists( obj ):
 			os.remove(obj)
@@ -559,7 +566,7 @@ def chunked_build( ):
 						f.write(
 							'#include "{0}" // {1} bytes\n'.format( os.path.abspath( source ),
 								os.path.getsize( source ) ) )
-						obj = "{0}/{1}_{2}.o".format( project.obj_dir,
+						obj = "{0}/{1}_{2}.obj".format( project.obj_dir,
 							os.path.basename( source ).split( '.' )[0],
 							project.targetName )
 						if os.path.exists( obj ):
@@ -571,7 +578,7 @@ def chunked_build( ):
 			elif len( sources_in_this_chunk ) > 0:
 				chunkname = get_chunk_name( project.output_name, chunk )
 
-				obj = "{0}/{1}_{2}.o".format( project.obj_dir, chunkname,
+				obj = "{0}/{1}_{2}.obj".format( project.obj_dir, chunkname,
 					project.targetName )
 				if os.path.exists( obj ):
 					#If the chunk object exists, the last build of these files was the full chunk.

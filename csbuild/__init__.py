@@ -57,6 +57,7 @@ once that thread tries to use it. Long story short: Don't import modules within 
 
 import argparse
 import glob
+import shlex
 import shutil
 import signal
 import math
@@ -668,12 +669,12 @@ def SetChunks( *chunks ):
 	relativel to the script's location, NOT the project working directory. Each list will be built as one chunk.
 	"""
 	chunks = list( chunks )
-	projectSettings.currentProject.chunks = chunks
+	projectSettings.currentProject.forceChunks = chunks
 
 
 def ClearChunks( ):
 	"""Clears the explicitly set list of chunks and returns the behavior to the default."""
-	projectSettings.currentProject.chunks = []
+	projectSettings.currentProject.forceChunks = []
 
 
 def HeaderRecursionLevel( i ):
@@ -1376,7 +1377,7 @@ def build( ):
 						chunkFileStr = " {}".format( [ os.path.basename(piece) for piece in project.chunksByFile[chunk] ] )
 
 					built = True
-					obj = "{0}/{1}_{2}.o".format( projectSettings.currentProject.obj_dir,
+					obj = "{0}/{1}_{2}.obj".format( projectSettings.currentProject.obj_dir,
 						os.path.basename( chunk ).split( '.' )[0],
 						project.targetName )
 					if not _shared_globals.semaphore.acquire( False ):
@@ -1530,38 +1531,38 @@ def link( project, *objs ):
 
 	output = "{0}/{1}".format( project.output_dir, project.output_name )
 
+	log.LOG_LINKER( "Linking {0}...".format( os.path.abspath( output ) ) )
+
 	objs = list( objs )
 	if not objs:
 		for chunk in project.chunks:
 			if not project.unity:
-				obj = "{}/{}_{}.o".format(
+				obj = "{}/{}_{}.obj".format(
 					project.obj_dir,
 					_utils.get_chunk_name( project.output_name, chunk ),
 					project.targetName
 				)
 			else:
-				obj = "{0}/{1}_unity_{2}.o".format( project.obj_dir, project.output_name, project.targetName )
+				obj = "{0}/{1}_unity_{2}.obj".format( project.obj_dir, project.output_name, project.targetName )
 			if project.use_chunks and not _shared_globals.disable_chunks and os.path.exists( obj ):
 				objs.append( obj )
 			else:
 				if type( chunk ) == list:
 					for source in chunk:
-						obj = "{0}/{1}_{2}.o".format( project.obj_dir, os.path.basename( source ).split( '.' )[0],
+						obj = "{0}/{1}_{2}.obj".format( project.obj_dir, os.path.basename( source ).split( '.' )[0],
 							project.targetName )
 						if os.path.exists( obj ):
 							objs.append( obj )
 						else:
-							log.LOG_ERROR(
-								"Some object files are missing. Either the build failed, or you haven't built yet." )
+							log.LOG_ERROR( "Could not find {} for linking. Something went wrong here.".format(obj) )
 							return LinkStatus.Fail
 				else:
-					obj = "{0}/{1}_{2}.o".format( project.obj_dir, os.path.basename( chunk ).split( '.' )[0],
+					obj = "{0}/{1}_{2}.obj".format( project.obj_dir, os.path.basename( chunk ).split( '.' )[0],
 						project.targetName )
 					if os.path.exists( obj ):
 						objs.append( obj )
 					else:
-						log.LOG_ERROR(
-							"Some object files are missing. Either the build failed, or you haven't built yet." )
+						log.LOG_ERROR( "Could not find {} for linking. Something went wrong here.".format(obj) )
 						return LinkStatus.Fail
 
 	if not objs:
@@ -1602,8 +1603,6 @@ def link( project, *objs ):
 					log.LOG_LINKER( "Nothing to link." )
 				return LinkStatus.UpToDate
 
-	log.LOG_LINKER( "Linking {0}...".format( os.path.abspath( output ) ) )
-
 	if not os.path.exists( project.output_dir ):
 		os.makedirs( project.output_dir )
 
@@ -1616,7 +1615,7 @@ def link( project, *objs ):
 	if _shared_globals.show_commands:
 		print(cmd)
 
-	fd = subprocess.Popen( cmd, stdout = subprocess.PIPE, stderr = subprocess.PIPE, shell=True )
+	fd = subprocess.Popen( shlex.split(cmd), stdout = subprocess.PIPE, stderr = subprocess.PIPE )
 
 	(output, errors) = fd.communicate( )
 	ret = fd.returncode
@@ -1671,7 +1670,7 @@ def clean( silent = False ):
 		if not silent:
 			log.LOG_BUILD( "Cleaning {0} ({1})...".format( project.output_name, project.targetName ) )
 		for source in project.sources:
-			obj = "{0}/{1}_{2}.o".format( project.obj_dir, os.path.basename( source ).split( '.' )[0],
+			obj = "{0}/{1}_{2}.obj".format( project.obj_dir, os.path.basename( source ).split( '.' )[0],
 				project.targetName )
 			if os.path.exists( obj ):
 				if not silent:

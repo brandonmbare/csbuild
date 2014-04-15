@@ -420,6 +420,7 @@ class projectSettings( object ):
 
 		self.allpaths = []
 		self.chunks = []
+		self.forceChunks = []
 		self.chunksByFile = {}
 
 		self.use_chunks = True
@@ -549,7 +550,8 @@ class projectSettings( object ):
 
 		self.exclude_dirs.append( self.csbuild_dir )
 
-		projectSettings.currentProject = self
+		global currentProject
+		currentProject = self
 
 		if self.ext is None:
 			self.ext = self.activeToolchain.get_default_extension( self.type )
@@ -599,9 +601,16 @@ class projectSettings( object ):
 		Force a re-run of the file discovery process. Useful if a postPrepareBuild step adds additional files to the project.
 		This will have no effect when called from any place other than a postPrepareBuild step.
 		"""
-		if not self.chunks:
+		self.sources = []
+		if not self.forceChunks:
+			self.allsources = []
+			self.allheaders = []
+			self.cppheaders = []
+			self.cheaders = []
+
 			self.get_files( self.allsources, self.cppheaders, self.cheaders )
 			self.allsources += self.extraFiles
+			self.allheaders = self.cppheaders + self.cheaders
 
 			if not self.allsources:
 				return
@@ -609,7 +618,7 @@ class projectSettings( object ):
 			#We'll do this even if _use_chunks is false, because it simplifies the linker logic.
 			self.chunks = self.make_chunks( self.allsources )
 		else:
-			self.allsources = list( itertools.chain( *self.chunks ) )
+			self.allsources = list( itertools.chain( *self.forceChunks ) )
 
 		if not _shared_globals.CleanBuild and not _shared_globals.do_install and csbuild.get_option(
 				"generate_solution" ) is None:
@@ -701,6 +710,7 @@ class projectSettings( object ):
 			"opt_set": self.opt_set,
 			"allpaths": list( self.allpaths ),
 			"chunks": list( self.chunks ),
+			"forceChunks": list( self.forceChunks ),
 			"chunksByFile" : dict( self.chunksByFile ),
 			"use_chunks": self.use_chunks,
 			"chunk_tolerance": self.chunk_tolerance,
@@ -1026,12 +1036,12 @@ class projectSettings( object ):
 
 		basename = os.path.basename( srcFile ).split( '.' )[0]
 		if not ofile:
-			ofile = "{0}/{1}_{2}.o".format( self.obj_dir, basename,
+			ofile = "{0}/{1}_{2}.obj".format( self.obj_dir, basename,
 				self.targetName )
 
 		if self.use_chunks and not _shared_globals.disable_chunks:
 			chunk = self.get_chunk( srcFile )
-			chunkfile = "{0}/{1}_{2}.o".format( self.obj_dir, chunk,
+			chunkfile = "{0}/{1}_{2}.obj".format( self.obj_dir, chunk,
 				self.targetName )
 
 			#First check: If the object file doesn't exist, we obviously have to create it.
