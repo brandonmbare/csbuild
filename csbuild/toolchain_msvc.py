@@ -29,6 +29,7 @@ Contains a plugin class for interfacing with MSVC
 
 import os
 import platform
+import re
 import subprocess
 import sys
 
@@ -514,6 +515,10 @@ class toolchain_msvc( toolchain.toolchainBase ):
 		return -1
 
 
+	def get_obj_ext(self):
+		return ".obj"
+
+
 	def get_pch_file( self, fileName ):
 		return fileName.rsplit( ".", 1 )[0] + ".pch"
 
@@ -527,6 +532,98 @@ class toolchain_msvc( toolchain.toolchainBase ):
 		"""
 		self.settingsOverrides["msvc_version"] = msvc_version
 
+
+	def parseOutput(self, outputStr):
+		compileDetail = re.compile(r"^(cl|LINK|.+?)(\((\d*)\))?\s*: (Command line |fatal )?(warning|error) ([A-Z]+\d\d\d\d: .*)$")
+		additionalInfo = re.compile(r"^        \s*(?:(could be |or )\s*')?(.*)\((\d+)\) : (.*)$")
+
+		line = None
+		ret = []
+		detailsToAppend = []
+
+		try:
+			for text in outputStr.split('\n'):
+				if not text.strip():
+					continue
+
+				match = additionalInfo.search(text)
+				if text.startswith("        ") and not match:
+					subline = _shared_globals.OutputLine()
+					subline.text = text.rstrip()
+					subline.line = -1
+					subline.file = ""
+					subline.level = _shared_globals.OutputLevel.NOTE
+					subline.column = -1
+					if line is None:
+						detailsToAppend.append(subline)
+					else:
+						line.details.append(subline)
+					continue
+
+				if match:
+					subline = _shared_globals.OutputLine()
+					subline.text = match.group(4)
+					subline.line = int(match.group(3))
+					subline.file = match.group(2)
+					subline.level = _shared_globals.OutputLevel.NOTE
+					subline.column = -1
+					if line is None:
+						detailsToAppend.append(subline)
+					else:
+						line.details.append(subline)
+					continue
+
+				compileMatch = compileDetail.search(text)
+				if compileMatch:
+					line = _shared_globals.OutputLine()
+					fileName = compileMatch.group(1)
+					if fileName != 'cl' and fileName != 'LINK':
+						line.file = fileName
+					lineNumber = compileMatch.group(3)
+					if lineNumber:
+						line.line = int(lineNumber)
+
+					category = compileMatch.group(5)
+					line.column = -1
+
+					if category == "error":
+						line.level = _shared_globals.OutputLevel.ERROR
+					else:
+						line.level = _shared_globals.OutputLevel.WARNING
+
+					line.text = compileMatch.group(6)
+
+					line.details = detailsToAppend
+					detailsToAppend = []
+					ret.append(line)
+					continue
+
+				if text.startswith("Error:"):
+					line = _shared_globals.OutputLine()
+					line.text = text[6:].strip()
+					line.fileName = ""
+					line.line = -1
+					line.details = detailsToAppend
+					detailsToAppend = []
+					line.level = _shared_globals.OutputLevel.ERROR
+					ret.append(line)
+					continue
+
+				if text.startswith("Warning:"):
+					line = _shared_globals.OutputLine()
+					line.text = text[8:].strip()
+					line.fileName = ""
+					line.line = -1
+					line.details = detailsToAppend
+					detailsToAppend = []
+					line.level = _shared_globals.OutputLevel.WARNING
+					ret.append(line)
+					continue
+
+			return ret
+		except Exception as e:
+			print(e)
+			return None
 
 	def DebugRuntime( self ):
 		"""

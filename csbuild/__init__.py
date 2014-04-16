@@ -903,23 +903,46 @@ def DisableWarningsAsErrors( ):
 	projectSettings.currentProject.warnings_as_errors = False
 
 
-def DoNotChunkTogether(file1, file2):
+def DoNotChunkTogether(pattern, *additionalPatterns):
 	"""
-	Makes the two given files mutually exclusive when building chunks.
-	file1 will never appear in the same chunk as file2, even if that means one of the two files
-	is forced into its own separate chunk.
+	Makes files matching the given patterns mutually exclusive for chunking.
+	I.e., if you call this with DoNotChunkTogether("File1.cpp", "File2.cpp"), it guarantees
+	File1 and File2 will never appear together in the same chunk. If you specify more than two files,
+	or a pattern that matches more than two files, no two files in the list will ever appear together.
 
-	@type file1: string
-	@param file1: Path to the first file
-	@type file2: string
-	@param file2: Path to the second file
+	@type pattern: string
+	@param pattern: Pattern to search for files with (i.e., Source/*_Unchunkable.cpp)
+	@type additionalPatterns: arbitrary number of optional strings
+	@param additionalPatterns: Additional patterns to compile the list of mutually exclusive files with
 	"""
-	file1 = os.path.abspath(file1)
-	file2 = os.path.abspath(file2)
-	if file1 not in projectSettings.currentProject.chunkMutexes:
-		projectSettings.currentProject.chunkMutexes[file1] = set( [file2] )
-	else:
-		projectSettings.currentProject.chunkMutexes[file1].add(file2)
+	patterns = [pattern] + list(additionalPatterns)
+	mutexFiles = set()
+	for patternToMatch in patterns:
+		for filename in glob.glob(patternToMatch):
+			mutexFiles.add(os.path.abspath(filename))
+
+	for file1 in mutexFiles:
+		for file2 in mutexFiles:
+			if file1 == file2:
+				continue
+			if file1 not in projectSettings.currentProject.chunkMutexes:
+				projectSettings.currentProject.chunkMutexes[file1] = set( [file2] )
+			else:
+				projectSettings.currentProject.chunkMutexes[file1].add(file2)
+
+
+def DoNotChunk(*files):
+	"""
+	Prevents the listed files (or files matching the listed patterns) from ever being placed
+	in a chunk, ever.
+
+	@type files: arbitrary number of strings
+	@param files: filenames or patterns to exclude from chunking
+	"""
+
+	for pattern in list(files):
+		for filename in glob.glob(pattern):
+			projectSettings.currentProject.chunkExcludes.add(os.path.abspath(filename))
 
 
 def RegisterToolchain( name, toolchain ):
@@ -1378,9 +1401,9 @@ def build( ):
 						chunkFileStr = " {}".format( [ os.path.basename(piece) for piece in project.chunksByFile[chunk] ] )
 
 					built = True
-					obj = "{0}/{1}_{2}.obj".format( projectSettings.currentProject.obj_dir,
+					obj = "{}/{}_{}{}".format( projectSettings.currentProject.obj_dir,
 						os.path.basename( chunk ).split( '.' )[0],
-						project.targetName )
+						project.targetName, project.activeToolchain.get_obj_ext() )
 					if not _shared_globals.semaphore.acquire( False ):
 						if _shared_globals.max_threads != 1:
 							log.LOG_INFO( "Waiting for a build thread to become available..." )
@@ -1538,28 +1561,34 @@ def link( project, *objs ):
 	if not objs:
 		for chunk in project.chunks:
 			if not project.unity:
-				obj = "{}/{}_{}.obj".format(
+				obj = "{}/{}_{}{}".format(
 					project.obj_dir,
 					_utils.get_chunk_name( project.output_name, chunk ),
-					project.targetName
+					project.targetName,
+					project.activeToolchain.get_obj_ext()
 				)
 			else:
-				obj = "{0}/{1}_unity_{2}.obj".format( project.obj_dir, project.output_name, project.targetName )
+				obj = "{}/{}_unity_{}{}".format(
+					project.obj_dir,
+					project.output_name,
+					project.targetName,
+					project.activeToolchain.get_obj_ext()
+				)
 			if project.use_chunks and not _shared_globals.disable_chunks and os.path.exists( obj ):
 				objs.append( obj )
 			else:
 				if type( chunk ) == list:
 					for source in chunk:
-						obj = "{0}/{1}_{2}.obj".format( project.obj_dir, os.path.basename( source ).split( '.' )[0],
-							project.targetName )
+						obj = "{}/{}_{}{}".format( project.obj_dir, os.path.basename( source ).split( '.' )[0],
+							project.targetName, project.activeToolchain.get_obj_ext() )
 						if os.path.exists( obj ):
 							objs.append( obj )
 						else:
 							log.LOG_ERROR( "Could not find {} for linking. Something went wrong here.".format(obj) )
 							return LinkStatus.Fail
 				else:
-					obj = "{0}/{1}_{2}.obj".format( project.obj_dir, os.path.basename( chunk ).split( '.' )[0],
-						project.targetName )
+					obj = "{}/{}_{}{}".format( project.obj_dir, os.path.basename( chunk ).split( '.' )[0],
+						project.targetName, project.activeToolchain.get_obj_ext() )
 					if os.path.exists( obj ):
 						objs.append( obj )
 					else:
@@ -1671,8 +1700,8 @@ def clean( silent = False ):
 		if not silent:
 			log.LOG_BUILD( "Cleaning {0} ({1})...".format( project.output_name, project.targetName ) )
 		for source in project.sources:
-			obj = "{0}/{1}_{2}.obj".format( project.obj_dir, os.path.basename( source ).split( '.' )[0],
-				project.targetName )
+			obj = "{}/{}_{}{}".format( project.obj_dir, os.path.basename( source ).split( '.' )[0],
+				project.targetName, project.activeToolchain.get_obj_ext() )
 			if os.path.exists( obj ):
 				if not silent:
 					log.LOG_INFO( "Deleting {0}".format( obj ) )

@@ -855,7 +855,8 @@ class MainWindow( QMainWindow ):
 			return
 
 		if(
-			not file.endswith(".obj")
+			#TODO: Somehow get extension from the active toolchain?
+			not file.endswith(".o")
 			and not file.endswith(".so")
 			and not file.endswith(".a")
 			and not file.endswith(".exe")

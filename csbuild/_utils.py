@@ -152,8 +152,13 @@ class threaded_build( threading.Thread ):
 						except IOError as e:
 							continue
 
-						for source in self.project.final_chunk_set:
-							if line == os.path.basename(source):
+						stripped = line.strip()
+						if stripped == os.path.basename(self.file):
+							continue
+						if not " " in stripped:
+							baseStripped = stripped.rsplit(".",1)[0]
+							baseFile = self.file.rsplit(".", 1)[0]
+							if baseStripped == baseFile:
 								continue
 
 						errors += line
@@ -169,8 +174,13 @@ class threaded_build( threading.Thread ):
 				if not line:
 					break
 
-				for source in self.project.final_chunk_set:
-					if line == os.path.basename(source):
+				stripped = line.strip()
+				if stripped == os.path.basename(self.file):
+					continue
+				if not " " in stripped:
+					baseStripped = stripped.rsplit(".",1)[0]
+					baseFile = self.file.rsplit(".", 1)[0]
+					if baseStripped == baseFile:
 						continue
 
 				errors += line
@@ -509,8 +519,8 @@ def chunked_build( ):
 	if totalChunksWithMultipleFiles == 1 and not owningProject.unity:
 		chunkname = get_chunk_name( owningProject.output_name, chunks_to_build[0] )
 
-		obj = "{0}/{1}_{2}.obj".format( owningProject.obj_dir, chunkname,
-			owningProject.targetName )
+		obj = "{}/{}_{}{}".format( owningProject.obj_dir, chunkname,
+			owningProject.targetName, owningProject.activeToolchain.get_obj_ext() )
 		if os.path.exists( obj ):
 			os.remove(obj)
 			log.LOG_WARN_NOPUSH(
@@ -578,9 +588,9 @@ def chunked_build( ):
 						f.write(
 							'#include "{0}" // {1} bytes\n'.format( os.path.abspath( source ),
 								os.path.getsize( source ) ) )
-						obj = "{0}/{1}_{2}.obj".format( project.obj_dir,
+						obj = "{}/{}_{}{}".format( project.obj_dir,
 							os.path.basename( source ).split( '.' )[0],
-							project.targetName )
+							project.targetName, project.activeToolchain.get_obj_ext() )
 						if os.path.exists( obj ):
 							os.remove( obj )
 					f.write( "//Total size: {0} bytes".format( chunksize ) )
@@ -590,8 +600,8 @@ def chunked_build( ):
 			elif len( sources_in_this_chunk ) > 0:
 				chunkname = get_chunk_name( project.output_name, chunk )
 
-				obj = "{0}/{1}_{2}.obj".format( project.obj_dir, chunkname,
-					project.targetName )
+				obj = "{}/{}_{}{}".format( project.obj_dir, chunkname,
+					project.targetName, project.activeToolchain.get_obj_ext() )
 				if os.path.exists( obj ):
 					#If the chunk object exists, the last build of these files was the full chunk.
 					#We're now splitting the chunk to speed things up for future incremental builds,

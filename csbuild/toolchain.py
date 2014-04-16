@@ -322,6 +322,13 @@ class toolchainBase( object ):
 		"""
 		pass
 
+	@abstractmethod
+	def get_obj_ext(self):
+		"""
+		Get the extension for intermediate object files, including the .
+		"""
+		pass
+
 
 	def copy( self ):
 		"""
@@ -1047,22 +1054,47 @@ class toolchainBase( object ):
 		self.settingsOverrides["extraDirs"] = []
 
 
-	def DoNotChunkTogether(self, file1, file2):
+	def DoNotChunkTogether(self, pattern, *additionalPatterns):
 		"""
-		Makes the two given files mutually exclusive when building chunks.
-		file1 will never appear in the same chunk as file2, even if that means one of the two files
-		is forced into its own separate chunk.
+		Makes files matching the given patterns mutually exclusive for chunking.
+		I.e., if you call this with DoNotChunkTogether("File1.cpp", "File2.cpp"), it guarantees
+		File1 and File2 will never appear together in the same chunk. If you specify more than two files,
+		or a pattern that matches more than two files, no two files in the list will ever appear together.
 
-		@type file1: string
-		@param file1: Path to the first file
-		@type file2: string
-		@param file2: Path to the second file
+		@type pattern: string
+		@param pattern: Pattern to search for files with (i.e., Source/*_Unchunkable.cpp)
+		@type additionalPatterns: arbitrary number of optional strings
+		@param additionalPatterns: Additional patterns to compile the list of mutually exclusive files with
 		"""
-		file1 = os.path.abspath(file1)
-		file2 = os.path.abspath(file2)
 		if "chunkMutexes" not in self.settingsOverrides:
 			self.settingsOverrides["chunkMutexes"] = {}
-		if file1 not in self.settingsOverrides["chunkMutexes"]:
-			self.settingsOverrides["chunkMutexes"][file1] = set( [file2] )
-		else:
-			self.settingsOverrides["chunkMutexes"][file1].add(file2)
+		patterns = [pattern] + list(additionalPatterns)
+		mutexFiles = set()
+		for patternToMatch in patterns:
+			for filename in glob.glob(patternToMatch):
+				mutexFiles.add(os.path.abspath(filename))
+
+		for file1 in mutexFiles:
+			for file2 in mutexFiles:
+				if file1 == file2:
+					continue
+				if file1 not in self.settingsOverrides["chunkMutexes"]:
+					self.settingsOverrides["chunkMutexes"][file1] = set( [file2] )
+				else:
+					self.settingsOverrides["chunkMutexes"][file1].add(file2)
+
+	def DoNotChunk(self, *files):
+		"""
+		Prevents the listed files (or files matching the listed patterns) from ever being placed
+		in a chunk, ever.
+
+		@type files: arbitrary number of strings
+		@param files: filenames or patterns to exclude from chunking
+		"""
+
+		if "chunkExcludes" not in self.settingsOverrides:
+			self.settingsOverrides["chunkExcludes"] = set()
+
+		for pattern in list(files):
+			for filename in glob.glob(pattern):
+				self.settingsOverrides["chunkExcludes"].add(os.path.abspath(filename))

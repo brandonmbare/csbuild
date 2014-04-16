@@ -514,6 +514,8 @@ class projectSettings( object ):
 		self.ambiguousHeaderExtensions = set([".h", ".inl"])
 
 		self.chunkMutexes = {}
+		self.chunkExcludes = set()
+
 		#GUI support
 		self.state = _shared_globals.ProjectState.PENDING
 		self.startTime = 0
@@ -792,6 +794,7 @@ class projectSettings( object ):
 			"cppHeaderExtensions" : set(self.cppHeaderExtensions),
 			"ambiguousHeaderExtensions" : set(self.ambiguousHeaderExtensions),
 			"chunkMutexes" : {},
+			"chunkExcludes" : set(self.chunkExcludes),
 		}
 
 		for name in self.targets:
@@ -1036,13 +1039,13 @@ class projectSettings( object ):
 
 		basename = os.path.basename( srcFile ).split( '.' )[0]
 		if not ofile:
-			ofile = "{0}/{1}_{2}.obj".format( self.obj_dir, basename,
-				self.targetName )
+			ofile = "{}/{}_{}{}".format( self.obj_dir, basename,
+				self.targetName, self.activeToolchain.get_obj_ext() )
 
 		if self.use_chunks and not _shared_globals.disable_chunks:
 			chunk = self.get_chunk( srcFile )
-			chunkfile = "{0}/{1}_{2}.obj".format( self.obj_dir, chunk,
-				self.targetName )
+			chunkfile = "{}/{}_{}{}".format( self.obj_dir, chunk,
+				self.targetName, self.activeToolchain.get_obj_ext() )
 
 			#First check: If the object file doesn't exist, we obviously have to create it.
 			if not os.path.exists( ofile ):
@@ -1239,6 +1242,9 @@ class projectSettings( object ):
 			(extension in self.cppExtensions and newFileExtension in self.cExtensions)
 		):
 			return False
+
+		if newFile in self.chunkExcludes:
+			return False #NEVER ok to join chunk with this file!
 
 		for sourceFile in chunk:
 			if newFile in self.chunkMutexes and sourceFile in self.chunkMutexes[newFile]:

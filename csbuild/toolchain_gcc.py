@@ -312,6 +312,10 @@ class toolchain_gcc( toolchain.toolchainBase ):
 		return 2
 
 
+	def get_obj_ext(self):
+		return ".o"
+
+
 	def get_pch_file( self, fileName ):
 		return fileName + ".gch"
 
