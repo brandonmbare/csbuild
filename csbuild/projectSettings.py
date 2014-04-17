@@ -242,7 +242,7 @@ class projectSettings( object ):
 	@type no_warnings: bool
 
 	@ivar toolchains: All toolchains enabled for this project
-	@type toolchains: dict[str, csbuild.toolchain.toolchainBase]
+	@type toolchains: dict[str, csbuild.toolchain.toolchain]
 
 	@ivar cxxcmd: Base C++ compile command, returned from toolchain.get_base_cxx_command
 	@type cxxcmd: str
@@ -295,7 +295,7 @@ class projectSettings( object ):
 	@type activeToolchainName: str
 
 	@ivar activeToolchain: The actual currently active toolchain
-	@type activeToolchain: csbuild.toolchain.toolchainBase
+	@type activeToolchain: csbuild.toolchain.toolchain
 
 	@ivar warnings_as_errors: Whether all warnings should be treated as errors
 	@type warnings_as_errors: bool
@@ -446,6 +446,7 @@ class projectSettings( object ):
 		self.unity = False
 
 		self.precompile_done = False
+		self.precompile_started = True
 
 		self.no_warnings = False
 
@@ -467,6 +468,7 @@ class projectSettings( object ):
 		self.compiles_completed = 0
 
 		self.compile_failed = False
+		self.precompileFailed = False
 
 		self.static_runtime = False
 
@@ -506,12 +508,12 @@ class projectSettings( object ):
 		self.extraDirs = []
 		self.extraObjs = []
 
-		self.cExtensions = set([".c"])
-		self.cppExtensions = set([".cpp", ".cxx", ".cc", ".cp", ".c++"])
-		self.asmExtensions = set([".s", ".asm"])
+		self.cExtensions = {".c"}
+		self.cppExtensions = {".cpp", ".cxx", ".cc", ".cp", ".c++"}
+		self.asmExtensions = {".s", ".asm"}
 		self.cHeaderExtensions = set()
-		self.cppHeaderExtensions = set([".hpp", ".hxx", ".hh", ".hp", ".h++"])
-		self.ambiguousHeaderExtensions = set([".h", ".inl"])
+		self.cppHeaderExtensions = {".hpp", ".hxx", ".hh", ".hp", ".h++"}
+		self.ambiguousHeaderExtensions = {".h", ".inl"}
 
 		self.chunkMutexes = {}
 		self.chunkExcludes = set()
@@ -520,6 +522,7 @@ class projectSettings( object ):
 		self.state = _shared_globals.ProjectState.PENDING
 		self.startTime = 0
 		self.buildEnd = 0
+		self.linkQueueStart = 0
 		self.linkStart = 0
 		self.endTime = 0
 		self.compileOutput = {}
@@ -546,8 +549,12 @@ class projectSettings( object ):
 		os.chdir( self.workingDirectory )
 
 		self.activeToolchain = self.toolchains[self.activeToolchainName]
+		self.activeToolchain.SetActiveTool("compiler")
+
 		self.obj_dir = os.path.abspath( self.obj_dir )
+		self.activeToolchain.SetActiveTool("linker")
 		self.output_dir = os.path.abspath( self.output_dir )
+		self.activeToolchain.SetActiveTool("compiler")
 		self.csbuild_dir = os.path.join( self.obj_dir, ".csbuild" )
 
 		self.exclude_dirs.append( self.csbuild_dir )
@@ -555,10 +562,12 @@ class projectSettings( object ):
 		global currentProject
 		currentProject = self
 
+		self.activeToolchain.SetActiveTool("linker")
 		if self.ext is None:
-			self.ext = self.activeToolchain.get_default_extension( self.type )
+			self.ext = self.activeToolchain.Linker().get_default_extension( self.type )
 
 		self.output_name += self.ext
+		self.activeToolchain.SetActiveTool("compiler")
 
 		if self.prePrepareBuildStep:
 			log.LOG_BUILD( "Running pre-PrepareBuild step for {} ({})".format( self.output_name, self.targetName ) )
@@ -569,10 +578,10 @@ class projectSettings( object ):
 		if not os.path.exists( self.csbuild_dir ):
 			os.makedirs( self.csbuild_dir )
 
-		self.cccmd = self.activeToolchain.get_base_cc_command( self )
-		self.cxxcmd = self.activeToolchain.get_base_cxx_command( self )
-		self.ccpccmd = self.activeToolchain.get_base_cc_precompile_command( self )
-		self.cxxpccmd = self.activeToolchain.get_base_cxx_precompile_command( self )
+		self.cccmd = self.activeToolchain.Compiler().get_base_cc_command( self )
+		self.cxxcmd = self.activeToolchain.Compiler().get_base_cxx_command( self )
+		self.ccpccmd = self.activeToolchain.Compiler().get_base_cc_precompile_command( self )
+		self.cxxpccmd = self.activeToolchain.Compiler().get_base_cxx_precompile_command( self )
 
 		cmdfile = "{0}/{1}.csbuild".format( self.csbuild_dir, self.targetName )
 		cmd = ""
@@ -634,18 +643,31 @@ class projectSettings( object ):
 
 	def __getattribute__( self, name ):
 		activeToolchain = object.__getattribute__( self, "activeToolchain" )
-		if activeToolchain and name in activeToolchain.settingsOverrides:
-			ret = activeToolchain.settingsOverrides[name]
+		if activeToolchain:
+			if activeToolchain.activeTool and name in activeToolchain.activeTool.settingsOverrides:
+				ret = activeToolchain.activeTool.settingsOverrides[name]
 
-			if ret:
-				if isinstance( ret, dict ):
-					ret2 = object.__getattribute__( self, name )
-					ret2.update( ret )
-					return ret2
-				elif isinstance( ret, list ):
-					return ret + object.__getattribute__( self, name )
+				if ret:
+					if isinstance( ret, dict ):
+						ret2 = object.__getattribute__( self, name )
+						ret2.update( ret )
+						return ret2
+					elif isinstance( ret, list ):
+						return ret + object.__getattribute__( self, name )
 
-			return ret
+				return ret
+			elif name in activeToolchain.settingsOverrides:
+				ret = activeToolchain.settingsOverrides[name]
+
+				if ret:
+					if isinstance( ret, dict ):
+						ret2 = object.__getattribute__( self, name )
+						ret2.update( ret )
+						return ret2
+					elif isinstance( ret, list ):
+						return ret + object.__getattribute__( self, name )
+
+				return ret
 		return object.__getattribute__( self, name )
 
 
@@ -657,9 +679,13 @@ class projectSettings( object ):
 
 		if hasattr( self, "activeToolchain" ):
 			activeToolchain = object.__getattribute__( self, "activeToolchain" )
-			if activeToolchain and name in activeToolchain.settingsOverrides:
-				activeToolchain.settingsOverrides[name] = value
-				return
+			if activeToolchain:
+				if activeToolchain.activeTool and name in activeToolchain.activeTool.settingsOverrides:
+					activeToolchain.activeTool.settingsOverrides[name] = value
+					return
+				elif name in activeToolchain.settingsOverrides:
+					activeToolchain.settingsOverrides[name] = value
+					return
 		object.__setattr__( self, name, value )
 
 
@@ -730,6 +756,7 @@ class projectSettings( object ):
 			"cheaderfile": self.cheaderfile,
 			"unity": self.unity,
 			"precompile_done": self.precompile_done,
+			"precompile_started": self.precompile_started,
 			"no_warnings": self.no_warnings,
 			"toolchains": toolchains,
 			"cxxcmd": self.cxxcmd,
@@ -742,6 +769,7 @@ class projectSettings( object ):
 			"needs_cpp_precompile": self.needs_cpp_precompile,
 			"compiles_completed": self.compiles_completed,
 			"compile_failed": self.compile_failed,
+			"precompileFailed": self.precompileFailed,
 			"static_runtime": self.static_runtime,
 			"force_64_bit": self.force_64_bit,
 			"force_32_bit": self.force_32_bit,
@@ -769,6 +797,7 @@ class projectSettings( object ):
 			"state" : self.state,
 			"startTime" : self.startTime,
 			"buildEnd" : self.buildEnd,
+			"linkQueueStart" : self.linkQueueStart,
 			"linkStart" : self.linkStart,
 			"endTime" : self.endTime,
 			"compileOutput" : dict(self.compileOutput),
@@ -1040,12 +1069,12 @@ class projectSettings( object ):
 		basename = os.path.basename( srcFile ).split( '.' )[0]
 		if not ofile:
 			ofile = "{}/{}_{}{}".format( self.obj_dir, basename,
-				self.targetName, self.activeToolchain.get_obj_ext() )
+				self.targetName, self.activeToolchain.Compiler().get_obj_ext() )
 
 		if self.use_chunks and not _shared_globals.disable_chunks:
 			chunk = self.get_chunk( srcFile )
 			chunkfile = "{}/{}_{}{}".format( self.obj_dir, chunk,
-				self.targetName, self.activeToolchain.get_obj_ext() )
+				self.targetName, self.activeToolchain.Compiler().get_obj_ext() )
 
 			#First check: If the object file doesn't exist, we obviously have to create it.
 			if not os.path.exists( ofile ):
@@ -1206,7 +1235,7 @@ class projectSettings( object ):
 					continue
 
 				log.LOG_INFO( "Looking for lib{0}...".format( library ) )
-				lib = self.activeToolchain.find_library( self, library, self.library_dirs,
+				lib = self.activeToolchain.Linker().find_library( self, library, self.library_dirs,
 					force_static, force_shared )
 				if lib:
 					mtime = os.path.getmtime( lib )
@@ -1409,7 +1438,7 @@ class projectSettings( object ):
 
 			_shared_globals.current_compile += 1
 
-			cppobj = self.activeToolchain.get_pch_file( self.cppheaderfile )
+			cppobj = self.activeToolchain.Compiler().get_pch_file( self.cppheaderfile )
 
 			#precompiled headers block on current thread - run runs on current thread rather than starting a new one
 			thread = _utils.threaded_build( self.cppheaderfile, cppobj, self, True )
@@ -1431,7 +1460,7 @@ class projectSettings( object ):
 
 			_shared_globals.current_compile += 1
 
-			cobj = self.activeToolchain.get_pch_file( self.cheaderfile )
+			cobj = self.activeToolchain.Compiler().get_pch_file( self.cheaderfile )
 
 			#precompiled headers block on current thread - run runs on current thread rather than starting a new one
 			cthread = _utils.threaded_build( self.cheaderfile, cobj, self, True )
@@ -1450,6 +1479,7 @@ class projectSettings( object ):
 		log.LOG_BUILD( "Precompile took {0}:{1:02}".format( int( totalmin ), int( totalsec ) ) )
 
 		self.precompile_done = True
+		self.precompileFailed = self.compile_failed
 
 		return not self.compile_failed
 

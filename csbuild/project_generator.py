@@ -24,11 +24,12 @@ B{Project Generator Module}
 Defines the base class for project generation.
 """
 
-from abc import abstractmethod
+from abc import abstractmethod, ABCMeta
 import os
-import csbuild
+from csbuild import _shared_globals
 
 
+@_shared_globals.MetaClass(ABCMeta)
 class project_generator( object ):
 	"""
 	Base class used for project generation.

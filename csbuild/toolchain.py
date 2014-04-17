@@ -23,321 +23,54 @@ B{Toolchain Module}
 
 Defines the base class for creating custom toolchains
 
-@undocumented: combined_toolchains
+@undocumented: ClassCombiner
 """
 
-from abc import abstractmethod
+from abc import abstractmethod, ABCMeta
 import glob
 import os
 from csbuild import log
 import csbuild
+from csbuild import _shared_globals
 
 
-class combined_toolchains( object ):
-	def __init__( self, toolchains ):
-		self.toolchains = toolchains
+class ClassCombiner( object ):
+	"""
+	Represents the combined return value of a multi-object accessor.
+
+	@ivar objs: The objects contained within the combined class
+	@itype objs: list[object]
+	"""
+	def __init__( self, objs ):
+		self.objs = objs
 
 
 	def __getattr__( self, name ):
 		funcs = []
-		for toolchain in self.toolchains:
-			funcs.append( getattr( toolchain, name ) )
+		for obj in self.objs:
+			funcs.append( getattr( obj, name ) )
 
 
 		def combined_func( *args, **kwargs ):
+			rets = []
 			for func in funcs:
-				func( *args, **kwargs )
+				rets.append(func( *args, **kwargs ))
+			if rets:
+				if len(rets) == 1:
+					return rets[0]
+				else:
+					return ClassCombiner(rets)
 
 
 		return combined_func
 
+class SettingsOverrider( object ):
+	def __init__(self):
+		self.settingsOverrides = {}
 
-class toolchainBase( object ):
-	"""
-	Base class used for custom toolchains
-	To create a new toolchain, inherit from this class, and then use
-	L{csbuild.RegisterToolchain()<csbuild.RegisterToolchain>}
-	"""
-	def __init__( self ):
-		"""
-		Default constructor
-		"""
+	def copy(self):
+		ret = self.__class__()
 
-		self.settingsOverrides = { }
-
-
-	def parseOutput(self, outputStr):
-		return None
-
-	@staticmethod
-	def additional_args( parser ):
-		"""
-		Asks for additional command-line arguments to be added by the toolchain.
-
-		@param parser: A parser for these arguments to be added to
-		@type parser: argparse.argument_parser
-		"""
-		pass
-
-
-	@abstractmethod
-	def get_link_command( self, project, outputFile, objList ):
-		"""
-		Retrieves the command to be used for linking for this toolchain.
-
-		@param project: The project currently being linked, which can be used to retrieve any needed information.
-		@type project: L{csbuild.projectSettings.projectSettings}
-
-		@param outputFile: The file that will be the result of the link operation.
-		@type outputFile: str
-
-		@param objList: List of objects being linked
-		@type objList: list[str]
-
-		@return: The fully formatted link command
-		@rtype: str
-		"""
-		pass
-
-
-	@abstractmethod
-	def find_library( self, project, library, library_dirs, force_static, force_shared ):
-		"""
-		Search for a library and verify that it is installed.
-
-		@param project: The project currently being checked, which can be used to retrieve any needed information.
-		@type project: L{csbuild.projectSettings.projectSettings}
-
-		@param library: The library being searched for
-		@type library: str
-
-		@param library_dirs: The directories to search for the library in
-		@type library_dirs: list[str]
-
-		@param force_static: Whether or not this library should be forced to link statically
-		@type force_static: bool
-
-		@param force_shared: Whether or not this library should be forced to link dynamically
-		@type force_shared: bool
-
-		@return: The location to the library if found, or None
-		@rtype: str or None
-		"""
-		pass
-
-
-	@abstractmethod
-	def get_base_cxx_command( self, project ):
-		"""
-		Retrieves the BASE C++ compiler command for this project.
-
-		The difference between the base command and the extended command is as follows:
-			1. The base command does not include any specific files in it
-			2. The base command should be seen as the full list of compiler settings that will force a full recompile
-			if ANY of them are changed. For example, optimization settings should be included here because a change to
-			that setting should cause all object files to be regenerated.
-
-		Thus, anything that can be changed without forcing a clean rebuild should be in the extended command, not the base.
-
-		@param project: The project currently being compiled, which can be used to retrieve any needed information.
-		@type project: L{csbuild.projectSettings.projectSettings}
-
-		@return: The base command string
-		@rtype: str
-		"""
-		pass
-
-
-	@abstractmethod
-	def get_base_cc_command( self, project ):
-		"""
-		Retrieves the BASE C compiler command for this project.
-
-		The difference between the base command and the extended command is as follows:
-			1. The base command does not include any specific files in it
-			2. The base command should be seen as the full list of compiler settings that will force a full recompile
-			if ANY of them are changed. For example, optimization settings should be included here because a change to
-			that setting should cause all object files to be regenerated.
-
-		Thus, anything that can be changed without forcing a clean rebuild should be in the extended command, not the base.
-
-		@param project: The project currently being compiled, which can be used to retrieve any needed information.
-		@type project: L{csbuild.projectSettings.projectSettings}
-
-		@return: The base command string
-		@rtype: str
-		"""
-		pass
-
-
-	@abstractmethod
-	def get_extended_command( self, baseCmd, project, forceIncludeFile, outObj, inFile ):
-		"""
-		Retrieves the EXTENDED C/C++ compiler command for compiling a specific file
-
-		The difference between the base command and the extended command is as follows:
-			1. The base command does not include any specific files in it
-			2. The base command should be seen as the full list of compiler settings that will force a full recompile
-			if ANY of them are changed. For example, optimization settings should be included here because a change to
-			that setting should cause all object files to be regenerated.
-
-		Thus, anything that can be changed without forcing a clean rebuild should be in the extended command, not the base.
-
-		@param baseCmd: The project's base command as returned from L{get_base_cxx_command} or L{get_base_cc_command},
-		as is appropriate for the file being compiled.
-		@type baseCmd: str
-
-		@param project: The project currently being compiled, which can be used to retrieve any needed information.
-		@type project: L{csbuild.projectSettings.projectSettings}
-
-		@param forceIncludeFile: A precompiled header that's being forcefully included.
-		@type forceIncludeFile: str
-
-		@param outObj: The object file to be generated by this command
-		@type outObj: str
-
-		@param inFile: The file being compiled
-		@type inFile: str
-
-		@return: The extended command string, including the base command string
-		@rtype: str
-		"""
-		pass
-
-
-	@abstractmethod
-	def get_base_cxx_precompile_command( self, project ):
-		"""
-		Retrieves the BASE C++ compiler command for precompiling headers in this project.
-
-		The difference between the base command and the extended command is as follows:
-			1. The base command does not include any specific files in it
-			2. The base command should be seen as the full list of compiler settings that will force a full recompile
-			if ANY of them are changed. For example, optimization settings should be included here because a change to
-			that setting should cause all object files to be regenerated.
-
-		Thus, anything that can be changed without forcing a clean rebuild should be in the extended command, not the base.
-
-		@param project: The project currently being compiled, which can be used to retrieve any needed information.
-		@type project: L{csbuild.projectSettings.projectSettings}
-
-		@return: The base command string
-		@rtype: str
-		"""
-		pass
-
-
-	@abstractmethod
-	def get_base_cc_precompile_command( self, project ):
-		"""
-		Retrieves the BASE C compiler command for precompiling headers in this project.
-
-		The difference between the base command and the extended command is as follows:
-			1. The base command does not include any specific files in it
-			2. The base command should be seen as the full list of compiler settings that will force a full recompile
-			if ANY of them are changed. For example, optimization settings should be included here because a change to
-			that setting should cause all object files to be regenerated.
-
-		Thus, anything that can be changed without forcing a clean rebuild should be in the extended command, not the base.
-
-		@param project: The project currently being compiled, which can be used to retrieve any needed information.
-		@type project: L{csbuild.projectSettings.projectSettings}
-
-		@return: The base command string
-		@rtype: str
-		"""
-		pass
-
-
-	@abstractmethod
-	def get_extended_precompile_command( self, baseCmd, project, forceIncludeFile, outObj, inFile ):
-		"""
-		Retrieves the EXTENDED C/C++ compiler command for compiling a specific precompiled header
-
-		The difference between the base command and the extended command is as follows:
-			1. The base command does not include any specific files in it
-			2. The base command should be seen as the full list of compiler settings that will force a full recompile
-			if ANY of them are changed. For example, optimization settings should be included here because a change to
-			that setting should cause all object files to be regenerated.
-
-		Thus, anything that can be changed without forcing a clean rebuild should be in the extended command, not the base.
-
-		@param baseCmd: The project's base command as returned from L{get_base_cxx_command} or L{get_base_cc_command},
-		as is appropriate for the file being compiled.
-		@type baseCmd: str
-
-		@param project: The project currently being compiled, which can be used to retrieve any needed information.
-		@type project: L{csbuild.projectSettings.projectSettings}
-
-		@param forceIncludeFile: Currently unused for precompiled headers.
-		@type forceIncludeFile: str
-
-		@param outObj: The object file to be generated by this command
-		@type outObj: str
-
-		@param inFile: The file being compiled
-		@type inFile: str
-
-		@return: The extended command string, including the base command string
-		@rtype: str
-		"""
-		pass
-
-
-	@abstractmethod
-	def get_default_extension( self, projectType ):
-		"""
-		Get the default extension for a given L{csbuild.ProjectType} value.
-
-		@param projectType: The requested output type
-		@type projectType: L{csbuild.ProjectType}
-
-		@return: The extension, including the . (i.e., .so, .a, .lib, .exe)
-		@rtype: str
-		"""
-		pass
-
-
-	@abstractmethod
-	def interrupt_exit_code( self ):
-		"""
-		Get the exit code that the compiler returns if the compile process is interrupted.
-
-		@return: The compiler's interrupt exit code
-		@rtype: int
-		"""
-		pass
-
-
-	@abstractmethod
-	def get_pch_file( self, fileName ):
-		"""
-		Get the properly formatted precompiled header output file for a given header input.
-
-		@param fileName: The input header
-		@type fileName: str
-
-		@return: The formatted output file (i.e., "header.pch" or "header.gch")
-		@rtype: str
-		"""
-		pass
-
-	@abstractmethod
-	def get_obj_ext(self):
-		"""
-		Get the extension for intermediate object files, including the .
-		"""
-		pass
-
-
-	def copy( self ):
-		"""
-		Create a deep copy of this toolchain.
-
-		@return: a copy of this toolchain
-		@rtype: toolchainBase
-		"""
-		ret = self.__class__( )
 		for kvp in self.settingsOverrides.items( ):
 			if isinstance( kvp[1], list ):
 				ret.settingsOverrides[kvp[0]] = list( kvp[1] )
@@ -347,7 +80,6 @@ class toolchainBase( object ):
 				ret.settingsOverrides[kvp[0]] = kvp[1]
 
 		return ret
-
 
 	def InstallOutput( self, s = "lib" ):
 		"""
@@ -447,7 +179,7 @@ class toolchainBase( object ):
 
 	def StaticLibraries( self, *args ):
 		"""
-		Similar to csbuild.toolchainBase.Libraries, but forces these libraries to be linked statically.
+		Similar to csbuild.toolchain.Libraries, but forces these libraries to be linked statically.
 
 		@type args: an arbitrary number of strings
 		@param args: The list of libraries to link in.
@@ -460,7 +192,7 @@ class toolchainBase( object ):
 
 	def SharedLibraries( self, *args ):
 		"""
-		Similar to csbuild.toolchainBase.Libraries, but forces these libraries to be linked dynamically.
+		Similar to csbuild.toolchain.Libraries, but forces these libraries to be linked dynamically.
 
 		@type args: an arbitrary number of strings
 		@param args: The list of libraries to link in.
@@ -1053,6 +785,18 @@ class toolchainBase( object ):
 		"""
 		self.settingsOverrides["extraDirs"] = []
 
+	def EnableWarningsAsErrors( self ):
+		"""
+		Promote all warnings to errors.
+		"""
+		self.settingsOverrides["warnings_as_errors"] = True
+
+
+	def DisableWarningsAsErrors(self):
+		"""
+		Disable the promotion of warnings to errors.
+		"""
+		self.settingsOverrides["warnings_as_errors"] = False
 
 	def DoNotChunkTogether(self, pattern, *additionalPatterns):
 		"""
@@ -1098,3 +842,398 @@ class toolchainBase( object ):
 		for pattern in list(files):
 			for filename in glob.glob(pattern):
 				self.settingsOverrides["chunkExcludes"].add(os.path.abspath(filename))
+
+
+@_shared_globals.MetaClass(ABCMeta)
+class linkerBase( SettingsOverrider ):
+	def __init__(self):
+		SettingsOverrider.__init__(self)
+
+	def parseOutput(self, outputStr):
+		return None
+
+	@abstractmethod
+	def copy(self):
+		return SettingsOverrider.copy(self)
+
+	@staticmethod
+	def additional_args( parser ):
+		"""
+		Asks for additional command-line arguments to be added by the toolchain.
+
+		@param parser: A parser for these arguments to be added to
+		@type parser: argparse.argument_parser
+		"""
+		pass
+
+
+	@abstractmethod
+	def interrupt_exit_code( self ):
+		"""
+		Get the exit code that the compiler returns if the compile process is interrupted.
+
+		@return: The compiler's interrupt exit code
+		@rtype: int
+		"""
+		pass
+
+	@abstractmethod
+	def get_link_command( self, project, outputFile, objList ):
+		"""
+		Retrieves the command to be used for linking for this toolchain.
+
+		@param project: The project currently being linked, which can be used to retrieve any needed information.
+		@type project: L{csbuild.projectSettings.projectSettings}
+
+		@param outputFile: The file that will be the result of the link operation.
+		@type outputFile: str
+
+		@param objList: List of objects being linked
+		@type objList: list[str]
+
+		@return: The fully formatted link command
+		@rtype: str
+		"""
+		pass
+
+
+	@abstractmethod
+	def find_library( self, project, library, library_dirs, force_static, force_shared ):
+		"""
+		Search for a library and verify that it is installed.
+
+		@param project: The project currently being checked, which can be used to retrieve any needed information.
+		@type project: L{csbuild.projectSettings.projectSettings}
+
+		@param library: The library being searched for
+		@type library: str
+
+		@param library_dirs: The directories to search for the library in
+		@type library_dirs: list[str]
+
+		@param force_static: Whether or not this library should be forced to link statically
+		@type force_static: bool
+
+		@param force_shared: Whether or not this library should be forced to link dynamically
+		@type force_shared: bool
+
+		@return: The location to the library if found, or None
+		@rtype: str or None
+		"""
+		pass
+
+	@abstractmethod
+	def get_default_extension( self, projectType ):
+		"""
+		Get the default extension for a given L{csbuild.ProjectType} value.
+
+		@param projectType: The requested output type
+		@type projectType: L{csbuild.ProjectType}
+
+		@return: The extension, including the . (i.e., .so, .a, .lib, .exe)
+		@rtype: str
+		"""
+		pass
+
+
+@_shared_globals.MetaClass(ABCMeta)
+class compilerBase( SettingsOverrider ):
+	def __init__(self):
+		SettingsOverrider.__init__(self)
+
+	def parseOutput(self, outputStr):
+		return None
+
+	@abstractmethod
+	def copy(self):
+		return SettingsOverrider.copy(self)
+
+	@staticmethod
+	def additional_args( parser ):
+		"""
+		Asks for additional command-line arguments to be added by the toolchain.
+
+		@param parser: A parser for these arguments to be added to
+		@type parser: argparse.argument_parser
+		"""
+		pass
+
+
+	@abstractmethod
+	def interrupt_exit_code( self ):
+		"""
+		Get the exit code that the compiler returns if the compile process is interrupted.
+
+		@return: The compiler's interrupt exit code
+		@rtype: int
+		"""
+		pass
+
+
+	@abstractmethod
+	def get_base_cxx_command( self, project ):
+		"""
+		Retrieves the BASE C++ compiler command for this project.
+
+		The difference between the base command and the extended command is as follows:
+			1. The base command does not include any specific files in it
+			2. The base command should be seen as the full list of compiler settings that will force a full recompile
+			if ANY of them are changed. For example, optimization settings should be included here because a change to
+			that setting should cause all object files to be regenerated.
+
+		Thus, anything that can be changed without forcing a clean rebuild should be in the extended command, not the base.
+
+		@param project: The project currently being compiled, which can be used to retrieve any needed information.
+		@type project: L{csbuild.projectSettings.projectSettings}
+
+		@return: The base command string
+		@rtype: str
+		"""
+		pass
+
+
+	@abstractmethod
+	def get_base_cc_command( self, project ):
+		"""
+		Retrieves the BASE C compiler command for this project.
+
+		The difference between the base command and the extended command is as follows:
+			1. The base command does not include any specific files in it
+			2. The base command should be seen as the full list of compiler settings that will force a full recompile
+			if ANY of them are changed. For example, optimization settings should be included here because a change to
+			that setting should cause all object files to be regenerated.
+
+		Thus, anything that can be changed without forcing a clean rebuild should be in the extended command, not the base.
+
+		@param project: The project currently being compiled, which can be used to retrieve any needed information.
+		@type project: L{csbuild.projectSettings.projectSettings}
+
+		@return: The base command string
+		@rtype: str
+		"""
+		pass
+
+
+	@abstractmethod
+	def get_extended_command( self, baseCmd, project, forceIncludeFile, outObj, inFile ):
+		"""
+		Retrieves the EXTENDED C/C++ compiler command for compiling a specific file
+
+		The difference between the base command and the extended command is as follows:
+			1. The base command does not include any specific files in it
+			2. The base command should be seen as the full list of compiler settings that will force a full recompile
+			if ANY of them are changed. For example, optimization settings should be included here because a change to
+			that setting should cause all object files to be regenerated.
+
+		Thus, anything that can be changed without forcing a clean rebuild should be in the extended command, not the base.
+
+		@param baseCmd: The project's base command as returned from L{get_base_cxx_command} or L{get_base_cc_command},
+		as is appropriate for the file being compiled.
+		@type baseCmd: str
+
+		@param project: The project currently being compiled, which can be used to retrieve any needed information.
+		@type project: L{csbuild.projectSettings.projectSettings}
+
+		@param forceIncludeFile: A precompiled header that's being forcefully included.
+		@type forceIncludeFile: str
+
+		@param outObj: The object file to be generated by this command
+		@type outObj: str
+
+		@param inFile: The file being compiled
+		@type inFile: str
+
+		@return: The extended command string, including the base command string
+		@rtype: str
+		"""
+		pass
+
+
+	@abstractmethod
+	def get_base_cxx_precompile_command( self, project ):
+		"""
+		Retrieves the BASE C++ compiler command for precompiling headers in this project.
+
+		The difference between the base command and the extended command is as follows:
+			1. The base command does not include any specific files in it
+			2. The base command should be seen as the full list of compiler settings that will force a full recompile
+			if ANY of them are changed. For example, optimization settings should be included here because a change to
+			that setting should cause all object files to be regenerated.
+
+		Thus, anything that can be changed without forcing a clean rebuild should be in the extended command, not the base.
+
+		@param project: The project currently being compiled, which can be used to retrieve any needed information.
+		@type project: L{csbuild.projectSettings.projectSettings}
+
+		@return: The base command string
+		@rtype: str
+		"""
+		pass
+
+
+	@abstractmethod
+	def get_base_cc_precompile_command( self, project ):
+		"""
+		Retrieves the BASE C compiler command for precompiling headers in this project.
+
+		The difference between the base command and the extended command is as follows:
+			1. The base command does not include any specific files in it
+			2. The base command should be seen as the full list of compiler settings that will force a full recompile
+			if ANY of them are changed. For example, optimization settings should be included here because a change to
+			that setting should cause all object files to be regenerated.
+
+		Thus, anything that can be changed without forcing a clean rebuild should be in the extended command, not the base.
+
+		@param project: The project currently being compiled, which can be used to retrieve any needed information.
+		@type project: L{csbuild.projectSettings.projectSettings}
+
+		@return: The base command string
+		@rtype: str
+		"""
+		pass
+
+
+	@abstractmethod
+	def get_extended_precompile_command( self, baseCmd, project, forceIncludeFile, outObj, inFile ):
+		"""
+		Retrieves the EXTENDED C/C++ compiler command for compiling a specific precompiled header
+
+		The difference between the base command and the extended command is as follows:
+			1. The base command does not include any specific files in it
+			2. The base command should be seen as the full list of compiler settings that will force a full recompile
+			if ANY of them are changed. For example, optimization settings should be included here because a change to
+			that setting should cause all object files to be regenerated.
+
+		Thus, anything that can be changed without forcing a clean rebuild should be in the extended command, not the base.
+
+		@param baseCmd: The project's base command as returned from L{get_base_cxx_command} or L{get_base_cc_command},
+		as is appropriate for the file being compiled.
+		@type baseCmd: str
+
+		@param project: The project currently being compiled, which can be used to retrieve any needed information.
+		@type project: L{csbuild.projectSettings.projectSettings}
+
+		@param forceIncludeFile: Currently unused for precompiled headers.
+		@type forceIncludeFile: str
+
+		@param outObj: The object file to be generated by this command
+		@type outObj: str
+
+		@param inFile: The file being compiled
+		@type inFile: str
+
+		@return: The extended command string, including the base command string
+		@rtype: str
+		"""
+		pass
+
+
+	@abstractmethod
+	def get_pch_file( self, fileName ):
+		"""
+		Get the properly formatted precompiled header output file for a given header input.
+
+		@param fileName: The input header
+		@type fileName: str
+
+		@return: The formatted output file (i.e., "header.pch" or "header.gch")
+		@rtype: str
+		"""
+		pass
+
+	@abstractmethod
+	def get_obj_ext(self):
+		"""
+		Get the extension for intermediate object files, including the .
+		"""
+		pass
+
+
+class toolchain( SettingsOverrider ):
+	"""
+	Base class used for custom toolchains
+	To create a new toolchain, inherit from this class, and then use
+	L{csbuild.RegisterToolchain()<csbuild.RegisterToolchain>}
+	"""
+	def __init__( self ):
+		"""
+		Default constructor
+		"""
+
+		self.settingsOverrides = { }
+		self.tools = {}
+		self.activeTool = None
+		self.activeToolName = ""
+
+
+	def Compiler(self):
+		return self.tools["compiler"]
+
+
+	def Linker(self):
+		return self.tools["linker"]
+
+
+	def Assembler(self):
+		return self.tools["assembler"]
+
+
+	def Tool( self, *args ):
+		"""
+		Perform actions on the listed tools. Examples:
+
+		csbuild.Toolchain("msvc").Tool("compiler", "linker").SetMsvcVersion(110)
+
+		@type args: arbitrary number of strings
+		@param args: The list of tools to act on
+
+		@return: A proxy object that enables functions to be applied to one or more specific tools.
+		"""
+		tools = []
+		for arg in list( args ):
+			tools.append( self.tools[arg] )
+		return ClassCombiner( tools )
+
+
+	def AddCustomTool(self, name, tool):
+		self.tools[name] = tool()
+
+
+	def SetActiveTool(self, name):
+		self.activeToolName = name
+		if name:
+			self.activeTool = self.tools[name]
+		else:
+			self.activeTool = None
+
+
+	def __getattr__( self, name ):
+		funcs = []
+		for obj in self.tools.values():
+			funcs.append( getattr( obj, name ) )
+
+		def combined_func( *args, **kwargs ):
+			for func in funcs:
+				func( *args, **kwargs )
+
+		return combined_func
+
+
+	def copy( self ):
+		"""
+		Create a deep copy of this toolchain.
+
+		@return: a copy of this toolchain
+		@rtype: toolchain
+		"""
+		ret = SettingsOverrider.copy(self)
+
+		for kvp in self.tools.items():
+			ret.tools[kvp[0]] = kvp[1].copy()
+
+		if self.activeToolName:
+			ret.activeToolName = self.activeToolName
+			if ret.activeToolName:
+				ret.activeTool = ret.tools[ret.activeToolName]
+
+		return ret

@@ -945,17 +945,24 @@ def DoNotChunk(*files):
 			projectSettings.currentProject.chunkExcludes.add(os.path.abspath(filename))
 
 
-def RegisterToolchain( name, toolchain ):
+def RegisterToolchain( name, compiler, linker ):
 	"""
 	Register a new toolchain for use in the project.
 
 	@type name: str
 	@param name: The name of the toolchain being registered
-	@type toolchain: csbuild.toolchain.ToolchainBase
-	@param toolchain: The toolchain to associate with that name
+	@type compiler: class derived from L{csbuild.toolchain.compilerBase}
+	@param compiler: The compiler used in this toolchain
+	@type linker: class derived from L{csbuild.toolchain.linkerBase}
+	@param linker: The linker used in this toolchain
 	"""
-	_shared_globals.alltoolchains[name] = toolchain
-	projectSettings.currentProject.toolchains[name] = toolchain( )
+	class registeredToolchain(toolchain.toolchain):
+		def __init__(self):
+			toolchain.toolchain.__init__(self)
+			self.tools["compiler"] = compiler()
+			self.tools["linker"] = linker()
+	_shared_globals.alltoolchains[name] = registeredToolchain
+	projectSettings.currentProject.toolchains[name] = registeredToolchain()
 
 
 def RegisterProjectGenerator( name, generator ):
@@ -986,7 +993,7 @@ def Toolchain( *args ):
 	toolchains = []
 	for arg in list( args ):
 		toolchains.append( projectSettings.currentProject.toolchains[arg] )
-	return toolchain.combined_toolchains( toolchains )
+	return toolchain.ClassCombiner( toolchains )
 
 
 def SetActiveToolchain( name ):
@@ -1233,6 +1240,8 @@ _shared_globals.starttime = time.time( )
 
 _barWriter = log.bar_writer( )
 
+building = False
+
 class LinkStatus(object):
 	"""
 	Defines the current link status of a project.
@@ -1250,9 +1259,12 @@ def build( ):
 	And spawning a build thread for each one that does.
 	"""
 
-	_barWriter.start( )
+	_barWriter.start()
+	linkThread.start()
 
 	built = False
+	global building
+	building = True
 
 	for project in _shared_globals.sortedProjects:
 		_shared_globals.total_compiles += len( project.final_chunk_set )
@@ -1285,9 +1297,9 @@ def build( ):
 		while LinkedSomething:
 			LinkedSomething = False
 			for otherProj in list( projects_in_flight ):
-				otherProj.mutex.acquire( )
-				complete = otherProj.compiles_completed
-				otherProj.mutex.release( )
+				with otherProj.mutex:
+					complete = otherProj.compiles_completed
+
 				if complete >= len( otherProj.final_chunk_set ) + int(
 						otherProj.needs_c_precompile ) + int(
 						otherProj.needs_cpp_precompile ):
@@ -1304,7 +1316,9 @@ def build( ):
 						log.LOG_ERROR( "Build of {} ({}) failed! Finishing up non-dependent build tasks...".format(
 							otherProj.output_name, otherProj.targetName ) )
 						otherProj.state = _shared_globals.ProjectState.FAILED
-						otherProj.endTime = time.time()
+						otherProj.linkQueueStart = time.time()
+						otherProj.linkStart = otherProj.linkQueueStart
+						otherProj.endTime = otherProj.linkQueueStart
 						continue
 
 					okToLink = True
@@ -1314,22 +1328,8 @@ def build( ):
 								okToLink = False
 								break
 					if okToLink:
-						otherProj.state = _shared_globals.ProjectState.LINKING
-						ret = link( otherProj )
-						if ret == LinkStatus.Fail:
-							_shared_globals.build_success = False
-							otherProj.state = _shared_globals.ProjectState.LINK_FAILED
-						elif ret == LinkStatus.Success:
-							if otherProj.postBuildStep:
-								log.LOG_BUILD( "Running post-build step for {} ({})".format( otherProj.output_name, otherProj.targetName ) )
-								otherProj.postBuildStep( otherProj )
-							otherProj.state = _shared_globals.ProjectState.FINISHED
-						elif ret == LinkStatus.UpToDate:
-							otherProj.state = _shared_globals.ProjectState.UP_TO_DATE
-						otherProj.endTime = time.time()
-
+						link( otherProj )
 						LinkedSomething = True
-						log.LOG_BUILD( "Finished {} ({})".format( otherProj.output_name, otherProj.targetName ) )
 						projects_done.add( otherProj.key )
 					else:
 						log.LOG_LINKER(
@@ -1345,22 +1345,8 @@ def build( ):
 						okToLink = False
 						break
 				if okToLink:
-					otherProj.state = _shared_globals.ProjectState.LINKING
-					ret = link( otherProj )
-					if ret == LinkStatus.Fail:
-						_shared_globals.build_success = False
-						otherProj.state = _shared_globals.ProjectState.LINK_FAILED
-					elif ret == LinkStatus.Success:
-						if otherProj.postBuildStep:
-							log.LOG_BUILD( "Running post-compile step for {} ({})".format( otherProj.output_name, otherProj.targetName ) )
-							otherProj.postBuildStep( otherProj )
-						otherProj.state = _shared_globals.ProjectState.FINISHED
-					elif ret == LinkStatus.UpToDate:
-						otherProj.state = _shared_globals.ProjectState.UP_TO_DATE
-					otherProj.endTime = time.time()
-
+					link( otherProj )
 					LinkedSomething = True
-					log.LOG_BUILD( "Finished {} ({})".format( otherProj.output_name, otherProj.targetName ) )
 					projects_done.add( otherProj.key )
 					pending_links.remove( otherProj )
 
@@ -1403,7 +1389,7 @@ def build( ):
 					built = True
 					obj = "{}/{}_{}{}".format( projectSettings.currentProject.obj_dir,
 						os.path.basename( chunk ).split( '.' )[0],
-						project.targetName, project.activeToolchain.get_obj_ext() )
+						project.targetName, project.activeToolchain.Compiler().get_obj_ext() )
 					if not _shared_globals.semaphore.acquire( False ):
 						if _shared_globals.max_threads != 1:
 							log.LOG_INFO( "Waiting for a build thread to become available..." )
@@ -1457,7 +1443,9 @@ def build( ):
 
 				_shared_globals.total_compiles -= len(project.final_chunk_set)
 
-				project.endTime = time.time()
+				project.linkQueueStart = time.time()
+				project.linkStart = project.linkQueueStart
+				project.endTime = project.linkQueueStart
 				project.state = _shared_globals.ProjectState.FAILED
 
 			if not _shared_globals.build_success and _shared_globals.stopOnError:
@@ -1532,8 +1520,14 @@ def build( ):
 
 	if not built:
 		log.LOG_BUILD( "Nothing to build." )
+	building = False
+	log.LOG_THREAD("Waiting for linker tasks to finish.")
+	linkThread.join()
 	return _shared_globals.build_success
 
+linkMutex = threading.Lock()
+linkCond = threading.Condition(linkMutex)
+linkQueue = []
 
 def link( project, *objs ):
 	"""
@@ -1544,12 +1538,24 @@ def link( project, *objs ):
 	This function also checks (if nothing was built) the modified times of all the required libraries, to see if we need
 	to relink anyway, even though nothing was compiled.
 	"""
+	global linkQueue
+	global linkMutex
+	global linkCond
 
+	project.state = _shared_globals.ProjectState.LINK_QUEUED
+	project.linkQueueStart = time.time()
+	with linkMutex:
+		linkQueue.append( (project, list(objs)) )
+		linkCond.notify()
+
+def performLink(project, objs):
 	project.linkStart = time.time()
 
 	if project.preLinkStep:
 		log.LOG_BUILD( "Running pre-link step for {} ({})".format( project.output_name, project.targetName ) )
 		project.preLinkStep(project)
+
+	project.activeToolchain.SetActiveTool("linker")
 
 	starttime = time.time( )
 
@@ -1557,7 +1563,6 @@ def link( project, *objs ):
 
 	log.LOG_LINKER( "Linking {0}...".format( os.path.abspath( output ) ) )
 
-	objs = list( objs )
 	if not objs:
 		for chunk in project.chunks:
 			if not project.unity:
@@ -1565,14 +1570,14 @@ def link( project, *objs ):
 					project.obj_dir,
 					_utils.get_chunk_name( project.output_name, chunk ),
 					project.targetName,
-					project.activeToolchain.get_obj_ext()
+					project.activeToolchain.Compiler().get_obj_ext()
 				)
 			else:
 				obj = "{}/{}_unity_{}{}".format(
 					project.obj_dir,
 					project.output_name,
 					project.targetName,
-					project.activeToolchain.get_obj_ext()
+					project.activeToolchain.Compiler().get_obj_ext()
 				)
 			if project.use_chunks and not _shared_globals.disable_chunks and os.path.exists( obj ):
 				objs.append( obj )
@@ -1580,7 +1585,7 @@ def link( project, *objs ):
 				if type( chunk ) == list:
 					for source in chunk:
 						obj = "{}/{}_{}{}".format( project.obj_dir, os.path.basename( source ).split( '.' )[0],
-							project.targetName, project.activeToolchain.get_obj_ext() )
+							project.targetName, project.activeToolchain.Compiler().get_obj_ext() )
 						if os.path.exists( obj ):
 							objs.append( obj )
 						else:
@@ -1588,7 +1593,7 @@ def link( project, *objs ):
 							return LinkStatus.Fail
 				else:
 					obj = "{}/{}_{}{}".format( project.obj_dir, os.path.basename( chunk ).split( '.' )[0],
-						project.targetName, project.activeToolchain.get_obj_ext() )
+						project.targetName, project.activeToolchain.Compiler().get_obj_ext() )
 					if os.path.exists( obj ):
 						objs.append( obj )
 					else:
@@ -1641,7 +1646,7 @@ def link( project, *objs ):
 	if os.path.exists( output ):
 		os.remove( output )
 
-	cmd = project.activeToolchain.get_link_command( project, output, objs )
+	cmd = project.activeToolchain.Linker().get_link_command( project, output, objs )
 	if _shared_globals.show_commands:
 		print(cmd)
 
@@ -1663,7 +1668,7 @@ def link( project, *objs ):
 		stripped_errors = re.sub(ansi_escape, '', errors)
 		project.linkOutput = output
 		project.linkErrors = stripped_errors
-		errorlist = project.activeToolchain.parseOutput(stripped_errors)
+		errorlist = project.activeToolchain.Linker().parseOutput(stripped_errors)
 		errorcount = 0
 		warningcount = 0
 		if errorlist:
@@ -1688,6 +1693,44 @@ def link( project, *objs ):
 
 	return LinkStatus.Success
 
+def linkThreadLoop():
+	global linkQueue
+	global linkMutex
+	global linkCond
+
+	global building
+	while True:
+		projectsToLink = []
+		with linkMutex:
+			if not linkQueue:
+				if not building:
+					return
+				linkCond.wait()
+
+			projectsToLink = linkQueue
+			linkQueue = []
+
+		for ( project, objs ) in projectsToLink:
+			project.state = _shared_globals.ProjectState.LINKING
+			ret = performLink(project, objs)
+
+			if ret == LinkStatus.Fail:
+				_shared_globals.build_success = False
+				project.state = _shared_globals.ProjectState.LINK_FAILED
+			elif ret == LinkStatus.Success:
+				if project.postBuildStep:
+					log.LOG_BUILD( "Running post-build step for {} ({})".format( project.output_name, project.targetName ) )
+					try:
+						project.postBuildStep( project )
+					except:
+						traceback.print_exc()
+				project.state = _shared_globals.ProjectState.FINISHED
+			elif ret == LinkStatus.UpToDate:
+				project.state = _shared_globals.ProjectState.UP_TO_DATE
+			project.endTime = time.time()
+			log.LOG_BUILD( "Finished {} ({})".format( project.output_name, project.targetName ) )
+
+linkThread = threading.Thread(target=linkThreadLoop)
 
 def clean( silent = False ):
 	"""
@@ -1701,7 +1744,7 @@ def clean( silent = False ):
 			log.LOG_BUILD( "Cleaning {0} ({1})...".format( project.output_name, project.targetName ) )
 		for source in project.sources:
 			obj = "{}/{}_{}{}".format( project.obj_dir, os.path.basename( source ).split( '.' )[0],
-				project.targetName, project.activeToolchain.get_obj_ext() )
+				project.targetName, project.activeToolchain.Compiler().get_obj_ext() )
 			if os.path.exists( obj ):
 				if not silent:
 					log.LOG_INFO( "Deleting {0}".format( obj ) )
@@ -1709,7 +1752,7 @@ def clean( silent = False ):
 		headerfile = "{0}/{1}_cpp_precompiled_headers_{2}.hpp".format( project.csbuild_dir,
 			project.output_name.split( '.' )[0],
 			project.targetName )
-		obj = project.activeToolchain.get_pch_file( headerfile )
+		obj = project.activeToolchain.Compiler().get_pch_file( headerfile )
 		if os.path.exists( obj ):
 			if not silent:
 				log.LOG_INFO( "Deleting {0}".format( obj ) )
@@ -1718,7 +1761,7 @@ def clean( silent = False ):
 		headerfile = "{0}/{1}_c_precompiled_headers_{2}.h".format( project.csbuild_dir,
 			project.output_name.split( '.' )[0],
 			project.targetName )
-		obj = project.activeToolchain.get_pch_file( headerfile )
+		obj = project.activeToolchain.Compiler().get_pch_file( headerfile )
 		if os.path.exists( obj ):
 			if not silent:
 				log.LOG_INFO( "Deleting {0}".format( obj ) )
@@ -1789,7 +1832,7 @@ def make( ):
 	"""
 	if not build( ):
 		_shared_globals.build_success = False
-		log.LOG_ERROR( "Build failed. Aborting." )
+		log.LOG_ERROR( "Build failed." )
 	else:
 		log.LOG_BUILD( "Build complete." )
 
@@ -1826,8 +1869,10 @@ def debug( ):
 		projectSettings.currentProject.output_dir = "Debug"
 	if not projectSettings.currentProject.obj_dir_set:
 		projectSettings.currentProject.obj_dir = "Debug/obj"
-	if not projectSettings.currentProject.toolchains["msvc"].settingsOverrides["debug_runtime_set"]:
-		projectSettings.currentProject.toolchains["msvc"].settingsOverrides["debug_runtime"] = True
+	if not projectSettings.currentProject.toolchains["msvc"].Compiler().debug_runtime_set:
+		projectSettings.currentProject.toolchains["msvc"].Compiler().debug_runtime = True
+	if not projectSettings.currentProject.toolchains["msvc"].Linker().debug_runtime_set:
+		projectSettings.currentProject.toolchains["msvc"].Linker().debug_runtime = True
 
 
 def release( ):
@@ -1840,13 +1885,15 @@ def release( ):
 		projectSettings.currentProject.output_dir = "Release"
 	if not projectSettings.currentProject.obj_dir_set:
 		projectSettings.currentProject.obj_dir = "Release/obj"
-	if not projectSettings.currentProject.toolchains["msvc"].settingsOverrides["debug_runtime_set"]:
-		projectSettings.currentProject.toolchains["msvc"].settingsOverrides["debug_runtime"] = False
+	if not projectSettings.currentProject.toolchains["msvc"].Compiler().debug_runtime_set:
+		projectSettings.currentProject.toolchains["msvc"].Compiler().debug_runtime = False
+	if not projectSettings.currentProject.toolchains["msvc"].Linker().debug_runtime_set:
+		projectSettings.currentProject.toolchains["msvc"].Linker().debug_runtime = False
 
 
 def _setupdefaults( ):
-	RegisterToolchain( "gcc", toolchain_gcc.toolchain_gcc )
-	RegisterToolchain( "msvc", toolchain_msvc.toolchain_msvc )
+	RegisterToolchain( "gcc", toolchain_gcc.compiler_gcc, toolchain_gcc.linker_gcc )
+	RegisterToolchain( "msvc", toolchain_msvc.compiler_msvc, toolchain_msvc.linker_msvc )
 
 	RegisterProjectGenerator( "qtcreator", project_generator_qtcreator.project_generator_qtcreator )
 	RegisterProjectGenerator( "slickedit", project_generator_slickedit.project_generator_slickedit )
@@ -2154,10 +2201,11 @@ def _run( ):
 	group.add_argument( '--solution-args', help = 'Arguments passed to the build script executed by the solution',
 		action = "store", default = "")
 
-	for chain in _shared_globals.alltoolchains.items( ):
-		if chain[1].additional_args != toolchain.toolchainBase.additional_args:
-			group = parser.add_argument_group( "Options for toolchain {}".format( chain[0] ) )
-			chain[1].additional_args( group )
+	#TODO: Additional args here
+	# for chain in _shared_globals.alltoolchains.items( ):
+	#	if chain[1].Compiler().additional_args != toolchain.compilerBase.additional_args:
+	#		group = parser.add_argument_group( "Options for toolchain {}".format( chain[0] ) )
+	#		chain[1].Compiler().additional_args( group )
 
 	for gen in _shared_globals.allgenerators.items( ):
 		if gen[1].additional_args != project_generator.project_generator.additional_args:
@@ -2246,7 +2294,7 @@ def _run( ):
 		for project in _shared_globals.tempprojects.values( ):
 			os.chdir( project.scriptPath )
 
-			newproject = project.copy( )
+			newproject = project.copy()
 
 			if _shared_globals.target:
 				newproject.targetName = _shared_globals.target
@@ -2430,6 +2478,4 @@ except Exception as e:
 	_barWriter.stop( )
 	if platform.system() != "Windows" and not imp.lock_held():
 		imp.acquire_lock()
-	if not isinstance(e, SystemExit):
-		traceback.print_exc()
 	raise

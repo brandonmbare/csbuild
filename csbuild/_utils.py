@@ -129,10 +129,10 @@ class threaded_build( threading.Thread ):
 			if headerfile:
 				inc += headerfile
 			if self.forPrecompiledHeader:
-				cmd = self.project.activeToolchain.get_extended_precompile_command( baseCommand,
+				cmd = self.project.activeToolchain.Compiler().get_extended_precompile_command( baseCommand,
 					self.project, inc, self.obj, os.path.abspath( self.file ) )
 			else:
-				cmd = self.project.activeToolchain.get_extended_command( baseCommand,
+				cmd = self.project.activeToolchain.Compiler().get_extended_command( baseCommand,
 					self.project, inc, self.obj, os.path.abspath( self.file ) )
 
 			if _shared_globals.show_commands:
@@ -140,62 +140,59 @@ class threaded_build( threading.Thread ):
 			if os.path.exists( self.obj ):
 				os.remove( self.obj )
 
-			errors = ""
-			output = ""
-			last = time.time()
-			fd = subprocess.Popen( shlex.split(cmd), stdout = subprocess.PIPE, stderr = subprocess.STDOUT )
-			while True:
-				try:
-					while fd.poll():
-						try:
-							line = fd.stdout.readline()
-						except IOError as e:
-							continue
+			class StringRef(object):
+				def __init__(self):
+					self.str = ""
 
-						stripped = line.strip()
-						if stripped == os.path.basename(self.file):
-							continue
-						if not " " in stripped:
-							baseStripped = stripped.rsplit(".",1)[0]
-							baseFile = self.file.rsplit(".", 1)[0]
-							if baseStripped == baseFile:
-								continue
-
-						errors += line
-					break
-				except IOError as e:
-					continue
-
-			while True:
-				try:
-					line = fd.stdout.readline()
-				except IOError as e:
-					continue
-				if not line:
-					break
-
-				stripped = line.strip()
-				if stripped == os.path.basename(self.file):
-					continue
-				if not " " in stripped:
-					baseStripped = stripped.rsplit(".",1)[0]
-					baseFile = self.file.rsplit(".", 1)[0]
-					if baseStripped == baseFile:
+			errors = StringRef()
+			output = StringRef()
+			fd = subprocess.Popen( shlex.split(cmd), stdout = subprocess.PIPE, stderr = subprocess.PIPE )
+			running = True
+			def GatherData(pipe, buffer):
+				while running:
+					try:
+						line = pipe.readline()
+					except IOError as e:
 						continue
+					if not line:
+						break
 
-				errors += line
+					stripped = line.strip()
+					baseFile = os.path.basename(self.file)
+					if stripped == baseFile:
+						continue
+					if not " " in stripped:
+						baseStripped = stripped.rsplit(".",1)[0]
+						baseFile = baseFile.rsplit(".", 1)[0]
+						if baseStripped == baseFile:
+							continue
+
+					buffer.str += line
+
+			outputThread = threading.Thread(target=GatherData, args=(fd.stdout, output))
+			errorThread = threading.Thread(target=GatherData, args=(fd.stderr, errors))
+
+			outputThread.start()
+			errorThread.start()
+
+			fd.wait()
+			running = False
+
+			outputThread.join()
+			errorThread.join()
 
 			ret = fd.returncode
 			with _shared_globals.printmutex:
-				sys.stdout.write( output )
-				sys.stderr.write( errors )
+				sys.stdout.write( output.str )
+				sys.stderr.write( errors.str )
 
 			self.project.mutex.acquire( )
 			ansi_escape = re.compile(r'\x1b[^m]*m')
-			stripped_errors = re.sub(ansi_escape, '', errors)
-			self.project.compileOutput[self.file] = output
+			stripped_errors = re.sub(ansi_escape, '', errors.str)
+			self.project.compileOutput[self.file] = output.str
 			self.project.compileErrors[self.file] = stripped_errors
-			errorlist = self.project.activeToolchain.parseOutput(stripped_errors)
+			errorlist = self.project.activeToolchain.Compiler().parseOutput(output.str)
+			errorlist += self.project.activeToolchain.Compiler().parseOutput(stripped_errors)
 			errorcount = 0
 			warningcount = 0
 			if errorlist:
@@ -226,7 +223,7 @@ class threaded_build( threading.Thread ):
 			_shared_globals.sgmutex.release()
 
 			if ret:
-				if str( ret ) == str( self.project.activeToolchain.interrupt_exit_code( ) ):
+				if str( ret ) == str( self.project.activeToolchain.Compiler().interrupt_exit_code( ) ):
 					_shared_globals.lock.acquire( )
 					if not _shared_globals.interrupted:
 						log.LOG_ERROR( "Keyboard interrupt received. Aborting build." )
@@ -405,7 +402,7 @@ def prepare_precompiles( ):
 
 
 		def handleHeaderFile( headerfile, allheaders, forCpp ):
-			obj = project.activeToolchain.get_pch_file( headerfile )
+			obj = project.activeToolchain.Compiler().get_pch_file( headerfile )
 
 			precompile = False
 			if not os.path.exists( headerfile ) or project.should_recompile( headerfile, obj, True ):
@@ -520,7 +517,7 @@ def chunked_build( ):
 		chunkname = get_chunk_name( owningProject.output_name, chunks_to_build[0] )
 
 		obj = "{}/{}_{}{}".format( owningProject.obj_dir, chunkname,
-			owningProject.targetName, owningProject.activeToolchain.get_obj_ext() )
+			owningProject.targetName, owningProject.activeToolchain.Compiler().get_obj_ext() )
 		if os.path.exists( obj ):
 			os.remove(obj)
 			log.LOG_WARN_NOPUSH(
@@ -590,7 +587,7 @@ def chunked_build( ):
 								os.path.getsize( source ) ) )
 						obj = "{}/{}_{}{}".format( project.obj_dir,
 							os.path.basename( source ).split( '.' )[0],
-							project.targetName, project.activeToolchain.get_obj_ext() )
+							project.targetName, project.activeToolchain.Compiler().get_obj_ext() )
 						if os.path.exists( obj ):
 							os.remove( obj )
 					f.write( "//Total size: {0} bytes".format( chunksize ) )
@@ -601,7 +598,7 @@ def chunked_build( ):
 				chunkname = get_chunk_name( project.output_name, chunk )
 
 				obj = "{}/{}_{}{}".format( project.obj_dir, chunkname,
-					project.targetName, project.activeToolchain.get_obj_ext() )
+					project.targetName, project.activeToolchain.Compiler().get_obj_ext() )
 				if os.path.exists( obj ):
 					#If the chunk object exists, the last build of these files was the full chunk.
 					#We're now splitting the chunk to speed things up for future incremental builds,

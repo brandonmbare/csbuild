@@ -60,7 +60,7 @@ and stepping on each other
 @type alltargets: set[str]
 
 @var alltoolchains: All toolchains that have been registered
-@type alltoolchains: dict[str, L{csbuild.toolchain.toolchainBase}]
+@type alltoolchains: dict[str, L{csbuild.toolchain.toolchain}]
 
 @var allgenerators: All project generators that have been registered
 @type allgenerators: dict[str, csbuild.project_generator.project_generator]
@@ -168,6 +168,12 @@ class OutputLine( object ):
 		self.line = -1
 		self.column = -1
 		self.details = []
+
+
+def MetaClass(meta):
+	def wrap(cls):
+		return meta(cls.__name__, cls.__bases__, dict(cls.__dict__))
+	return wrap
 
 
 color_supported = terminfo.TermInfo.SupportsColor( )
