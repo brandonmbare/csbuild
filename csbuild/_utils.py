@@ -146,7 +146,7 @@ class threaded_build( threading.Thread ):
 
 			errors = StringRef()
 			output = StringRef()
-			fd = subprocess.Popen( shlex.split(cmd), stdout = subprocess.PIPE, stderr = subprocess.PIPE )
+			fd = subprocess.Popen( shlex.split(cmd), stdout = subprocess.PIPE, stderr = subprocess.PIPE, cwd = self.project.workingDirectory )
 			running = True
 			def GatherData(pipe, buffer):
 				while running:
