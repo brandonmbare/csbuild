@@ -1516,7 +1516,9 @@ def build( ):
 		log.LOG_BUILD( "Nothing to build." )
 	building = False
 	global linkCond
-	linkCond.notify()
+	global linkMutex
+	with linkMutex:
+		linkCond.notify()
 	log.LOG_THREAD("Waiting for linker tasks to finish.")
 	linkThread.join()
 
