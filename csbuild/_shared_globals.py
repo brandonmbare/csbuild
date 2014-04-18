@@ -122,12 +122,13 @@ class ProjectState( object ):
 	PENDING = 0
 	BUILDING = 1
 	WAITING_FOR_LINK = 2
-	LINKING = 3
-	FINISHED = 4
-	FAILED = 5
-	LINK_FAILED = 6
-	UP_TO_DATE = 7
-	ABORTED = 8
+	LINK_QUEUED = 3
+	LINKING = 4
+	FINISHED = 5
+	FAILED = 6
+	LINK_FAILED = 7
+	UP_TO_DATE = 8
+	ABORTED = 9
 
 
 class OutputLevel( object ):
