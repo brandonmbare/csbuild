@@ -1260,11 +1260,12 @@ def build( ):
 	"""
 
 	_barWriter.start()
-	linkThread.start()
 
 	built = False
 	global building
 	building = True
+
+	linkThread.start()
 
 	for project in _shared_globals.sortedProjects:
 		_shared_globals.total_compiles += len( project.final_chunk_set )
@@ -1510,11 +1511,6 @@ def build( ):
 				log.LOG_BUILD( "Running post-make step for {} ({})".format( project.output_name, project.targetName ) )
 				project.postMakeStep(project)
 
-	compiletime = time.time( ) - starttime
-	totalmin = math.floor( compiletime / 60 )
-	totalsec = round( compiletime % 60 )
-	log.LOG_BUILD( "Compilation took {0}:{1:02}".format( int( totalmin ), int( totalsec ) ) )
-
 	for proj in _shared_globals.sortedProjects:
 		proj.save_md5s( proj.allsources, proj.allheaders )
 
@@ -1523,6 +1519,12 @@ def build( ):
 	building = False
 	log.LOG_THREAD("Waiting for linker tasks to finish.")
 	linkThread.join()
+
+	compiletime = time.time( ) - starttime
+	totalmin = math.floor( compiletime / 60 )
+	totalsec = round( compiletime % 60 )
+	log.LOG_BUILD( "Compilation took {0}:{1:02}".format( int( totalmin ), int( totalsec ) ) )
+
 	return _shared_globals.build_success
 
 linkMutex = threading.Lock()
@@ -1706,7 +1708,6 @@ def linkThreadLoop():
 				if not building:
 					return
 				linkCond.wait()
-
 			projectsToLink = linkQueue
 			linkQueue = []
 
@@ -1729,6 +1730,7 @@ def linkThreadLoop():
 				project.state = _shared_globals.ProjectState.UP_TO_DATE
 			project.endTime = time.time()
 			log.LOG_BUILD( "Finished {} ({})".format( project.output_name, project.targetName ) )
+
 
 linkThread = threading.Thread(target=linkThreadLoop)
 

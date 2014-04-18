@@ -242,25 +242,6 @@ class compiler_gcc( gccBase, toolchain.compilerBase ):
 		ret += "-I/usr/include -I/usr/local/include "
 		return ret
 
-	def SetupForProject( self, project ):
-		valid_x64_archs = [
-			"amd64",
-			"ia64",
-			"x64",
-			"x86_64",
-			"sparc64",
-			"ppc64",
-			"i686-64",
-		]
-		is_64bit_platform = True if platform.machine( ).lower( ) in valid_x64_archs else False
-
-		self._include_lib64 = False
-
-		# Only include lib64 if we're on a 64-bit platform and we haven't specified whether to build a 64bit or 32bit
-		# binary or if we're explicitly told to build a 64bit binary.
-		if (is_64bit_platform and not project.force_64_bit and not project.force_32_bit) or project.force_64_bit:
-			self._include_lib64 = True
-
 	def _get_cross_compile_flag( self, compiler, project ):
 		if not project.outputArchitecture:
 			return ""
@@ -391,6 +372,26 @@ class linker_gcc( gccBase, toolchain.linkerBase ):
 		return 2
 
 
+	def SetupForProject( self, project ):
+		valid_x64_archs = [
+			"amd64",
+			"ia64",
+			"x64",
+			"x86_64",
+			"sparc64",
+			"ppc64",
+			"i686-64",
+		]
+		is_64bit_platform = True if platform.machine( ).lower( ) in valid_x64_archs else False
+
+		self._include_lib64 = False
+
+		# Only include lib64 if we're on a 64-bit platform and we haven't specified whether to build a 64bit or 32bit
+		# binary or if we're explicitly told to build a 64bit binary.
+		if (is_64bit_platform and not project.force_64_bit and not project.force_32_bit) or project.force_64_bit:
+			self._include_lib64 = True
+
+
 	def get_libraries( self, libraries ):
 		"""Returns a string containing all of the passed libraries, formatted to be passed to gcc/g++."""
 		ret = ""
@@ -449,11 +450,11 @@ class linker_gcc( gccBase, toolchain.linkerBase ):
 				outputFile,
 				" ".join( objList ),
 				"-static-libgcc -static-libstdc++ " if project.static_runtime else "",
-				"-Wl,--start-group" if not project.strictOrdering else "",
+				"-Wl,--start-group" if not self.strictOrdering else "",
 				self.get_libraries( project.libraries ),
 				self.get_static_libraries( project.static_libraries ),
 				self.get_shared_libraries( project.shared_libraries ),
-				"-Wl,--end-group" if not project.strictOrdering else "",
+				"-Wl,--end-group" if not self.strictOrdering else "",
 				self.get_library_dirs( project.library_dirs, True ),
 				project.debug_level,
 				project.opt_level,
