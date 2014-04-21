@@ -94,9 +94,9 @@ class threaded_build( threading.Thread ):
 	def __init__( self, infile, inobj, proj, forPrecompiledHeader = False ):
 		"""Initialize the object. Also handles above-mentioned bug with dummy threads."""
 		threading.Thread.__init__( self )
-		self.file = infile
+		self.file = os.path.normcase(infile)
 
-		self.originalIn = os.path.abspath(os.path.relpath(infile))
+		self.originalIn = self.file
 		self.obj = os.path.abspath( inobj )
 		self.project = proj
 		self.forPrecompiledHeader = forPrecompiledHeader
@@ -109,11 +109,10 @@ class threaded_build( threading.Thread ):
 		"""Actually run the build process."""
 		starttime = time.time( )
 		try:
-			self.project.mutex.acquire( )
-			self.project.fileStatus[self.file] = _shared_globals.ProjectState.BUILDING
-			self.project.fileStart[self.file] = time.time()
-			self.project.updated = True
-			self.project.mutex.release( )
+			with self.project.mutex:
+				self.project.fileStatus[self.file] = _shared_globals.ProjectState.BUILDING
+				self.project.fileStart[self.file] = time.time()
+				self.project.updated = True
 
 			inc = ""
 			headerfile = ""
@@ -173,7 +172,7 @@ class threaded_build( threading.Thread ):
 								highIndex += 1
 								indexes[filename] = highIndex
 								lastFile = highIndex
-								filename = os.path.abspath(os.path.relpath(filename))
+								filename = os.path.normcase(filename)
 								filename = filename.replace("\\\\", "\\")
 								reverseIndexes[highIndex] = filename
 

@@ -1157,7 +1157,7 @@ class compilerBase( SettingsOverrider ):
 
 
 	def get_post_preprocess_sanitation_lines(self):
-		""
+		return []
 
 	@abstractmethod
 	def get_obj_ext(self):

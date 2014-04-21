@@ -538,7 +538,7 @@ class CodeProfileDisplay(CodeEditor):
 					data = f.read().split("\n")
 				io = cStringIO.StringIO()
 
-				absPath = os.path.abspath(os.path.relpath(absPath))
+				absPath = os.path.normcase(absPath)
 				baseFile = self.parentEditor.sourceFile
 
 				lineNo = 1
@@ -1209,7 +1209,7 @@ class MainWindow( QMainWindow ):
 
 
 	def buildTreeViewProfile(self, item, checked):
-		filename = os.path.abspath(os.path.relpath(str(item.toolTip(3))))
+		filename = os.path.normcase(str(item.toolTip(3)))
 
 		project = self.itemToProject[str(item.parent().text(0))]
 
@@ -1217,7 +1217,7 @@ class MainWindow( QMainWindow ):
 
 
 	def timelineViewProfile(self, item, checked):
-		filename = os.path.abspath(os.path.relpath(str(item.toolTip(0))))
+		filename = os.path.normcase(str(item.toolTip(0)))
 
 		idx = self.timelineWidget.indexOfTopLevelItem(self.parent())
 
@@ -1628,6 +1628,7 @@ class MainWindow( QMainWindow ):
 				item.setChildrenShowing(item.isExpanded())
 				def HandleChildTimeline( idx2, file ):
 					childWidget = item.child(idx2)
+					file = os.path.normcase(file)
 
 					project.mutex.acquire( )
 					try:
@@ -2000,6 +2001,7 @@ class MainWindow( QMainWindow ):
 					def HandleChildProgressBar( idx, file ):
 						childWidget = widget.child(idx)
 						progressBar = self.m_buildTree.itemWidget(childWidget, 1)
+						file = os.path.normcase(file)
 
 						project.mutex.acquire( )
 						try:

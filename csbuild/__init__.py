@@ -1438,7 +1438,7 @@ def build( ):
 
 				with project.mutex:
 					for chunk in project.final_chunk_set:
-						project.fileStatus[chunk] = _shared_globals.ProjectState.ABORTED
+						project.fileStatus[os.path.normcase(chunk)] = _shared_globals.ProjectState.ABORTED
 
 				_shared_globals.total_compiles -= len(project.final_chunk_set)
 
