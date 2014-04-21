@@ -259,6 +259,7 @@ autoCloseGui = False
 warningcount = 0
 errorcount = 0
 
+profile = False
 
 class dummy_block( object ):
 	"""Some versions of python have a bug in threading where a dummy thread will try and use a value that it deleted.

@@ -392,7 +392,7 @@ class projectSettings( object ):
 
 		self.obj_dir = "."
 		self.output_dir = "."
-		self.csbuild_dir = "./.csbuild"
+		self.csbuild_dir = ".csbuild"
 		self.output_name = ""
 		self.output_install_dir = ""
 		self.header_install_dir = ""
@@ -538,6 +538,7 @@ class projectSettings( object ):
 		self.errors = 0
 		self.warningsByFile = {}
 		self.errorsByFile = {}
+		self.times = {}
 
 		self.linkOutput = ""
 		self.linkErrors = ""
@@ -583,7 +584,7 @@ class projectSettings( object ):
 		self.ccpccmd = self.activeToolchain.Compiler().get_base_cc_precompile_command( self )
 		self.cxxpccmd = self.activeToolchain.Compiler().get_base_cxx_precompile_command( self )
 
-		cmdfile = "{0}/{1}.csbuild".format( self.csbuild_dir, self.targetName )
+		cmdfile = os.path.join( self.csbuild_dir, "{}.csbuild".format( self.targetName ) )
 		cmd = ""
 		if os.path.exists( cmdfile ):
 			with open( cmdfile, "r" ) as f:
@@ -824,6 +825,7 @@ class projectSettings( object ):
 			"ambiguousHeaderExtensions" : set(self.ambiguousHeaderExtensions),
 			"chunkMutexes" : {},
 			"chunkExcludes" : set(self.chunkExcludes),
+			"times" : self.times,
 		}
 
 		for name in self.targets:
@@ -920,10 +922,10 @@ class projectSettings( object ):
 		if os.path.exists( headerFile ):
 			path = headerFile
 		else:
-			path = "{0}/{1}".format( relativeDir, headerFile )
+			path = os.path.join( relativeDir, headerFile )
 			if not os.path.exists( path ):
 				for incDir in self.include_dirs:
-					path = "{0}/{1}".format( incDir, headerFile )
+					path = os.path.join( incDir, headerFile )
 					if os.path.exists( path ):
 						break
 						#A lot of standard C and C++ headers will be in a compiler-specific directory that we won't
@@ -946,7 +948,7 @@ class projectSettings( object ):
 				if line[0] != '#':
 					continue
 
-				RMatch = re.search( "#include\s*[<\"](.*?)[\">]", line )
+				RMatch = re.search( r"#\s*include\s*[<\"](.*?)[\">]", line )
 				if RMatch is None:
 					continue
 
@@ -1068,13 +1070,13 @@ class projectSettings( object ):
 
 		basename = os.path.basename( srcFile ).split( '.' )[0]
 		if not ofile:
-			ofile = "{}/{}_{}{}".format( self.obj_dir, basename,
-				self.targetName, self.activeToolchain.Compiler().get_obj_ext() )
+			ofile = os.path.join( self.obj_dir, "{}_{}{}".format( basename,
+				self.targetName, self.activeToolchain.Compiler().get_obj_ext() ))
 
 		if self.use_chunks and not _shared_globals.disable_chunks:
 			chunk = self.get_chunk( srcFile )
-			chunkfile = "{}/{}_{}{}".format( self.obj_dir, chunk,
-				self.targetName, self.activeToolchain.Compiler().get_obj_ext() )
+			chunkfile = os.path.join( self.obj_dir, "{}_{}{}".format( chunk,
+				self.targetName, self.activeToolchain.Compiler().get_obj_ext() ) )
 
 			#First check: If the object file doesn't exist, we obviously have to create it.
 			if not os.path.exists( ofile ):

@@ -1141,6 +1141,24 @@ class compilerBase( SettingsOverrider ):
 		"""
 		pass
 
+
+	@abstractmethod
+	def get_preprocess_command(self, baseCmd, project, inFile ):
+		return ""
+
+
+	@abstractmethod
+	def pragma_message(self, message):
+		return ""
+
+
+	def get_extra_post_preprocess_flags(self):
+		return ""
+
+
+	def get_post_preprocess_sanitation_lines(self):
+		""
+
 	@abstractmethod
 	def get_obj_ext(self):
 		"""

@@ -1386,9 +1386,9 @@ def build( ):
 						chunkFileStr = " {}".format( [ os.path.basename(piece) for piece in project.chunksByFile[chunk] ] )
 
 					built = True
-					obj = "{}/{}_{}{}".format( projectSettings.currentProject.obj_dir,
+					obj = os.path.join(projectSettings.currentProject.obj_dir, "{}_{}{}".format(
 						os.path.basename( chunk ).split( '.' )[0],
-						project.targetName, project.activeToolchain.Compiler().get_obj_ext() )
+						project.targetName, project.activeToolchain.Compiler().get_obj_ext() ) )
 					if not _shared_globals.semaphore.acquire( False ):
 						if _shared_globals.max_threads != 1:
 							log.LOG_INFO( "Waiting for a build thread to become available..." )
@@ -1563,41 +1563,39 @@ def performLink(project, objs):
 
 	starttime = time.time( )
 
-	output = "{0}/{1}".format( project.output_dir, project.output_name )
+	output = os.path.join( project.output_dir, project.output_name )
 
 	log.LOG_LINKER( "Linking {0}...".format( os.path.abspath( output ) ) )
 
 	if not objs:
 		for chunk in project.chunks:
 			if not project.unity:
-				obj = "{}/{}_{}{}".format(
-					project.obj_dir,
+				obj = os.path.join(project.obj_dir, "{}_{}{}".format(
 					_utils.get_chunk_name( project.output_name, chunk ),
 					project.targetName,
 					project.activeToolchain.Compiler().get_obj_ext()
-				)
+				))
 			else:
-				obj = "{}/{}_unity_{}{}".format(
-					project.obj_dir,
+				obj = os.path.join(project.obj_dir, "{}_unity_{}{}".format(
 					project.output_name,
 					project.targetName,
 					project.activeToolchain.Compiler().get_obj_ext()
-				)
+				))
 			if project.use_chunks and not _shared_globals.disable_chunks and os.path.exists( obj ):
 				objs.append( obj )
 			else:
 				if type( chunk ) == list:
 					for source in chunk:
-						obj = "{}/{}_{}{}".format( project.obj_dir, os.path.basename( source ).split( '.' )[0],
-							project.targetName, project.activeToolchain.Compiler().get_obj_ext() )
+						obj = os.path.join(project.obj_dir, "{}_{}{}".format( os.path.basename( source ).split( '.' )[0],
+							project.targetName, project.activeToolchain.Compiler().get_obj_ext() ) )
 						if os.path.exists( obj ):
 							objs.append( obj )
 						else:
 							log.LOG_ERROR( "Could not find {} for linking. Something went wrong here.".format(obj) )
 							return LinkStatus.Fail
 				else:
-					obj = "{}/{}_{}{}".format( project.obj_dir, os.path.basename( chunk ).split( '.' )[0],
-						project.targetName, project.activeToolchain.Compiler().get_obj_ext() )
+					obj = os.path.join(project.obj_dir, "{}_{}{}".format( os.path.basename( chunk ).split( '.' )[0],
+						project.targetName, project.activeToolchain.Compiler().get_obj_ext() ) )
 					if os.path.exists( obj ):
 						objs.append( obj )
 					else:
@@ -1747,24 +1745,24 @@ def clean( silent = False ):
 		if not silent:
 			log.LOG_BUILD( "Cleaning {0} ({1})...".format( project.output_name, project.targetName ) )
 		for source in project.sources:
-			obj = "{}/{}_{}{}".format( project.obj_dir, os.path.basename( source ).split( '.' )[0],
-				project.targetName, project.activeToolchain.Compiler().get_obj_ext() )
+			obj = os.path.join( project.obj_dir, "{}_{}{}".format(  os.path.basename( source ).split( '.' )[0],
+				project.targetName, project.activeToolchain.Compiler().get_obj_ext() ) )
 			if os.path.exists( obj ):
 				if not silent:
 					log.LOG_INFO( "Deleting {0}".format( obj ) )
 				os.remove( obj )
-		headerfile = "{0}/{1}_cpp_precompiled_headers_{2}.hpp".format( project.csbuild_dir,
+		headerfile = os.path.join(project.csbuild_dir, "{}_cpp_precompiled_headers_{}.hpp".format(
 			project.output_name.split( '.' )[0],
-			project.targetName )
+			project.targetName ) )
 		obj = project.activeToolchain.Compiler().get_pch_file( headerfile )
 		if os.path.exists( obj ):
 			if not silent:
 				log.LOG_INFO( "Deleting {0}".format( obj ) )
 			os.remove( obj )
 
-		headerfile = "{0}/{1}_c_precompiled_headers_{2}.h".format( project.csbuild_dir,
+		headerfile = os.path.join(project.csbuild_dir, "{}_c_precompiled_headers_{}.h".format(
 			project.output_name.split( '.' )[0],
-			project.targetName )
+			project.targetName ))
 		obj = project.activeToolchain.Compiler().get_pch_file( headerfile )
 		if os.path.exists( obj ):
 			if not silent:
@@ -1788,13 +1786,13 @@ def install( ):
 	"""
 	for project in _shared_globals.sortedProjects:
 		os.chdir( project.workingDirectory )
-		output = "{0}/{1}".format( project.output_dir, project.output_name )
+		output = os.path.join( project.output_dir, project.output_name )
 		install_something = False
 
 		if not project.output_install_dir or os.path.exists( output ):
 			#install output file
 			if project.output_install_dir:
-				outputDir = "{0}/{1}".format( _shared_globals.install_prefix, project.output_install_dir )
+				outputDir = os.path.join( _shared_globals.install_prefix, project.output_install_dir )
 				if not os.path.exists( outputDir ):
 					os.makedirs( outputDir )
 				log.LOG_INSTALL( "Installing {0} to {1}...".format( output, outputDir ) )
@@ -1806,7 +1804,7 @@ def install( ):
 			if not subdir:
 				subdir = _utils.get_base_name( project.output_name )
 			if project.header_install_dir:
-				install_dir = "{0}/{1}/{2}".format( _shared_globals.install_prefix,
+				install_dir = os.path.join( _shared_globals.install_prefix,
 					project.header_install_dir, subdir )
 				if not os.path.exists( install_dir ):
 					os.makedirs( install_dir )
@@ -1872,7 +1870,7 @@ def debug( ):
 	if not projectSettings.currentProject.output_dir_set:
 		projectSettings.currentProject.output_dir = "Debug"
 	if not projectSettings.currentProject.obj_dir_set:
-		projectSettings.currentProject.obj_dir = "Debug/obj"
+		projectSettings.currentProject.obj_dir = os.path.join("Debug", "obj")
 	if not projectSettings.currentProject.toolchains["msvc"].Compiler().debug_runtime_set:
 		projectSettings.currentProject.toolchains["msvc"].Compiler().debug_runtime = True
 	if not projectSettings.currentProject.toolchains["msvc"].Linker().debug_runtime_set:
@@ -1888,7 +1886,7 @@ def release( ):
 	if not projectSettings.currentProject.output_dir_set:
 		projectSettings.currentProject.output_dir = "Release"
 	if not projectSettings.currentProject.obj_dir_set:
-		projectSettings.currentProject.obj_dir = "Release/obj"
+		projectSettings.currentProject.obj_dir =  os.path.join("Release", "obj")
 	if not projectSettings.currentProject.toolchains["msvc"].Compiler().debug_runtime_set:
 		projectSettings.currentProject.toolchains["msvc"].Compiler().debug_runtime = False
 	if not projectSettings.currentProject.toolchains["msvc"].Linker().debug_runtime_set:
@@ -2175,8 +2173,8 @@ def _run( ):
 	parser.add_argument( "-j", "--jobs", action = "store", dest = "jobs", type = int, help = "Number of simultaneous build processes" )
 	parser.add_argument( "-g", "--gui", action = "store_true", dest = "gui", help = "Show GUI while building (experimental)")
 	parser.add_argument( "--auto-close-gui", action = "store_true", help = "Automatically close the gui on build success (will stay open on failure)")
+	parser.add_argument("--profile", action="store_true", help="Collect detailed line-by-line profiling information on compile time. --gui option required to see this information.")
 	parser.add_argument( '--show-commands', help = "Show all commands sent to the system.", action = "store_true" )
-	parser.add_argument( '--no-progress', help = "Turn off the progress bar.", action = "store_true" )
 	parser.add_argument( '--force-color', help = "Force color on or off.",
 		action = "store", choices = ["on", "off"], default = None, const = "on", nargs = "?" )
 	parser.add_argument( '--force-progress-bar', help = "Force progress bar on or off.",
@@ -2247,12 +2245,15 @@ def _run( ):
 	_shared_globals.do_install = args.install
 	_shared_globals.quiet = args.quiet
 	_shared_globals.show_commands = args.show_commands
-	_shared_globals.rebuild = args.rebuild
+	_shared_globals.rebuild = args.rebuild or args.profile
+	if args.profile and not args.gui:
+		log.LOG_WARN("Profile mode has no effect without --gui. Disabling --profile.")
+		args.profile = False
+	if args.profile and not args.rebuild:
+		log.LOG_WARN("A full build is required to collect profiling information. Forcing --rebuild flag.")
 	project_build_list = None
 	if args.project:
 		project_build_list = set( args.project )
-	if args.no_progress:
-		_shared_globals.columns = 0
 
 	if args.force_color == "on":
 		_shared_globals.color_supported = True
@@ -2274,6 +2275,7 @@ def _run( ):
 		_shared_globals.max_threads = args.jobs
 		_shared_globals.semaphore = threading.BoundedSemaphore( value = _shared_globals.max_threads )
 
+	_shared_globals.profile = args.profile
 	_shared_globals.disable_chunks = args.no_chunks
 	_shared_globals.disable_precompile = args.no_precompile
 

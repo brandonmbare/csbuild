@@ -355,9 +355,11 @@ class compiler_msvc( MsvcBase, toolchain.compilerBase ):
 	def getExtendedPrecompilerArgs( self, base_cmd, force_include_file, output_obj, input_file ):
 		split = input_file.rsplit(".", 1)
 		srcFile = os.path.join("{}.{}".format(split[0], "c" if split[1] == "h" else "cpp"))
-		with open(srcFile, "w") as f:
-			f.write("#include \"{}\"\n".format(input_file))
-		time.sleep(0.1)
+
+		fd = os.open(srcFile, os.O_WRONLY | os.O_CREAT | os.O_NOINHERIT, 0666)
+		os.write(fd, "#include \"{}\"\n".format(input_file))
+		os.fsync(fd)
+		os.close(fd)
 
 		objFile = "{}.obj".format(split[0])
 
@@ -420,6 +422,14 @@ class compiler_msvc( MsvcBase, toolchain.compilerBase ):
 	def get_extended_precompile_command( self, baseCmd, project, forceIncludeFile, outObj, inFile ):
 		self.SetupForProject( project )
 		return self.getExtendedPrecompilerArgs( baseCmd, forceIncludeFile, outObj, inFile )
+
+
+	def get_preprocess_command(self, baseCmd, project, inFile ):
+		return "{} /E /wd\"4005\" \"{}\"".format(baseCmd, inFile)
+
+
+	def pragma_message(self, message):
+		return "#pragma message(\"{}\")".format(message)
 
 
 	def get_obj_ext(self):

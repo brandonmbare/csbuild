@@ -1,6 +1,9 @@
 # coding=utf-8
+import functools
+import hashlib
 import re
 import stat
+import cStringIO
 import csbuild
 from csbuild import log
 
@@ -241,7 +244,7 @@ class SyntaxHighlighter( QtGui.QSyntaxHighlighter ):
 		self.highlightRules.append(SyntaxHighlighter.HighlightRule(re.compile("^\s*#.*$"), self.preprocessorFormat))
 
 		self.stringFormat.setForeground(QtCore.Qt.darkCyan)
-		self.highlightRules.append(SyntaxHighlighter.HighlightRule(re.compile("\".*\""), self.stringFormat))
+		self.highlightRules.append(SyntaxHighlighter.HighlightRule(re.compile("\".*?\""), self.stringFormat))
 
 	
 	def highlightBlock(self, line):
@@ -284,6 +287,7 @@ class LineNumberArea( QtGui.QWidget ):
 	def __init__(self, editor):
 		QtGui.QWidget.__init__(self, editor)
 		self.editor = editor
+		self.buttonDown = False
 
 	def sizeHint(self):
 		return QtCore.QSize(self.editor.lineNumberAreaWidth(), 0)
@@ -291,9 +295,27 @@ class LineNumberArea( QtGui.QWidget ):
 	def paintEvent(self, event):
 		self.editor.lineNumberAreaPaintEvent(event)
 
+	def mouseMoveEvent(self, event):
+		if self.buttonDown:
+			self.editor.sideBarMousePress(event)
+
+	def mousePressEvent(self, event):
+		if event.button() == QtCore.Qt.LeftButton:
+			self.buttonDown = True
+			self.editor.sideBarMousePress(event)
+
+	def mouseReleaseEvent(self, event):
+		if event.button() == QtCore.Qt.LeftButton:
+			self.buttonDown = False
+
+
+
 class CodeEditor( QtGui.QPlainTextEdit ):
-	def __init__(self, parent = None):
+	def __init__(self, parent, parentEditor, project, directory = None):
 		QtGui.QPlainTextEdit.__init__(self, parent)
+
+		self.parentEditor = parentEditor
+		self.project = project
 
 		font = QtGui.QFont()
 		font.setFamily("monospace")
@@ -305,7 +327,7 @@ class CodeEditor( QtGui.QPlainTextEdit ):
 
 		self.setFont(font)
 
-		self.lineNumbers = LineNumberArea(self)
+		self.sideBar = LineNumberArea(self)
 
 		self.cursorPositionChanged.connect(self.highlightCurrentLine)
 		self.blockCountChanged.connect(self.updateLineNumberAreaWidth)
@@ -315,7 +337,7 @@ class CodeEditor( QtGui.QPlainTextEdit ):
 		self.highlightCurrentLine()
 
 	def lineNumberAreaPaintEvent(self, event):
-		painter = QtGui.QPainter(self.lineNumbers)
+		painter = QtGui.QPainter(self.sideBar)
 		painter.fillRect(event.rect(), QtCore.Qt.lightGray)
 
 		block = self.firstVisibleBlock()
@@ -327,7 +349,7 @@ class CodeEditor( QtGui.QPlainTextEdit ):
 			if block.isVisible and bottom >= event.rect().top():
 				number = str(blockNum + 1)
 				painter.setPen(QtCore.Qt.black)
-				painter.drawText(0, top, self.lineNumbers.width(), self.fontMetrics().height(), QtCore.Qt.AlignRight, number)
+				painter.drawText(0, top, self.sideBar.width(), self.fontMetrics().height(), QtCore.Qt.AlignRight, number)
 			block = block.next()
 			top = bottom
 			bottom = top + int(self.blockBoundingRect(block).height())
@@ -349,7 +371,7 @@ class CodeEditor( QtGui.QPlainTextEdit ):
 		QtGui.QPlainTextEdit.resizeEvent(self, event)
 
 		cr = self.contentsRect()
-		self.lineNumbers.setGeometry(QtCore.QRect(cr.left(), cr.top(), self.lineNumberAreaWidth(), cr.height()))
+		self.sideBar.setGeometry(QtCore.QRect(cr.left(), cr.top(), self.lineNumberAreaWidth(), cr.height()))
 
 	def updateLineNumberAreaWidth(self, blockCount):
 		self.setViewportMargins(self.lineNumberAreaWidth(), 0, 0, 0)
@@ -370,12 +392,357 @@ class CodeEditor( QtGui.QPlainTextEdit ):
 
 	def updateLineNumberArea(self, rect, num):
 		if num:
-			self.lineNumbers.scroll(0, num)
+			self.sideBar.scroll(0, num)
 		else:
-			self.lineNumbers.update(0, rect.y(), self.lineNumbers.width(), rect.height())
+			self.sideBar.update(0, rect.y(), self.sideBar.width(), rect.height())
 
 		if rect.contains(self.viewport().rect()):
 			self.updateLineNumberAreaWidth(0)
+
+
+	def sideBarMousePress(self, event):
+		pass
+
+
+class CodeProfileDisplay(CodeEditor):
+	def __init__(self, parent, parentEditor, project, directory):
+		self.visualizationWidth = 15
+		CodeEditor.__init__(self, parent, parentEditor, project)
+		self.directory = directory
+
+		self.setReadOnly(True)
+		self.vals = []
+		self.highVal = 0.0
+
+		self.setMouseTracking(True)
+		self.selections = []
+
+		self.mousePos = None
+		self.mouseGlobalPos = None
+
+	def keyPressEvent(self, event):
+		if not self.mousePos:
+			return
+		if event.key() == QtCore.Qt.Key_Control:
+			mouseEvent = QtGui.QMouseEvent(
+				QtCore.QEvent.MouseMove,
+				self.mousePos,
+				self.mouseGlobalPos,
+				QtCore.Qt.NoButton,
+				QtCore.Qt.NoButton,
+				QtGui.QApplication.keyboardModifiers()
+			)
+			self.mouseMoveEvent(mouseEvent)
+
+
+	def keyReleaseEvent(self, event):
+		if not self.mousePos:
+			return
+		if event.key() == QtCore.Qt.Key_Control:
+			mouseEvent = QtGui.QMouseEvent(
+				QtCore.QEvent.MouseMove,
+				self.mousePos,
+				self.mouseGlobalPos,
+				QtCore.Qt.NoButton,
+				QtCore.Qt.NoButton,
+				QtGui.QApplication.keyboardModifiers()
+			)
+			self.mouseMoveEvent(mouseEvent)
+
+
+	def mouseMoveEvent(self, event):
+		cursor = self.cursorForPosition(event.pos())
+		block = cursor.block()
+		line = str(block.text())
+		RMatch = re.search( r"#\s*include\s*[<\"](.*?)[\">]", line )
+		if RMatch:
+			extraSelections = list(self.selections)
+			selection = QtGui.QTextEdit.ExtraSelection()
+			selection.format.setFontUnderline(True)
+			modifiers = QtGui.QApplication.keyboardModifiers()
+			if modifiers == QtCore.Qt.ControlModifier:
+				selection.format.setForeground(QtGui.QColor("#0000FF"))
+				selection.format.setFontWeight(QtGui.QFont.Bold)
+				QApplication.setOverrideCursor(QtCore.Qt.PointingHandCursor)
+				QtGui.QToolTip.showText(event.globalPos(), "", self)
+			else:
+				QtGui.QToolTip.showText(event.globalPos(), "Ctrl+click to open profile view for {}".format(RMatch.group(1)), self)
+				QApplication.restoreOverrideCursor()
+			selection.cursor = QtGui.QTextCursor(self.document())
+			selection.cursor.movePosition(QtGui.QTextCursor.Down, QtGui.QTextCursor.MoveAnchor, block.blockNumber())
+			selection.cursor.movePosition(QtGui.QTextCursor.Right, QtGui.QTextCursor.MoveAnchor, RMatch.start())
+			selection.cursor.clearSelection()
+			selection.cursor.movePosition(QtGui.QTextCursor.Right, QtGui.QTextCursor.KeepAnchor, RMatch.end() - RMatch.start())
+			extraSelections.append(selection)
+			self.setExtraSelections(extraSelections)
+			self.mousePos = event.pos()
+			self.mouseGlobalPos = event.globalPos()
+		else:
+			QtGui.QToolTip.showText(event.globalPos(), "", self)
+			self.setExtraSelections(self.selections)
+			QApplication.restoreOverrideCursor()
+			self.mousePos = None
+			self.mouseGlobalPos = None
+
+	def highlightCurrentLine(self):
+		pass
+
+	def sideBarMousePress(self, event):
+		if event.pos().x() <= self.visualizationWidth:
+			totalLines = self.blockCount()
+			pct = float(event.pos().y()) / self.sideBar.rect().height()
+			cursor = self.textCursor()
+			block = cursor.block()
+			blockNo = block.blockNumber()
+			desiredBlockNo = int(totalLines * pct)
+			if blockNo > desiredBlockNo:
+				cursor.movePosition(QtGui.QTextCursor.Up, QtGui.QTextCursor.MoveAnchor, blockNo - desiredBlockNo)
+			else:
+				cursor.movePosition(QtGui.QTextCursor.Down, QtGui.QTextCursor.MoveAnchor, desiredBlockNo - blockNo)
+			self.setTextCursor(cursor)
+			self.centerCursor()
+
+
+	def mousePressEvent(self, event):
+		if event.button() == QtCore.Qt.LeftButton and event.modifiers() == QtCore.Qt.ControlModifier:
+			cursor = self.cursorForPosition(event.pos())
+			block = cursor.block()
+			line = str(block.text())
+			RMatch = re.search( r"#\s*include\s*[<\"](.*?)[\">]", line )
+			if RMatch:
+				includeFile = RMatch.group(1)
+				project = self.project
+
+				#First try: Absolute path relative to base file directory.
+				absPath = os.path.abspath(os.path.join(self.directory, includeFile))
+				if not os.path.exists(absPath):
+					#Second try: Look in the project's include directories.
+					for directory in project.include_dirs:
+						absPath = os.path.abspath(os.path.join(directory, includeFile))
+						if os.path.exists(absPath):
+							break
+				if not os.path.exists(absPath):
+					#Third try, brute force it against the filemap our parent has for us.
+					base = os.path.basename(includeFile)
+					if base in self.parentEditor.filemap:
+						options = self.parentEditor.filemap[base]
+						if len(options) == 1:
+							absPath = list(options)[0]
+						else:
+							log.LOG_ERROR("TODO: Multiple options exist for header {}: {}".format(includeFile, options))
+							return
+					else:
+						return
+
+				with open(absPath, "r") as f:
+					data = f.read().split("\n")
+				io = cStringIO.StringIO()
+
+				absPath = os.path.abspath(os.path.relpath(absPath))
+				baseFile = self.parentEditor.sourceFile
+
+				lineNo = 1
+
+				for line in data:
+					lineTime = 0.0
+
+					if lineNo in project.times[baseFile][absPath]:
+						lineTime = project.times[baseFile][absPath][lineNo]
+
+					io.write("{: 9.6f}\t\t{}\n".format(lineTime, line))
+					lineNo += 1
+
+				data = io.getvalue()
+				io.close()
+
+				window = EditorWindow(baseFile, 0, 0, CodeProfileDisplay, self, project=project, directory=os.path.dirname(absPath), data=data, filemap=self.parentEditor.filemap, baseFile=os.path.basename(absPath))
+				window.show()
+
+
+	def setPlainText(self, text):
+		CodeEditor.setPlainText(self, text)
+
+		extraSelections = []
+		text = text.split("\n")
+
+		class VisMode:
+			Mean = 1
+			HighVal = 3
+			Constant = 4
+
+		mode = VisMode.Mean
+		skipIncludes = True
+
+		if mode == VisMode.Mean:
+			highVal = 0.0
+			num = 0
+			for line in text:
+				if not line.strip():
+					continue
+				if skipIncludes:
+					RMatch = re.search( r"#\s*include\s*[<\"](.*?)[\">]", line )
+					if RMatch:
+						continue
+				val = float(line.split('\t')[0])
+				highVal += val
+				num += 1
+
+			if num == 0:
+				return
+
+			highVal /= num
+			highVal *= 2
+			if not highVal:
+				for line in text:
+					if not line.strip():
+						continue
+					val = float(line.split('\t')[0])
+					highVal += val
+					num += 1
+
+				if num == 0:
+					return
+
+				highVal /= num
+				highVal *= 2
+		elif mode == VisMode.HighVal:
+			highVal = 0.0
+			for line in text:
+				if not line.strip():
+					continue
+				if skipIncludes:
+					RMatch = re.search( r"#\s*include\s*[<\"](.*?)[\">]", line )
+					if RMatch:
+						continue
+				val = float(line.split('\t')[0])
+				highVal = max(highVal, val)
+				if not highVal:
+					for line in text:
+						if not line.strip():
+							continue
+						val = float(line.split('\t')[0])
+						highVal = max(highVal, val)
+		elif mode == VisMode.Constant:
+			highVal = 0.01
+
+		if not highVal:
+			return
+
+		lineNo = 0
+		for line in text:
+			if not line.strip():
+				continue
+			val = float(line.split('\t')[0])
+			if val > highVal:
+				val = highVal
+			selection = QtGui.QTextEdit.ExtraSelection()
+			gbVals = 255 - math.ceil(255 * (val/highVal))
+			selection.format.setBackground(QtGui.QColor(255, gbVals, gbVals))
+			selection.format.setProperty(QtGui.QTextFormat.FullWidthSelection, True)
+			selection.cursor = QtGui.QTextCursor(self.document())
+			selection.cursor.movePosition(QtGui.QTextCursor.Down, QtGui.QTextCursor.MoveAnchor, lineNo)
+			selection.cursor.clearSelection()
+			extraSelections.append(selection)
+			lineNo += 1
+			self.vals.append(val)
+			self.highVal = highVal
+
+		self.selections = extraSelections
+		self.setExtraSelections(extraSelections)
+
+
+	def lineNumberAreaWidth(self):
+		return self.visualizationWidth + CodeEditor.lineNumberAreaWidth(self)
+
+
+	def lineNumberAreaPaintEvent(self, event):
+		painter = QtGui.QPainter(self.sideBar)
+		painter.fillRect(event.rect(), QtCore.Qt.lightGray)
+
+		width = self.visualizationWidth
+		visualHeight = self.sideBar.rect().height()
+		height = min(visualHeight, len(self.vals))
+		image = QtGui.QImage(width, height, QtGui.QImage.Format_RGB32)
+		image.fill(QtGui.qRgb(255, 255, 255))
+		lineNo = 0
+		for val in self.vals:
+			y = int(lineNo * (float(height) / float(len(self.vals))))
+			color = QtGui.QColor(image.pixel(0, y))
+			gbVal = min(255 - int(math.ceil((val / self.highVal) * 255)), color.blue())
+			onColor = QtGui.qRgb(255, gbVal, gbVal)
+			for x in range(width):
+				image.setPixel(x, y, onColor)
+			lineNo += 1
+
+		block = self.firstVisibleBlock()
+		blockNum = block.blockNumber()
+		top = int(self.blockBoundingGeometry(block).translated(self.contentOffset()).top())
+		bottom = top + int(self.blockBoundingRect(block).height())
+
+		topLeft = self.sideBar.rect().topLeft()
+		bottomRight = self.sideBar.rect().bottomRight()
+		bottomRight.setX(self.visualizationWidth)
+		rect = QtCore.QRect(topLeft, bottomRight)
+
+		painter.drawImage(rect, image, image.rect())
+
+		image2 = QtGui.QImage(self.sideBar.rect().width(), self.sideBar.rect().height(), QtGui.QImage.Format_ARGB32)
+
+		firstNum = -1
+		lastNum = -1
+		while block.isValid() and top <= self.rect().bottom():
+			if block.isVisible() and bottom >= self.rect().top():
+				if firstNum == -1:
+					firstNum = blockNum
+				lastNum = blockNum + 1
+			block = block.next()
+			top = bottom
+			bottom = top + int(self.blockBoundingRect(block).height())
+			blockNum += 1
+
+		mult = float(self.sideBar.rect().height())/float(len(self.vals))
+		fillColor = QtGui.qRgba(192, 192, 192, 64)
+		onColor = QtGui.qRgba(64, 64, 64, 127)
+		offColor = QtGui.qRgba(127, 127, 127, 127)
+		image2.fill(offColor)
+		startPixel = int(math.floor(firstNum * mult))
+		endPixel = min(int(math.ceil(lastNum * mult)) - 1, self.sideBar.rect().height() - 1)
+
+		for i in range(startPixel, endPixel):
+			for j in range(self.sideBar.rect().width()):
+				image2.setPixel(j, i, fillColor)
+
+			image2.setPixel(0, i, onColor)
+			image2.setPixel(1, i, onColor)
+			image2.setPixel(self.sideBar.width()-2, i, onColor)
+			image2.setPixel(self.sideBar.width()-1, i, onColor)
+
+		for i in range(self.sideBar.rect().width()):
+			image2.setPixel(i, startPixel, onColor)
+			image2.setPixel(i, endPixel, onColor)
+			image2.setPixel(i, startPixel + 1, onColor)
+			image2.setPixel(i, endPixel - 1, onColor)
+
+
+		painter.drawImage(rect, image2, image2.rect())
+
+		block = self.firstVisibleBlock()
+		blockNum = block.blockNumber()
+		top = int(self.blockBoundingGeometry(block).translated(self.contentOffset()).top())
+		bottom = top + int(self.blockBoundingRect(block).height())
+
+		while block.isValid() and top <= event.rect().bottom():
+			if block.isVisible() and bottom >= event.rect().top():
+				number = str(blockNum + 1)
+				painter.setPen(QtCore.Qt.black)
+				painter.drawText(0, top, self.sideBar.width(), self.fontMetrics().height(), QtCore.Qt.AlignRight, number)
+			block = block.next()
+			top = bottom
+			bottom = top + int(self.blockBoundingRect(block).height())
+			blockNum += 1
+
+
+
 
 class GridLineDelegate(QtGui.QStyledItemDelegate):
 	def __init__(self, parent, *args, **kwargs):
@@ -405,24 +772,20 @@ class GridLineDelegate(QtGui.QStyledItemDelegate):
 				item.draw(painter)
 				self.lastRow = index.row()
 
+
 class EditorWindow( QMainWindow ):
-	def __init__(self, sourceFile, line, column, *args, **kwargs):
-		QMainWindow.__init__(self, *args, **kwargs)
+	def __init__(self, sourceFile, line, column, EditorType, parent, project = None, directory = None, baseFile = None, data = None, filemap = None, *args, **kwargs):
+		QMainWindow.__init__(self, parent, *args, **kwargs)
 
 		self.resize(1100, 600)
+		self.project = project
 
 		self.centralWidget = QtGui.QWidget(self)
 		self.centralWidget.setObjectName("centralWidget")
 
 		self.outerLayout = QtGui.QVBoxLayout(self.centralWidget)
 
-		self.editor = CodeEditor(self.centralWidget)
-		#self.editor.setFontFamily("monospace")
-		#self.editor.setTextColor(QtCore.Qt.black)
-
-		#palette = self.editor.palette()
-		#palette.setColor(QtGui.QPalette.Base, QtCore.Qt.white)
-		#self.editor.setPalette(palette)
+		self.editor = EditorType(self.centralWidget, self, project, directory)
 		self.editor.setStyleSheet(
 			"""
 			QPlainTextEdit
@@ -430,12 +793,18 @@ class EditorWindow( QMainWindow ):
 				color: black;
 				background-color: white;
 			}
-			""")
+			"""
+		)
+
+		self.filemap = filemap
 
 		self.highlighter = SyntaxHighlighter(self.editor.document())
 
-		with open(sourceFile, "r") as f:
-			self.editor.setPlainText(f.read())
+		if data:
+			self.editor.setPlainText(data)
+		else:
+			with open(sourceFile, "r") as f:
+				self.editor.setPlainText(f.read())
 
 		self.editor.textChanged.connect(self.rehighlight)
 		self.editor.setLineWrapMode(QtGui.QPlainTextEdit.NoWrap)
@@ -445,34 +814,41 @@ class EditorWindow( QMainWindow ):
 
 		self.outerLayout.addWidget(self.editor)
 
-		self.innerLayout = QtGui.QHBoxLayout()
-		horizontalSpacer = QtGui.QSpacerItem(40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
-		self.innerLayout.addItem(horizontalSpacer)
+		if EditorType == CodeEditor:
+			self.isCodeEditor = True
+			self.innerLayout = QtGui.QHBoxLayout()
+			horizontalSpacer = QtGui.QSpacerItem(40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
+			self.innerLayout.addItem(horizontalSpacer)
 
-		self.makeWriteable = QtGui.QPushButton(self.centralWidget)
-		self.makeWriteable.setText("Make Writeable")
-		self.makeWriteable.pressed.connect(self.MakeWriteable)
-		self.innerLayout.addWidget(self.makeWriteable)
+			self.makeWriteable = QtGui.QPushButton(self.centralWidget)
+			self.makeWriteable.setText("Make Writeable")
+			self.makeWriteable.pressed.connect(self.MakeWriteable)
+			self.innerLayout.addWidget(self.makeWriteable)
 
-		if os.access(sourceFile, os.W_OK):
-			self.makeWriteable.hide()
+			if os.access(sourceFile, os.W_OK):
+				self.makeWriteable.hide()
+			else:
+				self.editor.setReadOnly(True)
+
+			self.saveButton = QtGui.QPushButton(self.centralWidget)
+			self.saveButton.setText("Save")
+			self.saveButton.pressed.connect(self.save)
+			self.innerLayout.addWidget(self.saveButton)
+
+			self.outerLayout.addLayout(self.innerLayout)
+
+			self.saveAction = QtGui.QAction(self)
+			self.saveAction.setShortcut( QtCore.Qt.CTRL | QtCore.Qt.Key_S )
+			self.saveAction.triggered.connect(self.save)
+			self.addAction(self.saveAction)
 		else:
-			self.editor.setReadOnly(True)
-
-		self.saveButton = QtGui.QPushButton(self.centralWidget)
-		self.saveButton.setText("Save")
-		self.saveButton.pressed.connect(self.save)
-		self.innerLayout.addWidget(self.saveButton)
-
-		self.outerLayout.addLayout(self.innerLayout)
-
-		self.saveAction = QtGui.QAction(self)
-		self.saveAction.setShortcut( QtCore.Qt.CTRL | QtCore.Qt.Key_S )
-		self.saveAction.triggered.connect(self.save)
-		self.addAction(self.saveAction)
+			self.isCodeEditor = False
 
 		self.setCentralWidget(self.centralWidget)
-		self.setWindowTitle(sourceFile)
+		if baseFile:
+			self.setWindowTitle("Profile view: {}".format(baseFile))
+		else:
+			self.setWindowTitle(sourceFile)
 		self.highlighting = False
 		self.sourceFile = sourceFile
 
@@ -513,7 +889,8 @@ class EditorWindow( QMainWindow ):
 		self.statusBar.showMessage("Saved.", 5000)
 
 	def closeEvent(self, event):
-		del self.parent().openWindows[self.sourceFile]
+		if self.isCodeEditor:
+			del self.parent().openWindows[self.sourceFile]
 		QMainWindow.closeEvent(self, event)
 
 
@@ -610,6 +987,8 @@ class MainWindow( QMainWindow ):
 		self.m_buildTree.header().setStretchLastSection(True)
 		self.m_buildTree.currentItemChanged.connect(self.SelectionChanged)
 		self.m_buildTree.itemExpanded.connect(self.UpdateProjects)
+		self.m_buildTree.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+		self.m_buildTree.customContextMenuRequested.connect(self.buildTreeContextMenu)
 		verticalLayout.addWidget(self.m_buildTree)
 
 		self.topPane.addTab(self.buildWidget, "Build Progress")
@@ -639,6 +1018,8 @@ class MainWindow( QMainWindow ):
 		self.timelineWidget.itemCollapsed.connect(self.TimelineItemExpended)
 
 		self.timelineWidget.setItemDelegate(GridLineDelegate(self.timelineWidget))
+		self.timelineWidget.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+		self.timelineWidget.customContextMenuRequested.connect(self.timelineContextMenu)
 
 		verticalLayout.addWidget(self.timelineWidget)
 
@@ -754,6 +1135,96 @@ class MainWindow( QMainWindow ):
 
 		self.tick = 0
 
+	def buildTreeContextMenu(self, point):
+		if not _shared_globals.profile:
+			return
+
+		if not self.readyToClose:
+			return
+
+		item = self.m_buildTree.itemAt(point)
+		parent = item.parent()
+		if not parent:
+			return
+		if parent.parent():
+			return
+		menu = QtGui.QMenu(self)
+		action = QtGui.QAction("View profile data", self)
+		action.triggered.connect(functools.partial(self.buildTreeViewProfile, item))
+		menu.addAction(action)
+		menu.popup(self.m_buildTree.viewport().mapToGlobal(point))
+
+	def timelineContextMenu(self, point):
+		if not _shared_globals.profile:
+			return
+
+		if not self.readyToClose:
+			return
+
+		item = self.timelineWidget.itemAt(point)
+		parent = item.parent()
+		if not parent:
+			return
+		if parent.parent():
+			return
+		menu = QtGui.QMenu(self)
+		action = QtGui.QAction("View profile data", self)
+		action.triggered.connect(functools.partial(self.timelineViewProfile, item))
+		menu.addAction(action)
+		menu.popup(self.timelineWidget.viewport().mapToGlobal(point))
+
+
+	def launchProfileView(self, project, filename):
+		baseFile = os.path.basename(filename)
+		directory = os.path.dirname(filename)
+
+		with open(filename, "r") as f:
+			data = f.read().split("\n")
+		io = cStringIO.StringIO()
+
+		lineNo = 1
+		for line in data:
+			lineTime = 0.0
+
+			if lineNo in project.times[filename][filename]:
+				lineTime = project.times[filename][filename][lineNo]
+
+			io.write("{: 9.6f}\t\t{}\n".format(lineTime, line))
+			lineNo += 1
+
+		data = io.getvalue()
+		io.close()
+
+		filemap = {}
+		for otherfile in project.times[filename]:
+			baseName = os.path.basename(otherfile)
+			if baseName not in filemap:
+				filemap[baseName] = {otherfile}
+			else:
+				filemap[baseName].add(otherfile)
+
+
+		window = EditorWindow(filename, 0, 0, CodeProfileDisplay, self, baseFile=baseFile, project=project, directory=directory, data=data, filemap=filemap)
+		window.show()
+
+
+	def buildTreeViewProfile(self, item, checked):
+		filename = os.path.abspath(os.path.relpath(str(item.toolTip(3))))
+
+		project = self.itemToProject[str(item.parent().text(0))]
+
+		self.launchProfileView(project, filename)
+
+
+	def timelineViewProfile(self, item, checked):
+		filename = os.path.abspath(os.path.relpath(str(item.toolTip(0))))
+
+		idx = self.timelineWidget.indexOfTopLevelItem(self.parent())
+
+		project = _shared_globals.sortedProjects[idx]
+
+		self.launchProfileView(project, filename)
+
 	def ButtonClicked(self, toggled):
 		if self.m_ignoreButton:
 			return
@@ -796,7 +1267,7 @@ class MainWindow( QMainWindow ):
 			and not file.endswith(".lib")
 			and not file.endswith(".obj")
 		):
-			window = EditorWindow(file, line, col, self)
+			window = EditorWindow(file, line, col, CodeEditor, self)
 			window.show()
 			window.ScrollTo(line, col)
 			self.openWindows[file] = window
@@ -1088,7 +1559,7 @@ class MainWindow( QMainWindow ):
 								else:
 									extension = ".cpp"
 
-								chunk = "{}/{}{}".format( project.csbuild_dir, chunk, extension )
+								chunk = os.path.join( project.csbuild_dir, "{}{}".format( chunk, extension ) )
 
 								if chunk in used_chunks:
 									continue
@@ -1200,7 +1671,7 @@ class MainWindow( QMainWindow ):
 						else:
 							extension = ".cpp"
 
-						chunk = "{}/{}{}".format( project.csbuild_dir, chunk, extension )
+						chunk = os.path.join( project.csbuild_dir, "{}{}".format( chunk, extension ) )
 
 						if chunk in used_chunks:
 							continue
@@ -1582,7 +2053,7 @@ class MainWindow( QMainWindow ):
 							else:
 								extension = ".cpp"
 
-							chunk = "{}/{}{}".format( project.csbuild_dir, chunk, extension )
+							chunk = os.path.join( project.csbuild_dir, "{}{}".format( chunk, extension ) )
 
 							if chunk in used_chunks:
 								continue
@@ -1983,7 +2454,7 @@ class GuiThread( threading.Thread ):
 					else:
 						extension = ".cpp"
 
-					chunk = "{}/{}{}".format( project.csbuild_dir, chunk, extension )
+					chunk = os.path.join( project.csbuild_dir, "{}{}".format( chunk, extension ) )
 
 					if chunk in used_chunks:
 						continue

@@ -312,6 +312,21 @@ class compiler_gcc( gccBase, toolchain.compilerBase ):
 		return 2
 
 
+	def get_preprocess_command(self, baseCmd, project, inFile ):
+		return "{} -E {} \"{}\"".format(baseCmd, self.get_include_dirs( project.include_dirs ), inFile)
+
+
+	def pragma_message(self, message):
+		return "#pragma message \"{}\"".format(message)
+
+
+	def get_extra_post_preprocess_flags(self):
+		return " -ftemplate-backtrace-limit=0 -fno-show-source-location -fno-caret-diagnostics -fno-diagnostics-fixit-info"
+
+	def get_post_preprocess_sanitation_lines(self):
+		return ["In included file:"]
+
+
 	def get_obj_ext(self):
 		return ".o"
 

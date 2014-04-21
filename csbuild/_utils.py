@@ -29,6 +29,8 @@ import sys
 import datetime
 import glob
 import traceback
+import cStringIO
+import platform
 
 import csbuild
 from csbuild import log
@@ -94,7 +96,7 @@ class threaded_build( threading.Thread ):
 		threading.Thread.__init__( self )
 		self.file = infile
 
-		self.originalIn = infile
+		self.originalIn = os.path.abspath(os.path.relpath(infile))
 		self.obj = os.path.abspath( inobj )
 		self.project = proj
 		self.forPrecompiledHeader = forPrecompiledHeader
@@ -112,6 +114,7 @@ class threaded_build( threading.Thread ):
 			self.project.fileStart[self.file] = time.time()
 			self.project.updated = True
 			self.project.mutex.release( )
+
 			inc = ""
 			headerfile = ""
 			extension = "." + self.file.rsplit(".", 1)[1]
@@ -126,6 +129,71 @@ class threaded_build( threading.Thread ):
 					headerfile = self.project.cppheaderfile
 				baseCommand = self.project.cxxcmd
 
+			indexes = {}
+			reverseIndexes = {}
+
+			if _shared_globals.profile:
+				profileIn = os.path.join( self.project.csbuild_dir, "profileIn")
+				if not os.path.exists(profileIn):
+					os.makedirs(profileIn)
+				self.file = os.path.join( profileIn, "{}.{}".format(hashlib.md5(self.file).hexdigest(), self.file.rsplit(".", 1)[1]) )
+				preprocessCmd = self.project.activeToolchain.Compiler().get_preprocess_command( baseCommand, self.project, os.path.abspath( self.originalIn ))
+				if _shared_globals.show_commands:
+					print(preprocessCmd)
+
+				fd = subprocess.Popen(shlex.split(preprocessCmd), stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+
+				data = cStringIO.StringIO()
+				lastLine = 0
+				lastFile = 0
+
+				highIndex = 0
+
+				op, er = fd.communicate()
+				if fd.returncode == 0:
+					text = op.split("\n")
+
+					for line in text:
+						stripped = line.rstrip()
+
+						data.write(stripped)
+						data.write("\n")
+
+						if not stripped:
+							lastLine += 1
+							continue
+
+						if stripped.startswith("#line") or stripped.startswith("# "):
+							split = stripped.split(" ",2)
+							filename = split[2].split('"')[1]
+							lastLine = int(split[1])
+							if filename in indexes:
+								lastFile = indexes[filename]
+							else:
+								highIndex += 1
+								indexes[filename] = highIndex
+								lastFile = highIndex
+								filename = os.path.abspath(os.path.relpath(filename))
+								filename = filename.replace("\\\\", "\\")
+								reverseIndexes[highIndex] = filename
+
+							data.write(self.project.activeToolchain.Compiler().pragma_message("CSBPF[{}][{}]".format(lastFile, lastLine)))
+							data.write("\n")
+						else:
+							data.write(self.project.activeToolchain.Compiler().pragma_message("CSBPL[{}][{}]".format(lastFile, lastLine)))
+							data.write("\n")
+							lastLine += 1
+					if platform.system() == "Windows":
+						fd = os.open(self.file, os.O_WRONLY | os.O_CREAT | os.O_NOINHERIT, 0666)
+						os.write(fd, data.getvalue())
+						os.fsync(fd)
+						os.close(fd)
+					else:
+						with open(self.file, "w") as f:
+							f.write(data.getvalue())
+				else:
+					print(er)
+
 			if headerfile:
 				inc += headerfile
 			if self.forPrecompiledHeader:
@@ -134,6 +202,9 @@ class threaded_build( threading.Thread ):
 			else:
 				cmd = self.project.activeToolchain.Compiler().get_extended_command( baseCommand,
 					self.project, inc, self.obj, os.path.abspath( self.file ) )
+
+			if _shared_globals.profile:
+				cmd += self.project.activeToolchain.Compiler().get_extra_post_preprocess_flags()
 
 			if _shared_globals.show_commands:
 				print(cmd)
@@ -148,6 +219,17 @@ class threaded_build( threading.Thread ):
 			output = StringRef()
 			fd = subprocess.Popen( shlex.split(cmd), stdout = subprocess.PIPE, stderr = subprocess.PIPE, cwd = self.project.workingDirectory )
 			running = True
+
+			times = {}
+			lastTimes = {}
+
+			if platform.system() == "Windows":
+				timeFunc = time.clock
+			else:
+				timeFunc = time.time
+
+			sanitation_lines = self.project.activeToolchain.Compiler().get_post_preprocess_sanitation_lines()
+
 			def GatherData(pipe, buffer):
 				while running:
 					try:
@@ -167,6 +249,42 @@ class threaded_build( threading.Thread ):
 						if baseStripped == baseFile:
 							continue
 
+					if _shared_globals.profile:
+						sanitized = False
+						for sanitationLine in sanitation_lines:
+							if stripped == sanitationLine:
+								sanitized = True
+								break
+						if sanitized:
+							continue
+
+						if "CSBPF" in line:
+							split = line.split("[")
+							file = reverseIndexes[int(split[1].split("]")[0])]
+							lineNo = int(split[2].split("]")[0]) - 1
+							now = timeFunc()
+							if file in lastTimes:
+								if file not in times:
+									times[file] = {}
+								if lineNo not in times[file]:
+									times[file][lineNo] = 0
+								times[file][lineNo] += now - lastTimes[file]
+							lastTimes[file] = now
+							continue
+
+						if "CSBPL" in line:
+							split = line.split("[")
+							file = reverseIndexes[int(split[1].split("]")[0])]
+							lineNo = int(split[2].split("]")[0])
+							if file not in times:
+								times[file] = {}
+							if lineNo not in times[file]:
+								times[file][lineNo] = 0
+							now = timeFunc()
+							times[file][lineNo] += now - lastTimes[file]
+							lastTimes[file] = now
+							continue
+
 					buffer.str += line
 
 			outputThread = threading.Thread(target=GatherData, args=(fd.stdout, output))
@@ -181,6 +299,9 @@ class threaded_build( threading.Thread ):
 			outputThread.join()
 			errorThread.join()
 
+			with self.project.mutex:
+				self.project.times[self.originalIn] = times
+
 			ret = fd.returncode
 			with _shared_globals.printmutex:
 				sys.stdout.write( output.str )
@@ -189,8 +310,8 @@ class threaded_build( threading.Thread ):
 			self.project.mutex.acquire( )
 			ansi_escape = re.compile(r'\x1b[^m]*m')
 			stripped_errors = re.sub(ansi_escape, '', errors.str)
-			self.project.compileOutput[self.file] = output.str
-			self.project.compileErrors[self.file] = stripped_errors
+			self.project.compileOutput[self.originalIn] = output.str
+			self.project.compileErrors[self.originalIn] = stripped_errors
 			errorlist = self.project.activeToolchain.Compiler().parseOutput(output.str)
 			errorlist += self.project.activeToolchain.Compiler().parseOutput(stripped_errors)
 			errorcount = 0
@@ -204,16 +325,16 @@ class threaded_build( threading.Thread ):
 
 				self.project.errors += errorcount
 				self.project.warnings += warningcount
-				self.project.errorsByFile[self.file] = errorcount
-				self.project.warningsByFile[self.file] = warningcount
-				self.project.parsedErrors[self.file] = errorlist
+				self.project.errorsByFile[self.originalIn] = errorcount
+				self.project.warningsByFile[self.originalIn] = warningcount
+				self.project.parsedErrors[self.originalIn] = errorlist
 
 				if errorcount > 0:
-					self.project.fileStatus[self.file] = _shared_globals.ProjectState.FAILED
+					self.project.fileStatus[self.originalIn] = _shared_globals.ProjectState.FAILED
 				else:
-					self.project.fileStatus[self.file] = _shared_globals.ProjectState.FINISHED
+					self.project.fileStatus[self.originalIn] = _shared_globals.ProjectState.FINISHED
 			else:
-				self.project.fileStatus[self.file] = _shared_globals.ProjectState.FINISHED
+				self.project.fileStatus[self.originalIn] = _shared_globals.ProjectState.FINISHED
 
 			self.project.mutex.release( )
 
@@ -234,12 +355,12 @@ class threaded_build( threading.Thread ):
 					_shared_globals.semaphore.release( )
 					log.LOG_BUILD( "Closing thread..." )
 				if not _shared_globals.interrupted:
-					log.LOG_ERROR( "Compile of {} failed!  (Return code: {})".format( self.file, ret ) )
+					log.LOG_ERROR( "Compile of {} failed!  (Return code: {})".format( self.originalIn, ret ) )
 				_shared_globals.build_success = False
 
 				self.project.mutex.acquire( )
 				self.project.compile_failed = True
-				self.project.fileStatus[self.file] = _shared_globals.ProjectState.FAILED
+				self.project.fileStatus[self.originalIn] = _shared_globals.ProjectState.FAILED
 				self.project.updated = True
 				self.project.mutex.release( )
 		except Exception as e:
@@ -247,23 +368,23 @@ class threaded_build( threading.Thread ):
 			# release...
 			#Meaning the build will hang. And for whatever reason ctrl+c won't fix it.
 			#ABSOLUTELY HAVE TO release the semaphore on ANY exception.
-			#if os.path.dirname(self.file) == _csbuild_dir:
-			#   os.remove(self.file)
+			#if os.path.dirname(self.originalIn) == _csbuild_dir:
+			#   os.remove(self.originalIn)
 			_shared_globals.semaphore.release( )
 
 			self.project.mutex.acquire( )
 			self.project.compile_failed = True
 			self.project.compiles_completed += 1
-			self.project.fileStatus[self.file] = _shared_globals.ProjectState.FAILED
-			self.project.fileEnd[self.file] = time.time()
+			self.project.fileStatus[self.originalIn] = _shared_globals.ProjectState.FAILED
+			self.project.fileEnd[self.originalIn] = time.time()
 			self.project.updated = True
 			self.project.mutex.release( )
 
 			traceback.print_exc()
 			raise e
 		else:
-			#if os.path.dirname(self.file) == _csbuild_dir:
-			#   os.remove(self.file)
+			#if os.path.dirname(self.originalIn) == _csbuild_dir:
+			#   os.remove(self.originalIn)
 			#if inc or (not self.project.precompile and not self.project.chunk_precompile):
 			#endtime = time.time( )
 			#_shared_globals.sgmutex.acquire( )
@@ -274,7 +395,7 @@ class threaded_build( threading.Thread ):
 
 			self.project.mutex.acquire( )
 			self.project.compiles_completed += 1
-			self.project.fileEnd[self.file] = time.time()
+			self.project.fileEnd[self.originalIn] = time.time()
 			self.project.updated = True
 			self.project.mutex.release( )
 
@@ -459,9 +580,9 @@ def prepare_precompiles( ):
 					cheaders = project.precompileAsC
 
 			if cppheaders:
-				project.cppheaderfile = "{0}/{1}_cpp_precompiled_headers_{2}.hpp".format( project.csbuild_dir,
+				project.cppheaderfile = os.path.join( project.csbuild_dir, "{}_cpp_precompiled_headers_{}.hpp".format(
 					project.output_name.split( '.' )[0],
-					project.targetName )
+					project.targetName ))
 
 				project.needs_cpp_precompile, project.cppheaderfile = handleHeaderFile( project.cppheaderfile, cppheaders, True )
 
@@ -470,9 +591,9 @@ def prepare_precompiles( ):
 				project.needs_cpp_precompile = False
 
 			if cheaders:
-				project.cheaderfile = "{0}/{1}_c_precompiled_headers_{2}.h".format( project.csbuild_dir,
+				project.cheaderfile = os.path.join(project.csbuild_dir, "{}_c_precompiled_headers_{}.h".format(
 					project.output_name.split( '.' )[0],
-					project.targetName )
+					project.targetName ))
 
 				project.needs_c_precompile, project.cheaderfile = handleHeaderFile( project.cheaderfile, cheaders, False )
 
@@ -516,8 +637,8 @@ def chunked_build( ):
 	if totalChunksWithMultipleFiles == 1 and not owningProject.unity:
 		chunkname = get_chunk_name( owningProject.output_name, chunks_to_build[0] )
 
-		obj = "{}/{}_{}{}".format( owningProject.obj_dir, chunkname,
-			owningProject.targetName, owningProject.activeToolchain.Compiler().get_obj_ext() )
+		obj = os.path.join(owningProject.obj_dir, "{}_{}{}".format( chunkname,
+			owningProject.targetName, owningProject.activeToolchain.Compiler().get_obj_ext() ))
 		if os.path.exists( obj ):
 			os.remove(obj)
 			log.LOG_WARN_NOPUSH(
@@ -557,17 +678,15 @@ def chunked_build( ):
 				extension = ".cpp"
 
 			if project.unity:
-				outFile = "{}/{}_unity{}".format(
-					project.csbuild_dir,
+				outFile = os.path.join( project.csbuild_dir, "{}_unity{}".format(
 					project.output_name,
 					extension
-				)
+				))
 			else:
-				outFile = "{}/{}{}".format(
-					project.csbuild_dir,
+				outFile = os.path.join( project.csbuild_dir, "{}{}".format(
 					get_chunk_name( project.output_name, chunk ),
 					extension
-				)
+				))
 
 			#If only one or two sources in this chunk need to be built, we get no benefit from building it as a unit.
 			# Split unless we're told not to.
@@ -585,9 +704,9 @@ def chunked_build( ):
 						f.write(
 							'#include "{0}" // {1} bytes\n'.format( os.path.abspath( source ),
 								os.path.getsize( source ) ) )
-						obj = "{}/{}_{}{}".format( project.obj_dir,
+						obj = os.path.join( project.obj_dir, "{}_{}{}".format(
 							os.path.basename( source ).split( '.' )[0],
-							project.targetName, project.activeToolchain.Compiler().get_obj_ext() )
+							project.targetName, project.activeToolchain.Compiler().get_obj_ext() ))
 						if os.path.exists( obj ):
 							os.remove( obj )
 					f.write( "//Total size: {0} bytes".format( chunksize ) )
@@ -597,8 +716,8 @@ def chunked_build( ):
 			elif len( sources_in_this_chunk ) > 0:
 				chunkname = get_chunk_name( project.output_name, chunk )
 
-				obj = "{}/{}_{}{}".format( project.obj_dir, chunkname,
-					project.targetName, project.activeToolchain.Compiler().get_obj_ext() )
+				obj = os.path.join( project.obj_dir, "{}_{}{}".format( chunkname,
+					project.targetName, project.activeToolchain.Compiler().get_obj_ext() ) )
 				if os.path.exists( obj ):
 					#If the chunk object exists, the last build of these files was the full chunk.
 					#We're now splitting the chunk to speed things up for future incremental builds,
