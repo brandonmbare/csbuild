@@ -2277,7 +2277,7 @@ def _run( ):
 
 	_shared_globals.profile = args.profile
 	_shared_globals.disable_chunks = args.no_chunks
-	_shared_globals.disable_precompile = args.no_precompile
+	_shared_globals.disable_precompile = args.no_precompile or args.profile
 
 	_shared_globals.stopOnError = args.stop_on_error
 
