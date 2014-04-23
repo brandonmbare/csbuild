@@ -228,6 +228,7 @@ class threaded_build( threading.Thread ):
 				timeFunc = time.time
 
 			sanitation_lines = self.project.activeToolchain.Compiler().get_post_preprocess_sanitation_lines()
+			ansi_escape = re.compile(r'\x1b[^m]*m')
 
 			def GatherData(pipe, buffer):
 				while running:
@@ -258,7 +259,8 @@ class threaded_build( threading.Thread ):
 							continue
 
 						if "CSBPF" in line:
-							split = line.split("[")
+							sub = re.sub(ansi_escape, '', line)
+							split = sub.split("[")
 							file = reverseIndexes[int(split[1].split("]")[0])]
 							lineNo = int(split[2].split("]")[0]) - 1
 							now = timeFunc()
@@ -272,7 +274,8 @@ class threaded_build( threading.Thread ):
 							continue
 
 						if "CSBPL" in line:
-							split = line.split("[")
+							sub = re.sub(ansi_escape, '', line)
+							split = sub.split("[")
 							file = reverseIndexes[int(split[1].split("]")[0])]
 							lineNo = int(split[2].split("]")[0])
 							if file not in times:
@@ -307,7 +310,6 @@ class threaded_build( threading.Thread ):
 				sys.stderr.write( errors.str )
 
 			self.project.mutex.acquire( )
-			ansi_escape = re.compile(r'\x1b[^m]*m')
 			stripped_errors = re.sub(ansi_escape, '', errors.str)
 			self.project.compileOutput[self.originalIn] = output.str
 			self.project.compileErrors[self.originalIn] = stripped_errors

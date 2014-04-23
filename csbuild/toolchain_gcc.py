@@ -321,7 +321,7 @@ class compiler_gcc( gccBase, toolchain.compilerBase ):
 
 
 	def get_extra_post_preprocess_flags(self):
-		return " -ftemplate-backtrace-limit=0 -fno-show-source-location -fno-caret-diagnostics -fno-diagnostics-fixit-info"
+		return " -ftemplate-backtrace-limit=0 -fno-show-source-location -fno-caret-diagnostics -fno-diagnostics-fixit-info -W#pragma-messages"
 
 	def get_post_preprocess_sanitation_lines(self):
 		return ["In included file:"]

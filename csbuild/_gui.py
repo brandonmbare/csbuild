@@ -4,6 +4,7 @@ import hashlib
 import re
 import stat
 import cStringIO
+import sys
 import csbuild
 from csbuild import log
 
@@ -419,6 +420,9 @@ class CodeProfileDisplay(CodeEditor):
 
 		self.mousePos = None
 		self.mouseGlobalPos = None
+		self.maxVal = 0.0
+
+		self.settingValue = False
 
 	def keyPressEvent(self, event):
 		if not self.mousePos:
@@ -562,9 +566,7 @@ class CodeProfileDisplay(CodeEditor):
 	def setPlainText(self, text):
 		CodeEditor.setPlainText(self, text)
 
-		extraSelections = []
 		text = text.split("\n")
-
 		class VisMode:
 			Mean = 1
 			HighVal = 3
@@ -572,6 +574,16 @@ class CodeProfileDisplay(CodeEditor):
 
 		mode = VisMode.Mean
 		skipIncludes = True
+		maxVal = 0.0
+		for line in text:
+			if not line.strip():
+				continue
+			val = float(line.split('\t')[0])
+			maxVal = max(maxVal, val)
+		self.maxVal = maxVal
+
+		self.parentEditor.slider.setMaximum(self.toLog(maxVal))
+		self.parentEditor.slider.setMinimum(1)
 
 		if mode == VisMode.Mean:
 			highVal = 0.0
@@ -628,15 +640,81 @@ class CodeProfileDisplay(CodeEditor):
 		if not highVal:
 			return
 
+		self.highVal = highVal
+
+		self.settingValue = True
+		self.parentEditor.slider.setValue(self.toLog(highVal))
+		self.settingValue = False
+
+		self.parentEditor.textBox.setText("{:f}".format(highVal))
+		self.highlightProblemAreas(text)
+
+
+	def toLog(self, val):
+		normalized = float(val)/self.maxVal
+		return int(round(math.sqrt(normalized) * 1000))
+
+	def fromLog(self, val):
+		if val == 0:
+			return 0
+		val = float(val)/1000.0
+		return val * val * self.maxVal
+
+
+	def sliderMoved(self, value):
+		if self.settingValue:
+			return
+
+		self.highVal = self.fromLog(value)
+		self.parentEditor.textBox.setText("{:f}".format(self.highVal))
+		if not self.parentEditor.slider.isSliderDown():
+			text = str(self.toPlainText())
+			self.highlightProblemAreas(text.split("\n"))
+
+
+	def textEdited(self):
+		try:
+			val = float(self.parentEditor.textBox.text())
+		except:
+			self.parentEditor.textBox.setText("{:f}".format(self.highVal))
+		else:
+			if val <= 0.0:
+				self.parentEditor.textBox.setText("{:f}".format(self.highVal))
+				return
+			if val > self.maxVal:
+				val = self.maxVal
+				self.parentEditor.textBox.setText("{:f}".format(val))
+
+			self.highVal = val
+			self.settingValue = True
+			self.parentEditor.slider.setValue(self.toLog(self.highVal))
+			self.settingValue = False
+
+			text = str(self.toPlainText())
+			self.highlightProblemAreas(text.split("\n"))
+
+
+
+
+	def sliderReleased(self):
+		self.highVal = self.fromLog(self.parentEditor.slider.value())
+		text = str(self.toPlainText())
+		self.highlightProblemAreas(text.split("\n"))
+
+
+	def highlightProblemAreas(self, text):
+		extraSelections = []
+		self.vals = []
+
 		lineNo = 0
 		for line in text:
 			if not line.strip():
 				continue
 			val = float(line.split('\t')[0])
-			if val > highVal:
-				val = highVal
+			if val > self.highVal:
+				val = self.highVal
 			selection = QtGui.QTextEdit.ExtraSelection()
-			gbVals = 255 - math.ceil(255 * (val/highVal))
+			gbVals = 255 - math.ceil(255 * (val/self.highVal))
 			selection.format.setBackground(QtGui.QColor(255, gbVals, gbVals))
 			selection.format.setProperty(QtGui.QTextFormat.FullWidthSelection, True)
 			selection.cursor = QtGui.QTextCursor(self.document())
@@ -645,7 +723,6 @@ class CodeProfileDisplay(CodeEditor):
 			extraSelections.append(selection)
 			lineNo += 1
 			self.vals.append(val)
-			self.highVal = highVal
 
 		self.selections = extraSelections
 		self.setExtraSelections(extraSelections)
@@ -800,12 +877,6 @@ class EditorWindow( QMainWindow ):
 
 		self.highlighter = SyntaxHighlighter(self.editor.document())
 
-		if data:
-			self.editor.setPlainText(data)
-		else:
-			with open(sourceFile, "r") as f:
-				self.editor.setPlainText(f.read())
-
 		self.editor.textChanged.connect(self.rehighlight)
 		self.editor.setLineWrapMode(QtGui.QPlainTextEdit.NoWrap)
 
@@ -814,9 +885,12 @@ class EditorWindow( QMainWindow ):
 
 		self.outerLayout.addWidget(self.editor)
 
+		self.highlighting = False
+		self.sourceFile = sourceFile
+
+		self.innerLayout = QtGui.QHBoxLayout()
 		if EditorType == CodeEditor:
 			self.isCodeEditor = True
-			self.innerLayout = QtGui.QHBoxLayout()
 			horizontalSpacer = QtGui.QSpacerItem(40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
 			self.innerLayout.addItem(horizontalSpacer)
 
@@ -843,14 +917,33 @@ class EditorWindow( QMainWindow ):
 			self.addAction(self.saveAction)
 		else:
 			self.isCodeEditor = False
+			label = QtGui.QLabel(self.centralWidget)
+			label.setText("Highlight values approaching:")
+			self.innerLayout.addWidget(label)
+			self.slider = QtGui.QSlider(QtCore.Qt.Horizontal, self.centralWidget)
+			self.innerLayout.addWidget(self.slider)
+			self.slider.valueChanged.connect(self.editor.sliderMoved)
+			self.slider.sliderReleased.connect(self.editor.sliderReleased)
+
+			self.textBox = QtGui.QLineEdit(self.centralWidget)
+			self.textBox.setMaximumWidth(160)
+			self.innerLayout.addWidget(self.textBox)
+			self.textBox.editingFinished.connect(self.editor.textEdited)
+
+			self.outerLayout.addLayout(self.innerLayout)
+
+		if data:
+			self.editor.setPlainText(data)
+		else:
+			with open(sourceFile, "r") as f:
+				self.editor.setPlainText(f.read())
 
 		self.setCentralWidget(self.centralWidget)
 		if baseFile:
 			self.setWindowTitle("Profile view: {}".format(baseFile))
 		else:
 			self.setWindowTitle(sourceFile)
-		self.highlighting = False
-		self.sourceFile = sourceFile
+
 
 	def ScrollTo(self, line, column):
 		if line or column:
@@ -2011,9 +2104,12 @@ class MainWindow( QMainWindow ):
 
 						try:
 							startTime = project.fileStart[file]
-							endTime = project.fileEnd[file]
 						except:
 							startTime = 0
+
+						try:
+							endTime = project.fileEnd[file]
+						except:
 							endTime = 0
 
 						warnings = 0
@@ -2099,7 +2195,7 @@ class MainWindow( QMainWindow ):
 
 
 	def retranslateUi(self):
-		self.setWindowTitle("CSBuild {}".format(csbuild.__version__))
+		self.setWindowTitle("CSBuild {}".format(csbuild.__version__.strip()))
 		self.m_buildSummaryLabel.setText("Build Started at 00:00... (00:00)")
 		self.m_successfulBuildsLabel.setText("Successful Builds: 0")
 		self.m_failedBuildsLabel.setText("Failed Builds: 0")
