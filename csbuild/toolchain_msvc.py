@@ -120,9 +120,19 @@ class MsvcBase( object ):
 		self._build_64_bit = False
 
 		# Determine if we need to build for 64-bit.
-		if self._platform_arch == X64 and not self._project_settings.force_64_bit and not self._project_settings.force_32_bit:
+		if(
+			self._platform_arch == X64
+			and not self._project_settings.force_64_bit
+			and not self._project_settings.force_32_bit
+			and self._project_settings.outputArchitecture != csbuild.ArchitectureType.Architecture["x86"]
+			and self._project_settings.outputArchitecture != csbuild.ArchitectureType.Architecture["win32"]
+		):
 			self._build_64_bit = True
-		elif self._project_settings.force_64_bit:
+		elif(
+			self._project_settings.force_64_bit
+			or self._project_settings.outputArchitecture != csbuild.ArchitectureType.Architecture["x64"]
+			or self._project_settings.outputArchitecture != csbuild.ArchitectureType.Architecture["win64"]
+		):
 			self._build_64_bit = True
 
 		# If we're trying to build for 64-bit, determine the appropriate path for the 64-bit tools based on the machine's architecture.

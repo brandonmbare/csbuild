@@ -459,7 +459,8 @@ class projectSettings( object ):
 
 		self.recompile_all = False
 
-		self.targets = { }
+		self.targets = {}
+		self.archFuncs = {}
 
 		self.targetName = ""
 
@@ -487,6 +488,7 @@ class projectSettings( object ):
 		self.built_something = False
 
 		self.outputArchitecture = None
+		self.outputArchitectureName = ""
 
 		self.library_mtimes = []
 
@@ -764,6 +766,7 @@ class projectSettings( object ):
 			"cccmd": self.cccmd,
 			"recompile_all": self.recompile_all,
 			"targets": { },
+			"archFuncs" : dict(self.archFuncs),
 			"targetName": self.targetName,
 			"final_chunk_set": list( self.final_chunk_set ),
 			"needs_c_precompile": self.needs_c_precompile,
@@ -781,6 +784,7 @@ class projectSettings( object ):
 			"warnings_as_errors": self.warnings_as_errors,
 			"built_something": self.built_something,
 			"outputArchitecture": self.outputArchitecture,
+			"outputArchitectureName": self.outputArchitectureName,
 			"library_mtimes": list( self.library_mtimes ),
 			"scriptPath": self.scriptPath,
 			"mutex": threading.Lock( ),

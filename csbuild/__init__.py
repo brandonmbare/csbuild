@@ -117,19 +117,6 @@ class ArchitectureType( object ):
 	Contains information pertinent to all compilers.
 
 	It's not recommended to create these yourself unless you know what you're doing.
-	The following architectures are built-in and available for your use:
-
-		- csbuild.ArchitectureX86
-		- csbuild.ArchitectureWIN32
-		- csbuild.ArchitectureX64
-		- csbuild.ArchitectureAMD64
-		- csbuild.ArchitectureWIN64
-		- csbuild.ArchitectureARM
-		- csbuild.ArchitectureXScale
-		- csbuild.ArchitectureAARCH64
-		- csbuild.ArchitecturePowerPC
-		- csbuild.ArchitecturePowerPC64
-		- csbuild.ArchitecturePPU
 	"""
 	def __init__( self, archString, vendor = "unknown", system = "unknown", abi = "unknown" ):
 		"""
@@ -154,36 +141,43 @@ class ArchitectureType( object ):
 		@rtype: bool
 		"""
 		return self.archString == other.archString
+	
+	Architecture = {}
+	Aliases = {
+		"amd64" : "x64",
+		"xscale" : "arm",
+		"ppu" : "powerpc64"
+	}
 
 
-ArchitectureX86 = ArchitectureType( "i386" )
-ArchitectureWIN32 = ArchitectureType( "i386", "pc", "win32" )
+ArchitectureType.Architecture = {
+	"x86" : ArchitectureType( "i386" ),
+	"win32" : ArchitectureType( "i386", "pc", "win32" ),
+	"x64" : ArchitectureType( "x86_64" ),
+	"win64" : ArchitectureType( "x86_64", "pc", "win32" ),
 
-ArchitectureX64 = ArchitectureType( "x86_64" )
-ArchitectureAMD64 = ArchitectureX64
-ArchitectureWIN64 = ArchitectureType( "x86_64", "pc", "win32" )
+	"arm" : ArchitectureType( "arm" ),
+	"armv5" : ArchitectureType( "armv5" ),
+	"armv6m" : ArchitectureType( "armv6m" ),
+	"armv7a" : ArchitectureType( "armv7a" ),
+	"armv7m" : ArchitectureType( "armv7m" ),
 
-ArchitectureARM = ArchitectureType( "arm" )
-ArchitectureARMv5 = ArchitectureType( "armv5" )
-ArchitectureARMv6m = ArchitectureType( "armv6m" )
-ArchitectureARMv7a = ArchitectureType( "armv7a" )
-ArchitectureARMv7m = ArchitectureType( "armv7m" )
+	"aarch64" : ArchitectureType( "aarch64" ),
 
-ArchitectureXScale = ArchitectureARM
-ArchitectureAARCH64 = ArchitectureType( "aarch64" )
+	"powerpc" : ArchitectureType( "powerpc" ),
+	"powerpc64" : ArchitectureType( "powerpc64" ),
 
-ArchitecturePowerPC = ArchitectureType( "powerpc" )
-ArchitecturePowerPC64 = ArchitectureType( "powerpc64" )
-ArchitecturePPU = ArchitecturePowerPC64
+	"mips" : ArchitectureType( "mips" ),
 
-ArchitectureMips = ArchitectureType( "mips" )
+	#Android
+	"android-arm" : ArchitectureType( "arm", abi="android" ),
+	"android-armv5" : ArchitectureType( "armv5", abi="android" ),
+	"android-armv6m" : ArchitectureType( "armv6m", abi="android" ),
+	"android-armv7a" : ArchitectureType( "armv7a", abi="android" ),
+	"android-armv7m" : ArchitectureType( "armv7m", abi="android" ),
+	"android-mips" : ArchitectureType( "mips", abi="android" ),
+}
 
-ArchitectureAndroidARM = ArchitectureType( "arm", abi="android" )
-ArchitectureAndroidARMv5 = ArchitectureType( "armv5", abi="android" )
-ArchitectureAndroidARMv6m = ArchitectureType( "armv6m", abi="android" )
-ArchitectureAndroidARMv7a = ArchitectureType( "armv7a", abi="android" )
-ArchitectureAndroidARMv7m = ArchitectureType( "armv7m", abi="android" )
-ArchitectureAndroidMips = ArchitectureType( "mips", abi="android" )
 
 def NoBuiltinTargets( ):
 	"""
@@ -816,21 +810,13 @@ def OutputArchitecture( arch ):
 	Set the output architecture.
 
 	@type arch: ArchitectureType
-	@param arch: The desired architecture. Options are:
-
-		- csbuild.ArchitectureX86
-		- csbuild.ArchitectureWIN32
-		- csbuild.ArchitectureX64
-		- csbuild.ArchitectureAMD64
-		- csbuild.ArchitectureWIN64
-		- csbuild.ArchitectureARM
-		- csbuild.ArchitectureXScale
-		- csbuild.ArchitectureAARCH64
-		- csbuild.ArchitecturePowerPC
-		- csbuild.ArchitecturePowerPC64
-		- csbuild.ArchitecturePPU
+	@param arch: The desired architecture.
 	"""
-	projectSettings.currentProject.outputArchitecture = arch
+	if arch in ArchitectureType.Aliases:
+		arch = ArchitectureType.Aliases[arch]
+
+	projectSettings.currentProject.outputArchitecture = ArchitectureType.Architecture[arch]
+	projectSettings.currentProject.outputArchitectureName = arch
 
 
 def ExtraFiles( *args ):
@@ -1118,6 +1104,17 @@ def target( name, override = False ):
 
 
 	_shared_globals.alltargets.add( name )
+	return wrap
+
+
+def architecture( arch ):
+	"""
+	Specifies settings for a specific architecture.
+	"""
+	def wrap( archFunction ):
+		projectSettings.currentProject.archFuncs[arch] = archFunction
+		return archFunction
+
 	return wrap
 
 
@@ -2182,6 +2179,8 @@ def _run( ):
 	parser.add_argument( '--prefix', help = "install prefix (default /usr/local)", action = "store" )
 	parser.add_argument( '-t', '--toolchain', help = "Toolchain to use for compiling.",
 		choices = _shared_globals.alltoolchains, action = "store" )
+	parser.add_argument( '--architecture', '--arch', help = "Architecture to compile for.",
+		choices = list(ArchitectureType.Architecture.keys()) + list(ArchitectureType.Aliases.keys()), action = "store" )
 	parser.add_argument(
 		"--stop-on-error",
 		help = "Stop compilation after the first error is encountered.",
@@ -2271,6 +2270,9 @@ def _run( ):
 	if args.toolchain:
 		SetActiveToolchain( args.toolchain )
 
+	if args.architecture:
+		OutputArchitecture( args.architecture )
+
 	if args.jobs:
 		_shared_globals.max_threads = args.jobs
 		_shared_globals.semaphore = threading.BoundedSemaphore( value = _shared_globals.max_threads )
@@ -2316,6 +2318,9 @@ def _run( ):
 
 			for targetFunc in newproject.targets[newproject.targetName]:
 				targetFunc( )
+
+			if newproject.outputArchitectureName in newproject.archFuncs:
+				newproject.archFuncs[newproject.outputArchitectureName]()
 
 			alteredLinkDepends = []
 			alteredSrcDepends = []

@@ -729,19 +729,7 @@ class SettingsOverrider( object ):
 		Set the output architecture.
 
 		@type arch: ArchitectureType
-		@param arch: The desired architecture. Options are:
-
-			- csbuild.ArchitectureX86
-			- csbuild.ArchitectureWIN32
-			- csbuild.ArchitectureX64
-			- csbuild.ArchitectureAMD64
-			- csbuild.ArchitectureWIN64
-			- csbuild.ArchitectureARM
-			- csbuild.ArchitectureXScale
-			- csbuild.ArchitectureAARCH64
-			- csbuild.ArchitecturePowerPC
-			- csbuild.ArchitecturePowerPC64
-			- csbuild.ArchitecturePPU
+		@param arch: The desired architecture.
 		"""
 		self.settingsOverrides["outputArchitecture"] = arch
 
