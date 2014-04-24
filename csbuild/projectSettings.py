@@ -279,12 +279,6 @@ class projectSettings( object ):
 	@ivar static_runtime: Whether or not to link against a static runtime
 	@type static_runtime: bool
 
-	@ivar force_64_bit: Whether or not to force a 64-bit build
-	@type force_64_bit: bool
-
-	@ivar force_32_bit: Whether or not to force a 32-bit build
-	@type force_32_bit: bool
-
 	@ivar cppheaders: List of C++ headers
 	@type cppheaders: list[str]
 
@@ -473,10 +467,6 @@ class projectSettings( object ):
 
 		self.static_runtime = False
 
-
-		self.force_64_bit = False
-		self.force_32_bit = False
-
 		self.cheaders = []
 		self.cppheaders = []
 
@@ -487,8 +477,7 @@ class projectSettings( object ):
 
 		self.built_something = False
 
-		self.outputArchitecture = None
-		self.outputArchitectureName = ""
+		self.outputArchitecture = ""
 
 		self.library_mtimes = []
 
@@ -559,6 +548,14 @@ class projectSettings( object ):
 		self.output_dir = os.path.abspath( self.output_dir )
 		self.activeToolchain.SetActiveTool("compiler")
 		self.csbuild_dir = os.path.join( self.obj_dir, ".csbuild" )
+
+		for directory in self.include_dirs:
+			if not os.path.exists(directory):
+				log.LOG_WARN("Include path {} does not exist!".format(directory))
+
+		for directory in self.library_dirs:
+			if not os.path.exists(directory):
+				log.LOG_WARN("Library path {} does not exist!".format(directory))
 
 		self.exclude_dirs.append( self.csbuild_dir )
 
@@ -765,8 +762,8 @@ class projectSettings( object ):
 			"cxxcmd": self.cxxcmd,
 			"cccmd": self.cccmd,
 			"recompile_all": self.recompile_all,
-			"targets": { },
-			"archFuncs" : dict(self.archFuncs),
+			"targets": {},
+			"archFuncs" : {},
 			"targetName": self.targetName,
 			"final_chunk_set": list( self.final_chunk_set ),
 			"needs_c_precompile": self.needs_c_precompile,
@@ -775,8 +772,6 @@ class projectSettings( object ):
 			"compile_failed": self.compile_failed,
 			"precompileFailed": self.precompileFailed,
 			"static_runtime": self.static_runtime,
-			"force_64_bit": self.force_64_bit,
-			"force_32_bit": self.force_32_bit,
 			"cheaders": list( self.cheaders ),
 			"cppheaders": list( self.cppheaders ),
 			"activeToolchainName": self.activeToolchainName,
@@ -784,7 +779,6 @@ class projectSettings( object ):
 			"warnings_as_errors": self.warnings_as_errors,
 			"built_something": self.built_something,
 			"outputArchitecture": self.outputArchitecture,
-			"outputArchitectureName": self.outputArchitectureName,
 			"library_mtimes": list( self.library_mtimes ),
 			"scriptPath": self.scriptPath,
 			"mutex": threading.Lock( ),
@@ -834,6 +828,9 @@ class projectSettings( object ):
 
 		for name in self.targets:
 			ret.targets.update( { name : list( self.targets[name] ) } )
+
+		for arch in self.archFuncs:
+			ret.archFuncs.update( { arch : list( self.archFuncs[arch] ) } )
 
 		for srcFile in self.chunkMutexes:
 			ret.chunkMutexes.update( { srcFile : set( self.chunkMutexes[srcFile] ) } )
@@ -1225,7 +1222,6 @@ class projectSettings( object ):
 		whether or not a project with up-to-date objects still needs to link against new libraries.
 		"""
 		log.LOG_INFO( "Checking required libraries..." )
-
 
 		def check_libraries( libraries, force_static, force_shared ):
 			libraries_ok = True

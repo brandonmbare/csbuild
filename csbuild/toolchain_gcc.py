@@ -30,7 +30,7 @@ import sys
 from csbuild import _shared_globals
 from csbuild import toolchain
 import csbuild
-import platform
+from csbuild import log
 
 class gccBase( object ):
 	def __init__( self ):
@@ -242,14 +242,6 @@ class compiler_gcc( gccBase, toolchain.compilerBase ):
 		ret += "-I/usr/include -I/usr/local/include "
 		return ret
 
-	def _get_cross_compile_flag( self, compiler, project ):
-		if not project.outputArchitecture:
-			return ""
-		if "clang" in compiler.lower( ):
-			return "-target {}".format( project.outputArchitecture.clangTriple )
-		else:
-			return "-b {}".format( project.outputArchitecture.archString )
-
 
 	def get_base_command( self, compiler, project, isCpp ):
 		exitcodes = ""
@@ -263,9 +255,17 @@ class compiler_gcc( gccBase, toolchain.compilerBase ):
 		else:
 			standard = self.cStandard
 
-		return "{} {}{} -Winvalid-pch -c {}-g{} -O{} {}{}{} {} {}".format(
+		if project.outputArchitecture == 'x86':
+			archArg = "-m32 "
+		elif project.outputArchitecture == 'x64':
+			archArg = "-m64 "
+		else:
+			log.LOG_ERROR("Architecture {} is not natively supported by GCC toolchain. Cross-compiling must be implemented by the makefile.")
+			archArg = ""
+
+		return "{} {}{} -Winvalid-pch -c {}-g{} -O{} {}{}{} {}".format(
 			compiler,
-			"-m32 " if project.force_32_bit else "-m64 " if project.force_64_bit else "",
+			archArg,
 			exitcodes,
 			self.get_defines( project.defines, project.undefines ),
 			project.debug_level,
@@ -273,8 +273,7 @@ class compiler_gcc( gccBase, toolchain.compilerBase ):
 			"-fPIC " if project.type == csbuild.ProjectType.SharedLibrary else "",
 			"-pg " if project.profile else "",
 			"--std={0}".format( standard ) if standard != "" else "",
-			" ".join( project.cpp_compiler_flags ) if isCpp else " ".join( project.c_compiler_flags ),
-			self._get_cross_compile_flag( compiler, project )
+			" ".join( project.cpp_compiler_flags ) if isCpp else " ".join( project.c_compiler_flags )
 		)
 
 
@@ -388,22 +387,11 @@ class linker_gcc( gccBase, toolchain.linkerBase ):
 
 
 	def SetupForProject( self, project ):
-		valid_x64_archs = [
-			"amd64",
-			"ia64",
-			"x64",
-			"x86_64",
-			"sparc64",
-			"ppc64",
-			"i686-64",
-		]
-		is_64bit_platform = True if platform.machine( ).lower( ) in valid_x64_archs else False
-
 		self._include_lib64 = False
 
 		# Only include lib64 if we're on a 64-bit platform and we haven't specified whether to build a 64bit or 32bit
 		# binary or if we're explicitly told to build a 64bit binary.
-		if (is_64bit_platform and not project.force_64_bit and not project.force_32_bit) or project.force_64_bit:
+		if project.outputArchitecture == "x64":
 			self._include_lib64 = True
 
 
@@ -458,9 +446,17 @@ class linker_gcc( gccBase, toolchain.linkerBase ):
 			else:
 				cmd = project.cc
 
+			if project.outputArchitecture == 'x86':
+				archArg = "-m32 "
+			elif project.outputArchitecture == 'x64':
+				archArg = "-m64 "
+			else:
+				log.LOG_ERROR("Architecture {} is not natively supported by GCC toolchain. Cross-compiling must be implemented by the makefile.")
+				archArg = ""
+
 			return "{} {}{}-o{} {} {} {} {}{}{} {} {}-g{} -O{} {} {}".format(
 				cmd,
-				"-m32 " if project.force_32_bit else "-m64 " if project.force_64_bit else "",
+				archArg,
 				"-pg " if project.profile else "",
 				outputFile,
 				" ".join( objList ),

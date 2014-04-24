@@ -111,74 +111,6 @@ with open( os.path.dirname( __file__ ) + "/version", "r" ) as f:
 signal.signal( signal.SIGINT, signal.SIG_DFL )
 
 
-class ArchitectureType( object ):
-	"""
-	ArchitectureType encompasses architecture in a cross-platform, cross-toolchain way.
-	Contains information pertinent to all compilers.
-
-	It's not recommended to create these yourself unless you know what you're doing.
-	"""
-	def __init__( self, archString, vendor = "unknown", system = "unknown", abi = "unknown" ):
-		"""
-		@type archString: str
-		@param archString: The architecture to be passed to the compiler. This is the only thing used for gcc.
-		@type vendor: str
-		@param vendor: For clang, this specifies the target vendor. If you don't know or care, use "unknown"
-		@type system: str
-		@param system: For clang, this spedifies the target system. If you don't know or care, use "unknown"
-		@type abi: str
-		@param abi: For clang, specifies the C++ abi to use. If you don't know or care, use "unknown"
-		"""
-		self.archString = archString
-		self.clangTriple = "{}-{}-{}-{}".format( archString, vendor, system, abi )
-
-
-	def __eq__( self, other ):
-		"""
-		@type other: ArchitectureType
-		@param other: Other architecture to compare against
-		@return: Whether or not the two ArchitectureTypes are equal
-		@rtype: bool
-		"""
-		return self.archString == other.archString
-	
-	Architecture = {}
-	Aliases = {
-		"amd64" : "x64",
-		"xscale" : "arm",
-		"ppu" : "powerpc64"
-	}
-
-
-ArchitectureType.Architecture = {
-	"x86" : ArchitectureType( "i386" ),
-	"win32" : ArchitectureType( "i386", "pc", "win32" ),
-	"x64" : ArchitectureType( "x86_64" ),
-	"win64" : ArchitectureType( "x86_64", "pc", "win32" ),
-
-	"arm" : ArchitectureType( "arm" ),
-	"armv5" : ArchitectureType( "armv5" ),
-	"armv6m" : ArchitectureType( "armv6m" ),
-	"armv7a" : ArchitectureType( "armv7a" ),
-	"armv7m" : ArchitectureType( "armv7m" ),
-
-	"aarch64" : ArchitectureType( "aarch64" ),
-
-	"powerpc" : ArchitectureType( "powerpc" ),
-	"powerpc64" : ArchitectureType( "powerpc64" ),
-
-	"mips" : ArchitectureType( "mips" ),
-
-	#Android
-	"android-arm" : ArchitectureType( "arm", abi="android" ),
-	"android-armv5" : ArchitectureType( "armv5", abi="android" ),
-	"android-armv6m" : ArchitectureType( "armv6m", abi="android" ),
-	"android-armv7a" : ArchitectureType( "armv7a", abi="android" ),
-	"android-armv7m" : ArchitectureType( "armv7m", abi="android" ),
-	"android-mips" : ArchitectureType( "mips", abi="android" ),
-}
-
-
 def NoBuiltinTargets( ):
 	"""
 	Disable the built-in "debug" and "release" targets.
@@ -312,8 +244,6 @@ def IncludeDirs( *args ):
 	"""
 	for arg in args:
 		arg = os.path.abspath( arg )
-		if not os.path.exists( arg ):
-			log.LOG_WARN( "Include path {0} does not exist!".format( arg ) )
 		projectSettings.currentProject.include_dirs.append( arg )
 
 
@@ -330,8 +260,6 @@ def LibDirs( *args ):
 	"""
 	for arg in args:
 		arg = os.path.abspath( arg )
-		if not os.path.exists( arg ):
-			log.LOG_WARN( "Library path {0} does not exist!".format( arg ) )
 		projectSettings.currentProject.library_dirs.append( arg )
 
 
@@ -789,34 +717,14 @@ def SharedRuntime( ):
 	projectSettings.currentProject.static_runtime = False
 
 
-def Force32Bit( ):
-	"""
-	Force building a 32-bit executable for the native architecture.
-	"""
-	projectSettings.currentProject.force_32_bit = True
-	projectSettings.currentProject.force_64_bit = False
-
-
-def Force64Bit( ):
-	"""
-	Force building a 64-bit executable for the native architecture.
-	"""
-	projectSettings.currentProject.force_64_bit = True
-	projectSettings.currentProject.force_32_bit = False
-
-
 def OutputArchitecture( arch ):
 	"""
 	Set the output architecture.
 
-	@type arch: ArchitectureType
-	@param arch: The desired architecture.
+	@type arch: str
+	@param arch: The desired architecture. Choose from x86, x64, ARM.
 	"""
-	if arch in ArchitectureType.Aliases:
-		arch = ArchitectureType.Aliases[arch]
-
-	projectSettings.currentProject.outputArchitecture = ArchitectureType.Architecture[arch]
-	projectSettings.currentProject.outputArchitectureName = arch
+	projectSettings.currentProject.outputArchitecture = arch
 
 
 def ExtraFiles( *args ):
@@ -1107,12 +1015,16 @@ def target( name, override = False ):
 	return wrap
 
 
-def architecture( arch ):
+def architecture( arch, override = False ):
 	"""
 	Specifies settings for a specific architecture.
 	"""
 	def wrap( archFunction ):
-		projectSettings.currentProject.archFuncs[arch] = archFunction
+		if override is True or arch not in projectSettings.currentProject.archFuncs:
+			projectSettings.currentProject.archFuncs.update( { arch: [archFunction] } )
+		else:
+			projectSettings.currentProject.archFuncs[arch].append( archFunction )
+
 		return archFunction
 
 	return wrap
@@ -2180,7 +2092,7 @@ def _run( ):
 	parser.add_argument( '-t', '--toolchain', help = "Toolchain to use for compiling.",
 		choices = _shared_globals.alltoolchains, action = "store" )
 	parser.add_argument( '--architecture', '--arch', help = "Architecture to compile for.",
-		choices = list(ArchitectureType.Architecture.keys()) + list(ArchitectureType.Aliases.keys()), action = "store" )
+		choices = ["x86", "x64", "arm"], action = "store" )
 	parser.add_argument(
 		"--stop-on-error",
 		help = "Stop compilation after the first error is encountered.",
@@ -2272,6 +2184,10 @@ def _run( ):
 
 	if args.architecture:
 		OutputArchitecture( args.architecture )
+	elif platform.machine().endswith('64'):
+		OutputArchitecture("x64")
+	else:
+		OutputArchitecture("x86")
 
 	if args.jobs:
 		_shared_globals.max_threads = args.jobs
@@ -2319,8 +2235,9 @@ def _run( ):
 			for targetFunc in newproject.targets[newproject.targetName]:
 				targetFunc( )
 
-			if newproject.outputArchitectureName in newproject.archFuncs:
-				newproject.archFuncs[newproject.outputArchitectureName]()
+			if newproject.outputArchitecture in newproject.archFuncs:
+				for archFunc in newproject.archFuncs[newproject.outputArchitecture]:
+					archFunc()
 
 			alteredLinkDepends = []
 			alteredSrcDepends = []

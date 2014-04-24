@@ -122,17 +122,10 @@ class MsvcBase( object ):
 		# Determine if we need to build for 64-bit.
 		if(
 			self._platform_arch == X64
-			and not self._project_settings.force_64_bit
-			and not self._project_settings.force_32_bit
-			and self._project_settings.outputArchitecture != csbuild.ArchitectureType.Architecture["x86"]
-			and self._project_settings.outputArchitecture != csbuild.ArchitectureType.Architecture["win32"]
+			and self._project_settings.outputArchitecture != "x86"
 		):
 			self._build_64_bit = True
-		elif(
-			self._project_settings.force_64_bit
-			or self._project_settings.outputArchitecture != csbuild.ArchitectureType.Architecture["x64"]
-			or self._project_settings.outputArchitecture != csbuild.ArchitectureType.Architecture["win64"]
-		):
+		elif self._project_settings.outputArchitecture == "x64":
 			self._build_64_bit = True
 
 		# If we're trying to build for 64-bit, determine the appropriate path for the 64-bit tools based on the machine's architecture.
@@ -161,11 +154,12 @@ class MsvcBase( object ):
 				if sys.version_info >= (3, 0):
 					line = line.decode("utf-8")
 
+				key_value_list = line.split( "=", 1 )
+				os.environ[key_value_list[0]] = key_value_list[1]
+
 				# Check if the line we're on has the Windows SDK directory listed.
 				if line.startswith( "WindowsSdkDir=" ):
-					key_value_list = line.split( "=", 1 )
 					WINDOWS_SDK_DIR = key_value_list[1]
-					break
 
 			HAS_SET_VC_VARS = True
 

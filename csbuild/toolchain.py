@@ -219,8 +219,6 @@ class SettingsOverrider( object ):
 
 		for arg in args:
 			arg = os.path.abspath( arg )
-			if not os.path.exists( arg ):
-				log.LOG_WARN( "Include path {0} does not exist!".format( arg ) )
 			self.settingsOverrides["include_dirs"].append( arg )
 
 
@@ -240,8 +238,6 @@ class SettingsOverrider( object ):
 
 		for arg in args:
 			arg = os.path.abspath( arg )
-			if not os.path.exists( arg ):
-				log.LOG_WARN( "Library path {0} does not exist!".format( arg ) )
 			self.settingsOverrides["library_dirs"].append( arg )
 
 
@@ -706,22 +702,6 @@ class SettingsOverrider( object ):
 		Link against a dynamic C/C++ runtime library.
 		"""
 		self.settingsOverrides["static_runtime"] = False
-
-
-	def Force32Bit( self ):
-		"""
-		Force building a 32-bit executable for the native architecture.
-		"""
-		self.settingsOverrides["force_32_bit"] = True
-		self.settingsOverrides["force_64_bit"] = False
-
-
-	def Force64Bit( self ):
-		"""
-		Force building a 64-bit executable for the native architecture.
-		"""
-		self.settingsOverrides["force_64_bit"] = True
-		self.settingsOverrides["force_32_bit"] = False
 
 
 	def OutputArchitecture( self, arch ):
