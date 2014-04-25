@@ -1407,26 +1407,26 @@ class MainWindow( QMainWindow ):
 					outStr += ("=" * 40) + "\n\n"
 					outStr += project.name
 					outStr += ("=" * 40) + "\n\n"
-					project.mutex.acquire()
-					for filename in project.compileOutput:
-						outStr += filename
-						errors = ""
-						output = ""
-						if filename in project.compileErrors:
-							errors = project.compileErrors[filename]
-						output = project.compileOutput[filename]
-						if errors or output:
-							outStr += "\n" + ("-" * len(filename)) + "\n\n"
-							outStr += "\n" + ("-" * 40) + "\n\n"
-							if errors:
-								outStr += "ERROR OUTPUT:\n\n" + errors + "\n\n"
-							if output:
-								outStr += "OUTPUT:\n\n" + output + "\n\n"
-					if project.linkErrors:
-						outStr += "LINK ERRORS:\n\n" + project.linkErrors + "\n\n"
-					if project.linkOutput:
-						outStr += "LINK OUTPUT:\n\n" + project.linkOutput + "\n\n"
-					project.mutex.release()
+					with project.mutex:
+						for filename in project.compileOutput:
+							outStr += filename
+							errors = ""
+							output = ""
+							if filename in project.compileErrors:
+								errors = project.compileErrors[filename]
+							output = project.compileOutput[filename]
+							if errors or output:
+								outStr += "\n" + ("-" * len(filename)) + "\n\n"
+								outStr += "\n" + ("-" * 40) + "\n\n"
+								if errors:
+									outStr += "ERROR OUTPUT:\n\n" + errors + "\n\n"
+								if output:
+									outStr += "OUTPUT:\n\n" + output + "\n\n"
+						if project.linkErrors:
+							outStr += "LINK ERRORS:\n\n" + project.linkErrors + "\n\n"
+						if project.linkOutput:
+							outStr += "LINK OUTPUT:\n\n" + project.linkOutput + "\n\n"
+
 					outStr += "\n\n"
 				if outStr != self.m_textEdit.toPlainText():
 					self.m_textEdit.setText(outStr)
@@ -1438,29 +1438,28 @@ class MainWindow( QMainWindow ):
 
 					if widget == current:
 						outStr = ""
-						project.mutex.acquire()
-						for filename in project.compileOutput:
-							errors = ""
-							output = ""
-							if filename in project.compileErrors:
-								errors = project.compileErrors[filename]
-							output = project.compileOutput[filename]
-							if errors or output:
-								outStr += filename
-								outStr += "\n" + ("=" * 40) + "\n\n"
-								if errors:
-									outStr += "ERROR OUTPUT:\n\n" + errors + "\n\n"
-								if output:
-									outStr += "OUTPUT:\n\n" + output + "\n\n"
+						with project.mutex:
+							for filename in project.compileOutput:
+								errors = ""
+								output = ""
+								if filename in project.compileErrors:
+									errors = project.compileErrors[filename]
+								output = project.compileOutput[filename]
+								if errors or output:
+									outStr += filename
+									outStr += "\n" + ("=" * 40) + "\n\n"
+									if errors:
+										outStr += "ERROR OUTPUT:\n\n" + errors + "\n\n"
+									if output:
+										outStr += "OUTPUT:\n\n" + output + "\n\n"
 
-						if project.linkErrors:
-							outStr += "LINK ERRORS:\n\n" + project.linkErrors + "\n\n"
-						if project.linkOutput:
-							outStr += "LINK OUTPUT:\n\n" + project.linkOutput + "\n\n"
+							if project.linkErrors:
+								outStr += "LINK ERRORS:\n\n" + project.linkErrors + "\n\n"
+							if project.linkOutput:
+								outStr += "LINK OUTPUT:\n\n" + project.linkOutput + "\n\n"
 
-						if outStr != self.m_textEdit.toPlainText():
-							self.m_textEdit.setText(outStr)
-						project.mutex.release()
+							if outStr != self.m_textEdit.toPlainText():
+								self.m_textEdit.setText(outStr)
 					elif widget.isExpanded():
 						def HandleChild( idx, file ):
 							childWidget = widget.child(idx)
@@ -1469,12 +1468,12 @@ class MainWindow( QMainWindow ):
 								outStr = ""
 								errors = ""
 								output = ""
-								project.mutex.acquire()
-								if file in project.compileErrors:
-									errors = project.compileErrors[file]
-								if file in project.compileOutput:
-									output = project.compileOutput[file]
-								project.mutex.release()
+								with project.mutex:
+									if file in project.compileErrors:
+										errors = project.compileErrors[file]
+									if file in project.compileOutput:
+										output = project.compileOutput[file]
+
 								if errors or output:
 									outStr += file
 									outStr += "\n" + ("=" * 40) + "\n\n"
@@ -1791,11 +1790,10 @@ class MainWindow( QMainWindow ):
 				updatedProjects = [ self.itemToProject[text] ]
 		else:
 			for project in _shared_globals.sortedProjects:
-				project.mutex.acquire()
-				if project.updated or project:
-					updatedProjects.append(project)
-					project.updated = False
-				project.mutex.release()
+				with project.mutex:
+					if project.updated or project:
+						updatedProjects.append(project)
+						project.updated = False
 
 		class SharedLocals(object):
 			foundAnError = bool(self.warningErrorCount != 0)
@@ -1971,7 +1969,7 @@ class MainWindow( QMainWindow ):
 				widget.setText(8, time.asctime(time.localtime(endTime)))
 				timeDiff = endTime - startTime
 				minutes = math.floor( timeDiff / 60 )
-				seconds = round( timeDiff % 60 )
+				seconds = math.floor( timeDiff % 60 )
 				widget.setText(9, "{0:2}:{1:02}".format( int(minutes), int(seconds) ) )
 
 			elif state == _shared_globals.ProjectState.FAILED or state == _shared_globals.ProjectState.LINK_FAILED:
@@ -2005,7 +2003,7 @@ class MainWindow( QMainWindow ):
 				widget.setText(8, time.asctime(time.localtime(endTime)))
 				timeDiff = endTime - startTime
 				minutes = math.floor( timeDiff / 60 )
-				seconds = round( timeDiff % 60 )
+				seconds = math.floor( timeDiff % 60 )
 				widget.setText(9, "{0:2}:{1:02}".format( int(minutes), int(seconds) ) )
 
 			elif state == _shared_globals.ProjectState.UP_TO_DATE:
@@ -2184,6 +2182,40 @@ class MainWindow( QMainWindow ):
 				self.m_failedBuildsLabel.setPalette(palette)
 
 			if successcount + failcount == len(_shared_globals.sortedProjects):
+				if _shared_globals.profile and not self.readyToClose:
+					window = QtGui.QMainWindow(self)
+					window.centralWidget = QtGui.QWidget(window)
+					window.setCentralWidget(window.centralWidget)
+					layout = QtGui.QHBoxLayout(window.centralWidget)
+
+					window.editor = QtGui.QPlainTextEdit(window.centralWidget)
+					font = QtGui.QFont()
+					font.setFamily("monospace")
+					window.editor.setFont(font)
+					window.editor.setLineWrapMode(QtGui.QPlainTextEdit.NoWrap)
+
+					layout.addWidget(window.editor)
+
+					summedTimes = {}
+					for project in _shared_globals.sortedProjects:
+						for filename in project.summedTimes:
+							if filename in summedTimes:
+								summedTimes[filename] += project.summedTimes[filename]
+							else:
+								summedTimes[filename] = project.summedTimes[filename]
+
+					builder = cStringIO.StringIO()
+
+					for item in sorted(summedTimes.items(), key=lambda tup: tup[1], reverse=True):
+						builder.write("{:f}\t::{}\n".format(item[1], item[0]))
+
+					window.editor.setPlainText(builder.getvalue())
+
+					window.setWindowTitle("Profile Summary")
+					window.resize(1100,600)
+
+					window.show()
+
 				self.readyToClose = True
 				if _shared_globals.autoCloseGui and failcount == 0:
 					self.exiting = True
@@ -2266,30 +2298,14 @@ class MainWindow( QMainWindow ):
 		curtime = time.time( )
 		timeDiff = curtime - _shared_globals.starttime
 		minutes = math.floor( timeDiff / 60 )
-		seconds = round( timeDiff % 60 )
+		seconds = math.floor( timeDiff % 60 )
 
 		self.m_buildSummaryLabel.setText("Build Started {0}... ({1}:{2:02})".format( time.asctime(time.localtime(_shared_globals.starttime)), int(minutes), int(seconds) ))
 
-		if _shared_globals.times and _shared_globals.lastupdate >= 0:
+		with _shared_globals.sgmutex:
+			warningcount = _shared_globals.warningcount
+			errorcount = _shared_globals.errorcount
 
-			avgtime = sum( _shared_globals.times ) / (len( _shared_globals.times ))
-			top = _shared_globals.lastupdate + ((avgtime * (_shared_globals.total_compiles -
-															len(
-																_shared_globals.times ))) / _shared_globals
-												.max_threads)
-
-			diff = max( top - timeDiff, 0 )
-			estmin = max( math.floor( diff / 60 ), 0 )
-			estsec = max( round( diff % 60 ), 0 )
-
-			self.m_timeLeftLabel.setText("Est. Time Left: {0:2}:{1:02}".format( int(estmin), int(estsec) ))
-		else:
-			self.m_timeLeftLabel.setText("Est. Time Left: Unknown")
-
-		_shared_globals.sgmutex.acquire()
-		warningcount = _shared_globals.warningcount
-		errorcount = _shared_globals.errorcount
-		_shared_globals.sgmutex.release()
 		self.m_warningLabel.setText("Warnings: {}".format(warningcount))
 		self.m_errorLabel.setText("Errors: {}".format(errorcount))
 
@@ -2365,7 +2381,7 @@ class MainWindow( QMainWindow ):
 			widget.setText(8, time.asctime(time.localtime(endTime)))
 			timeDiff = endTime - startTime
 			minutes = math.floor( timeDiff / 60 )
-			seconds = round( timeDiff % 60 )
+			seconds = math.floor( timeDiff % 60 )
 			widget.setText(9, "{0:2}:{1:02}".format( int(minutes), int(seconds) ) )
 
 

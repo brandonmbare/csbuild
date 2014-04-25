@@ -364,6 +364,7 @@ class projectSettings( object ):
 		Default projectSettings constructor
 		"""
 		self.name = ""
+		self.priority = -1
 		self.key = ""
 		self.workingDirectory = "./"
 		self.linkDepends = []
@@ -509,6 +510,13 @@ class projectSettings( object ):
 		self.chunkMutexes = {}
 		self.chunkExcludes = set()
 
+		self.fileOverrides = {}
+		self.fileOverrideSettings = {}
+		self.ccOverrideCmds = {}
+		self.cxxOverrideCmds = {}
+		self.ccpcOverrideCmds = {}
+		self.cxxpcOverrideCmds = {}
+
 		#GUI support
 		self.state = _shared_globals.ProjectState.PENDING
 		self.startTime = 0
@@ -530,6 +538,7 @@ class projectSettings( object ):
 		self.warningsByFile = {}
 		self.errorsByFile = {}
 		self.times = {}
+		self.summedTimes = {}
 
 		self.linkOutput = ""
 		self.linkErrors = ""
@@ -577,6 +586,13 @@ class projectSettings( object ):
 
 		if not os.path.exists( self.csbuild_dir ):
 			os.makedirs( self.csbuild_dir )
+
+		for item in self.fileOverrideSettings.items():
+			item[1].activeToolchain = item[1].toolchains[self.activeToolchainName]
+			self.ccOverrideCmds[item[0]] = self.activeToolchain.Compiler().get_base_cc_command( item[1] )
+			self.cxxOverrideCmds[item[0]] = self.activeToolchain.Compiler().get_base_cxx_command( item[1] )
+			self.ccpcOverrideCmds[item[0]] = self.activeToolchain.Compiler().get_base_cc_precompile_command( item[1] )
+			self.cxxpcOverrideCmds[item[0]] = self.activeToolchain.Compiler().get_base_cxx_precompile_command( item[1] )
 
 		self.cccmd = self.activeToolchain.Compiler().get_base_cc_command( self )
 		self.cxxcmd = self.activeToolchain.Compiler().get_base_cxx_command( self )
@@ -673,9 +689,8 @@ class projectSettings( object ):
 
 	def __setattr__( self, name, value ):
 		if name == "state":
-			self.mutex.acquire()
-			self.updated = True
-			self.mutex.release()
+			with self.mutex:
+				self.updated = True
 
 		if hasattr( self, "activeToolchain" ):
 			activeToolchain = object.__getattribute__( self, "activeToolchain" )
@@ -697,6 +712,7 @@ class projectSettings( object ):
 
 		ret.__dict__ = {
 			"name": self.name,
+			"priority" : self.priority,
 			"key": self.key,
 			"workingDirectory": self.workingDirectory,
 			"linkDepends": list( self.linkDepends ),
@@ -764,6 +780,12 @@ class projectSettings( object ):
 			"recompile_all": self.recompile_all,
 			"targets": {},
 			"archFuncs" : {},
+			"fileOverrides" : {},
+			"fileOverrideSettings" : {},
+			"ccOverrideCmds" : dict(self.ccOverrideCmds),
+			"cxxOverrideCmds" : dict(self.cxxOverrideCmds),
+			"ccpcOverrideCmds" : dict(self.ccpcOverrideCmds),
+			"cxxpcOverrideCmds" : dict(self.cxxpcOverrideCmds),
 			"targetName": self.targetName,
 			"final_chunk_set": list( self.final_chunk_set ),
 			"needs_c_precompile": self.needs_c_precompile,
@@ -824,6 +846,7 @@ class projectSettings( object ):
 			"chunkMutexes" : {},
 			"chunkExcludes" : set(self.chunkExcludes),
 			"times" : self.times,
+			"summedTimes" : self.summedTimes,
 		}
 
 		for name in self.targets:
@@ -834,6 +857,13 @@ class projectSettings( object ):
 
 		for srcFile in self.chunkMutexes:
 			ret.chunkMutexes.update( { srcFile : set( self.chunkMutexes[srcFile] ) } )
+
+		for file in self.fileOverrides:
+			ret.fileOverrides.update( { file : list( self.fileOverrides[file] ) } )
+
+		for file in self.fileOverrideSettings:
+			ret.fileOverrideSettings.update( { file : self.fileOverrideSettings[file].copy() } )
+
 		return ret
 
 
@@ -1477,7 +1507,7 @@ class projectSettings( object ):
 
 		totaltime = time.time( ) - starttime
 		totalmin = math.floor( totaltime / 60 )
-		totalsec = round( totaltime % 60 )
+		totalsec = math.floor( totaltime % 60 )
 		log.LOG_BUILD( "Precompile took {0}:{1:02}".format( int( totalmin ), int( totalsec ) ) )
 
 		self.precompile_done = True

@@ -67,7 +67,6 @@ import sys
 import threading
 import time
 import platform
-import hashlib
 import imp
 import re
 import traceback
@@ -910,7 +909,7 @@ def SetActiveToolchain( name ):
 #<editor-fold desc="decorators">
 
 
-def project( name, workingDirectory, linkDepends = None, srcDepends = None ):
+def project( name, workingDirectory, linkDepends = None, srcDepends = None, priority = -1 ):
 	"""
 	Decorator used to declare a project. linkDepends and srcDepends here will be used to determine project build order.
 
@@ -953,6 +952,8 @@ def project( name, workingDirectory, linkDepends = None, srcDepends = None ):
 		newProject.linkDepends = linkDepends
 		newProject.srcDepends = srcDepends
 		newProject.func = projectFunction
+
+		newProject.priority = priority
 
 		_shared_globals.tempprojects.update( { name: newProject } )
 		projectSettings.currentGroup.tempprojects.update( { name: newProject } )
@@ -1012,6 +1013,33 @@ def target( name, override = False ):
 
 
 	_shared_globals.alltargets.add( name )
+	return wrap
+
+
+def fileSettings( files, override = False ):
+	"""
+	Specifies settings that affect a single specific file
+
+	@type files: str or list[str]
+	@param files: The file or files to apply these settings to
+	@type override: bool
+	@param override: If this is true, existing functionality for this target will be discarded for this project.
+	"""
+	def wrap( fileFunction ):
+		fileList = files
+		if not isinstance(fileList, list):
+			fileList = [fileList]
+
+		for file in fileList:
+			file = os.path.normcase(os.path.abspath(file))
+			if override is True or file not in projectSettings.currentProject.fileOverrides:
+				projectSettings.currentProject.fileOverrides.update( { file: [fileFunction] } )
+			else:
+				projectSettings.currentProject.fileOverrides[file].append( fileFunction )
+
+			return fileFunction
+
+
 	return wrap
 
 
@@ -1200,7 +1228,7 @@ def build( ):
 			#if _utils.needs_link(project):
 			#    projects_needing_links.add(project.key)
 
-	starttime = time.time( )
+	_shared_globals.starttime = time.time( )
 
 	def ReconcilePostBuild():
 		LinkedSomething = True
@@ -1215,7 +1243,7 @@ def build( ):
 						otherProj.needs_cpp_precompile ):
 					totaltime = (time.time( ) - otherProj.starttime)
 					minutes = math.floor( totaltime / 60 )
-					seconds = round( totaltime % 60 )
+					seconds = math.floor( totaltime % 60 )
 
 					log.LOG_BUILD(
 						"Compile of {0} ({3}) took {1}:{2:02}".format( otherProj.output_name, int( minutes ),
@@ -1312,10 +1340,10 @@ def build( ):
 						_shared_globals.semaphore.release()
 						break
 					if _shared_globals.times:
-						totaltime = (time.time( ) - starttime)
+						totaltime = (time.time( ) - _shared_globals.starttime)
 						_shared_globals.lastupdate = totaltime
 						minutes = math.floor( totaltime / 60 )
-						seconds = round( totaltime % 60 )
+						seconds = math.floor( totaltime % 60 )
 						avgtime = sum( _shared_globals.times ) / (len( _shared_globals.times ))
 						esttime = totaltime + ((avgtime * (
 							_shared_globals.total_compiles - len(
@@ -1324,16 +1352,16 @@ def build( ):
 							esttime = totaltime
 							_shared_globals.esttime = esttime
 						estmin = math.floor( esttime / 60 )
-						estsec = round( esttime % 60 )
+						estsec = math.floor( esttime % 60 )
 						log.LOG_BUILD(
 							"Compiling {0}{7}... ({1}/{2}) - {3}:{4:02}/{5}:{6:02}".format( os.path.basename( obj ),
 								_shared_globals.current_compile, _shared_globals.total_compiles, int( minutes ),
 								int( seconds ), int( estmin ),
 								int( estsec ), chunkFileStr ) )
 					else:
-						totaltime = (time.time( ) - starttime)
+						totaltime = (time.time( ) - _shared_globals.starttime)
 						minutes = math.floor( totaltime / 60 )
-						seconds = round( totaltime % 60 )
+						seconds = math.floor( totaltime % 60 )
 						log.LOG_BUILD(
 							"Compiling {0}{5}... ({1}/{2}) - {3}:{4:02}".format( os.path.basename( obj ),
 								_shared_globals.current_compile,
@@ -1365,17 +1393,17 @@ def build( ):
 			if not _shared_globals.semaphore.acquire( False ):
 				if _shared_globals.max_threads != 1:
 					if _shared_globals.times:
-						totaltime = (time.time( ) - starttime)
+						totaltime = (time.time( ) - _shared_globals.starttime)
 						_shared_globals.lastupdate = totaltime
 						minutes = math.floor( totaltime / 60 )
-						seconds = round( totaltime % 60 )
+						seconds = math.floor( totaltime % 60 )
 						avgtime = sum( _shared_globals.times ) / (len( _shared_globals.times ))
 						esttime = totaltime + ((avgtime * (_shared_globals.total_compiles - len(
 							_shared_globals.times ))) / _shared_globals.max_threads)
 						if esttime < totaltime:
 							esttime = totaltime
 						estmin = math.floor( esttime / 60 )
-						estsec = round( esttime % 60 )
+						estsec = math.floor( esttime % 60 )
 						_shared_globals.esttime = esttime
 						log.LOG_THREAD(
 							"Waiting on {0} more build thread{1} to finish... ({2}:{3:02}/{4}:{5:02})".format(
@@ -1431,9 +1459,9 @@ def build( ):
 	log.LOG_THREAD("Waiting for linker tasks to finish.")
 	linkThread.join()
 
-	compiletime = time.time( ) - starttime
+	compiletime = time.time( ) - _shared_globals.starttime
 	totalmin = math.floor( compiletime / 60 )
-	totalsec = round( compiletime % 60 )
+	totalsec = math.floor( compiletime % 60 )
 	log.LOG_BUILD( "Compilation took {0}:{1:02}".format( int( totalmin ), int( totalsec ) ) )
 
 	return _shared_globals.build_success
@@ -1599,7 +1627,7 @@ def performLink(project, objs):
 
 	totaltime = time.time( ) - starttime
 	totalmin = math.floor( totaltime / 60 )
-	totalsec = round( totaltime % 60 )
+	totalsec = math.floor( totaltime % 60 )
 	log.LOG_LINKER( "Link time: {0}:{1:02}".format( int( totalmin ), int( totalsec ) ) )
 
 	return LinkStatus.Success
@@ -1819,6 +1847,8 @@ def _setupdefaults( ):
 
 _guiModule = None
 
+sysExit = sys.exit
+
 def Done( code = 0 ):
 	"""
 	Exit the build process early
@@ -1843,7 +1873,7 @@ def Exit( code = 0 ):
 	if platform.system() != "Windows" and not imp.lock_held():
 		imp.acquire_lock()
 
-	sys.exit( code )
+	sysExit( code )
 
 
 ARG_NOT_SET = type( "ArgNotSetType", (), { } )( )
@@ -2210,6 +2240,7 @@ def _run( ):
 	#there's an execfile on this up above, but if we got this far we didn't pass --help or -h, so we need to do this here instead
 	_execfile( mainfile, _shared_globals.makefile_dict, _shared_globals.makefile_dict )
 
+	parser.parse_args(args.remainder)
 
 	def BuildWithTarget( target ):
 		if target is not None:
@@ -2238,6 +2269,17 @@ def _run( ):
 			if newproject.outputArchitecture in newproject.archFuncs:
 				for archFunc in newproject.archFuncs[newproject.outputArchitecture]:
 					archFunc()
+
+			for file in newproject.fileOverrides:
+				projCopy = newproject.copy()
+				projectSettings.currentProject = projCopy
+
+				for func in newproject.fileOverrides[file]:
+					func()
+
+				newproject.fileOverrideSettings[file] = projCopy
+
+			projectSettings.currentProject = newproject
 
 			alteredLinkDepends = []
 			alteredSrcDepends = []
@@ -2346,7 +2388,7 @@ def _run( ):
 
 	totaltime = time.time( ) - _shared_globals.starttime
 	totalmin = math.floor( totaltime / 60 )
-	totalsec = round( totaltime % 60 )
+	totalsec = math.floor( totaltime % 60 )
 	_utils.chunked_build( )
 	_utils.prepare_precompiles( )
 	log.LOG_BUILD( "Task preparation took {0}:{1:02}".format( int( totalmin ), int( totalsec ) ) )
@@ -2398,6 +2440,9 @@ def _run( ):
 	else:
 		Exit( 0 )
 
+#Regular sys.exit can't be called because we HAVE to reacquore the import lock at exit.
+#We stored sys.exit earlier, now we overwrite it to call our wrapper.
+sys.exit = Exit
 
 try:
 	_run( )

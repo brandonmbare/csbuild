@@ -182,7 +182,7 @@ class bar_writer( threading.Thread ):
 
 			if _shared_globals.columns > 0 and top > 0:
 				minutes = math.floor( curtime / 60 )
-				seconds = round( curtime % 60 )
+				seconds = math.floor( curtime % 60 )
 				estmin = 0
 				estsec = 0
 				if _shared_globals.times and _shared_globals.lastupdate >= 0:
@@ -195,7 +195,7 @@ class bar_writer( threading.Thread ):
 					if top < cur:
 						top = cur
 					estmin = math.floor( top / 60 )
-					estsec = round( top % 60 )
+					estsec = math.floor( top % 60 )
 
 				frac = float( cur ) / float( top )
 				num = int( math.floor( frac * (_shared_globals.columns - 16) ) )

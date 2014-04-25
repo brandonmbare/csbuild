@@ -416,10 +416,12 @@ class compiler_msvc( MsvcBase, toolchain.compilerBase ):
 
 
 	def get_base_cxx_precompile_command( self, project ):
+		self.SetupForProject( project )
 		return self.get_base_cxx_command( project )
 
 
 	def get_base_cc_precompile_command( self, project ):
+		self.SetupForProject( project )
 		return self.get_base_cc_command( project )
 
 

@@ -121,22 +121,48 @@ class threaded_build( threading.Thread ):
 				if( (self.project.chunk_precompile and self.project.cheaders) or self.project.precompileAsC )\
 					and not self.forPrecompiledHeader:
 					headerfile = self.project.cheaderfile
-				baseCommand = self.project.cccmd
+
+				if self.forPrecompiledHeader:
+					if self.originalIn in self.project.ccpcOverrideCmds:
+						baseCommand = self.project.ccpcOverrideCmds[self.originalIn]
+					else:
+						baseCommand = self.project.ccpccmd
+				else:
+					if self.originalIn in self.project.ccOverrideCmds:
+						baseCommand = self.project.ccOverrideCmds[self.originalIn]
+					else:
+						baseCommand = self.project.cccmd
 			else:
 				if (self.project.precompile or self.project.chunk_precompile) \
 					and not self.forPrecompiledHeader:
 					headerfile = self.project.cppheaderfile
-				baseCommand = self.project.cxxcmd
+
+				if self.forPrecompiledHeader:
+					if self.originalIn in self.project.cxxpcOverrideCmds:
+						baseCommand = self.project.cxxpcOverrideCmds[self.originalIn]
+					else:
+						baseCommand = self.project.cxxpccmd
+				else:
+					if self.originalIn in self.project.cxxOverrideCmds:
+						baseCommand = self.project.cxxOverrideCmds[self.originalIn]
+					else:
+						baseCommand = self.project.cxxcmd
 
 			indexes = {}
 			reverseIndexes = {}
+
+			if self.originalIn in self.project.fileOverrideSettings:
+				project = self.project.fileOverrideSettings[self.originalIn]
+			else:
+				project = self.project
 
 			if _shared_globals.profile:
 				profileIn = os.path.join( self.project.csbuild_dir, "profileIn")
 				if not os.path.exists(profileIn):
 					os.makedirs(profileIn)
 				self.file = os.path.join( profileIn, "{}.{}".format(hashlib.md5(self.file).hexdigest(), self.file.rsplit(".", 1)[1]) )
-				preprocessCmd = self.project.activeToolchain.Compiler().get_preprocess_command( baseCommand, self.project, os.path.abspath( self.originalIn ))
+
+				preprocessCmd = self.project.activeToolchain.Compiler().get_preprocess_command( baseCommand, project, os.path.abspath( self.originalIn ))
 				if _shared_globals.show_commands:
 					print(preprocessCmd)
 
@@ -172,7 +198,7 @@ class threaded_build( threading.Thread ):
 								highIndex += 1
 								indexes[filename] = highIndex
 								lastFile = highIndex
-								filename = os.path.normcase(filename)
+								filename = os.path.normcase(os.path.abspath(filename))
 								filename = filename.replace("\\\\", "\\")
 								reverseIndexes[highIndex] = filename
 
@@ -197,10 +223,10 @@ class threaded_build( threading.Thread ):
 				inc += headerfile
 			if self.forPrecompiledHeader:
 				cmd = self.project.activeToolchain.Compiler().get_extended_precompile_command( baseCommand,
-					self.project, inc, self.obj, os.path.abspath( self.file ) )
+					project, inc, self.obj, os.path.abspath( self.file ) )
 			else:
 				cmd = self.project.activeToolchain.Compiler().get_extended_command( baseCommand,
-					self.project, inc, self.obj, os.path.abspath( self.file ) )
+					project, inc, self.obj, os.path.abspath( self.file ) )
 
 			if _shared_globals.profile:
 				cmd += self.project.activeToolchain.Compiler().get_extra_post_preprocess_flags()
@@ -229,6 +255,8 @@ class threaded_build( threading.Thread ):
 
 			sanitation_lines = self.project.activeToolchain.Compiler().get_post_preprocess_sanitation_lines()
 			ansi_escape = re.compile(r'\x1b[^m]*m')
+
+			summedTimes = {}
 
 			def GatherData(pipe, buffer):
 				while running:
@@ -270,6 +298,8 @@ class threaded_build( threading.Thread ):
 								if lineNo not in times[file]:
 									times[file][lineNo] = 0
 								times[file][lineNo] += now - lastTimes[file]
+							else:
+								summedTimes[file] = 0
 							lastTimes[file] = now
 							continue
 
@@ -284,65 +314,77 @@ class threaded_build( threading.Thread ):
 								times[file][lineNo] = 0
 							now = timeFunc()
 							times[file][lineNo] += now - lastTimes[file]
+							summedTimes[file] += now - lastTimes[file]
 							lastTimes[file] = now
 							continue
 
 					buffer.str += line
 
-			outputThread = threading.Thread(target=GatherData, args=(fd.stdout, output))
-			errorThread = threading.Thread(target=GatherData, args=(fd.stderr, errors))
+			if _shared_globals.profile:
+				outputThread = threading.Thread(target=GatherData, args=(fd.stdout, output))
+				errorThread = threading.Thread(target=GatherData, args=(fd.stderr, errors))
 
-			outputThread.start()
-			errorThread.start()
+				outputThread.start()
+				errorThread.start()
 
-			fd.wait()
-			running = False
+				fd.wait()
+				running = False
 
-			outputThread.join()
-			errorThread.join()
+				outputThread.join()
+				errorThread.join()
+			else:
+				output.str, errors.str = fd.communicate()
 
 			with self.project.mutex:
 				self.project.times[self.originalIn] = times
+				for file in summedTimes:
+					if file in self.project.summedTimes:
+						self.project.summedTimes[file] += summedTimes[file]
+					else:
+						self.project.summedTimes[file] = summedTimes[file]
 
 			ret = fd.returncode
 			with _shared_globals.printmutex:
 				sys.stdout.write( output.str )
 				sys.stderr.write( errors.str )
 
-			self.project.mutex.acquire( )
-			stripped_errors = re.sub(ansi_escape, '', errors.str)
-			self.project.compileOutput[self.originalIn] = output.str
-			self.project.compileErrors[self.originalIn] = stripped_errors
-			errorlist = self.project.activeToolchain.Compiler().parseOutput(output.str)
-			errorlist += self.project.activeToolchain.Compiler().parseOutput(stripped_errors)
-			errorcount = 0
-			warningcount = 0
-			if errorlist:
-				for error in errorlist:
-					if error.level == _shared_globals.OutputLevel.ERROR:
-						errorcount += 1
-					if error.level == _shared_globals.OutputLevel.WARNING:
-						warningcount += 1
+			with self.project.mutex:
+				stripped_errors = re.sub(ansi_escape, '', errors.str)
+				self.project.compileOutput[self.originalIn] = output.str
+				self.project.compileErrors[self.originalIn] = stripped_errors
+				errorlist = self.project.activeToolchain.Compiler().parseOutput(output.str)
+				errorlist2 = self.project.activeToolchain.Compiler().parseOutput(stripped_errors)
+				if errorlist is None:
+					errorlist = errorlist2
+				elif errorlist2 is not None:
+					errorlist += errorlist2
 
-				self.project.errors += errorcount
-				self.project.warnings += warningcount
-				self.project.errorsByFile[self.originalIn] = errorcount
-				self.project.warningsByFile[self.originalIn] = warningcount
-				self.project.parsedErrors[self.originalIn] = errorlist
+				errorcount = 0
+				warningcount = 0
+				if errorlist:
+					for error in errorlist:
+						if error.level == _shared_globals.OutputLevel.ERROR:
+							errorcount += 1
+						if error.level == _shared_globals.OutputLevel.WARNING:
+							warningcount += 1
 
-				if errorcount > 0:
-					self.project.fileStatus[self.originalIn] = _shared_globals.ProjectState.FAILED
+					self.project.errors += errorcount
+					self.project.warnings += warningcount
+					self.project.errorsByFile[self.originalIn] = errorcount
+					self.project.warningsByFile[self.originalIn] = warningcount
+					self.project.parsedErrors[self.originalIn] = errorlist
+
+					if errorcount > 0:
+						self.project.fileStatus[self.originalIn] = _shared_globals.ProjectState.FAILED
+					else:
+						self.project.fileStatus[self.originalIn] = _shared_globals.ProjectState.FINISHED
 				else:
 					self.project.fileStatus[self.originalIn] = _shared_globals.ProjectState.FINISHED
-			else:
-				self.project.fileStatus[self.originalIn] = _shared_globals.ProjectState.FINISHED
 
-			self.project.mutex.release( )
 
-			_shared_globals.sgmutex.acquire()
-			_shared_globals.warningcount += warningcount
-			_shared_globals.errorcount += errorcount
-			_shared_globals.sgmutex.release()
+			with _shared_globals.sgmutex:
+				_shared_globals.warningcount += warningcount
+				_shared_globals.errorcount += errorcount
 
 			if ret:
 				if str( ret ) == str( self.project.activeToolchain.Compiler().interrupt_exit_code( ) ):
@@ -504,7 +546,7 @@ def sortProjects( projects_to_sort ):
 		already_inserted.remove( project.key )
 
 
-	for project in projects_to_sort.values( ):
+	for project in sorted(projects_to_sort.values( ), key=lambda proj: proj.priority, reverse=True):
 		insert_depends( project )
 
 	return ret

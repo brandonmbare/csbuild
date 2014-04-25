@@ -461,7 +461,7 @@ class linker_gcc( gccBase, toolchain.linkerBase ):
 				outputFile,
 				" ".join( objList ),
 				"-static-libgcc -static-libstdc++ " if project.static_runtime else "",
-				"-Wl,--start-group" if not self.strictOrdering else "",
+				"-Wl,--no-as-needed -Wl,--start-group" if not self.strictOrdering else "",
 				self.get_libraries( project.libraries ),
 				self.get_static_libraries( project.static_libraries ),
 				self.get_shared_libraries( project.shared_libraries ),
