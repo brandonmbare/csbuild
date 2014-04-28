@@ -381,8 +381,8 @@ class projectSettings( object ):
 		self.debug_level = 0
 		self.defines = []
 		self.undefines = []
-		self.cxx = "g++"
-		self.cc = "gcc"
+		self.cxx = ""
+		self.cc = ""
 		self.hasCppFiles = False
 
 		self.obj_dir = "."
