@@ -320,20 +320,17 @@ class threaded_build( threading.Thread ):
 
 					buffer.str += line
 
-			if _shared_globals.profile:
-				outputThread = threading.Thread(target=GatherData, args=(fd.stdout, output))
-				errorThread = threading.Thread(target=GatherData, args=(fd.stderr, errors))
+			outputThread = threading.Thread(target=GatherData, args=(fd.stdout, output))
+			errorThread = threading.Thread(target=GatherData, args=(fd.stderr, errors))
 
-				outputThread.start()
-				errorThread.start()
+			outputThread.start()
+			errorThread.start()
 
-				fd.wait()
-				running = False
+			fd.wait()
+			running = False
 
-				outputThread.join()
-				errorThread.join()
-			else:
-				output.str, errors.str = fd.communicate()
+			outputThread.join()
+			errorThread.join()
 
 			with self.project.mutex:
 				self.project.times[self.originalIn] = times
