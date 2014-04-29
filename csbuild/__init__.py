@@ -1875,7 +1875,7 @@ def Exit( code = 0 ):
 	#if _guiModule:
 	#	_guiModule.stop()
 
-	if platform.system() != "Windows" and not imp.lock_held():
+	if not imp.lock_held():
 		imp.acquire_lock()
 
 	sysExit( code )
@@ -2176,7 +2176,7 @@ def _run( ):
 	# thread objects are defined in so they're completed in full on the main thread before that thread starts.
 	#
 	# After this point, the LOCK IS RELEASED. Importing is NO LONGER THREAD-SAFE. DON'T DO IT.
-	if platform.system() != "Windows" and imp.lock_held():
+	if imp.lock_held():
 		imp.release_lock()
 
 	if args.version:
@@ -2454,6 +2454,6 @@ try:
 	Exit( 0 )
 except Exception as e:
 	_barWriter.stop( )
-	if platform.system() != "Windows" and not imp.lock_held():
+	if not imp.lock_held():
 		imp.acquire_lock()
 	raise

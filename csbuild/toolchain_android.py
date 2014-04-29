@@ -169,7 +169,6 @@ class AndroidLinker(AndroidBase, toolchain_gcc.linker_gcc):
 			if dirname > compilerDir:
 				compilerDir = dirname
 
-		print compilerDir
 		if not compilerDir:
 			log.LOG_ERROR("Architecture {} is not supported by the android toolchain.".format(project.outputArchitecture))
 
