@@ -84,6 +84,7 @@ from csbuild import _utils
 from csbuild import toolchain
 from csbuild import toolchain_msvc
 from csbuild import toolchain_gcc
+from csbuild import toolchain_android
 from csbuild import log
 from csbuild import _shared_globals
 from csbuild import projectSettings
@@ -1589,7 +1590,10 @@ def performLink(project, objs):
 	if _shared_globals.show_commands:
 		print(cmd)
 
-	fd = subprocess.Popen( shlex.split(cmd), stdout = subprocess.PIPE, stderr = subprocess.PIPE, cwd = project.workingDirectory )
+	if platform.system() != "Windows":
+		cmd = shlex.split(cmd)
+
+	fd = subprocess.Popen( cmd, stdout = subprocess.PIPE, stderr = subprocess.PIPE, cwd = project.workingDirectory )
 
 	(output, errors) = fd.communicate( )
 	ret = fd.returncode
@@ -1833,6 +1837,7 @@ def release( ):
 def _setupdefaults( ):
 	RegisterToolchain( "gcc", toolchain_gcc.compiler_gcc, toolchain_gcc.linker_gcc )
 	RegisterToolchain( "msvc", toolchain_msvc.compiler_msvc, toolchain_msvc.linker_msvc )
+	RegisterToolchain( "android", toolchain_android.AndroidCompiler, toolchain_android.AndroidLinker )
 
 	RegisterProjectGenerator( "qtcreator", project_generator_qtcreator.project_generator_qtcreator )
 	RegisterProjectGenerator( "slickedit", project_generator_slickedit.project_generator_slickedit )
