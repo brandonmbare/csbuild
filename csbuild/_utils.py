@@ -209,7 +209,7 @@ class threaded_build( threading.Thread ):
 							data.write("\n")
 							lastLine += 1
 					if platform.system() == "Windows":
-						fd = os.open(self.file, os.O_WRONLY | os.O_CREAT | os.O_NOINHERIT, 0666)
+						fd = os.open(self.file, os.O_WRONLY | os.O_CREAT | os.O_NOINHERIT, oct(438))
 						os.write(fd, data.getvalue())
 						os.fsync(fd)
 						os.close(fd)
