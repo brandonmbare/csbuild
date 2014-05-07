@@ -2187,6 +2187,9 @@ def _run( ):
 	_shared_globals.quiet = args.quiet
 	_shared_globals.show_commands = args.show_commands
 	_shared_globals.rebuild = args.rebuild or args.profile
+	if args.gui and _shared_globals.CleanBuild:
+		log.LOG_INFO("The GUI is currently disabled when performing a clean.");
+		args.gui = False
 	if args.profile and not args.gui:
 		log.LOG_WARN("Profile mode has no effect without --gui. Disabling --profile.")
 		args.profile = False
