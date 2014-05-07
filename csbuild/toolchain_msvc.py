@@ -362,7 +362,8 @@ class compiler_msvc( MsvcBase, toolchain.compilerBase ):
 	def getExtendedPrecompilerArgs( self, base_cmd, force_include_file, output_obj, input_file ):
 		split = input_file.rsplit(".", 1)
 		srcFile = os.path.join("{}.{}".format(split[0], "c" if split[1] == "h" else "cpp"))
-		fd = os.open(srcFile, os.O_WRONLY | os.O_CREAT | os.O_NOINHERIT, oct(438))
+		file_mode = 438 # Octal 0666
+		fd = os.open(srcFile, os.O_WRONLY | os.O_CREAT | os.O_NOINHERIT, file_mode)
 		os.write(fd, "#include \"{}\"\n".format(input_file))
 		os.fsync(fd)
 		os.close(fd)
