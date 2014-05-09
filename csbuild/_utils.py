@@ -29,8 +29,8 @@ import sys
 import datetime
 import glob
 import traceback
-import cStringIO
 import platform
+import io
 
 import csbuild
 from csbuild import log
@@ -168,7 +168,7 @@ class threaded_build( threading.Thread ):
 
 				fd = subprocess.Popen(shlex.split(preprocessCmd), stderr=subprocess.PIPE, stdout=subprocess.PIPE)
 
-				data = cStringIO.StringIO()
+				data = io.StringIO.StringIO()
 				lastLine = 0
 				lastFile = 0
 
@@ -267,6 +267,9 @@ class threaded_build( threading.Thread ):
 						continue
 					if not line:
 						break
+
+					if sys.version_info >= (3, 0):
+						line = line.decode("utf-8");
 
 					stripped = line.strip()
 					baseFile = os.path.basename(self.file)
@@ -484,7 +487,10 @@ def check_version( ):
 	except:
 		return
 	else:
-		RMatch = re.search( "LATEST:\s*(\S*)$", out )
+		pattern = "LATEST:\s*(\S*)$"
+		if sys.version_info >= (3, 0):
+			pattern = pattern.encode("utf-8")
+		RMatch = re.search( pattern, out )
 		if not RMatch:
 			return
 		latest_version = RMatch.group( 1 )
