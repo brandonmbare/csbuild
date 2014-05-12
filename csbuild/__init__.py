@@ -1611,7 +1611,12 @@ def performLink(project, objs):
 		stripped_errors = re.sub(ansi_escape, '', errors)
 		project.linkOutput = output
 		project.linkErrors = stripped_errors
-		errorlist = project.activeToolchain.Linker().parseOutput(stripped_errors)
+		errorlist = project.activeToolchain.Compiler().parseOutput(output)
+		errorlist2 = project.activeToolchain.Compiler().parseOutput(stripped_errors)
+		if errorlist is None:
+			errorlist = errorlist2
+		elif errorlist2 is not None:
+			errorlist += errorlist2
 		errorcount = 0
 		warningcount = 0
 		if errorlist:
