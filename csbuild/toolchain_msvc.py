@@ -155,11 +155,14 @@ class MsvcBase( object ):
 					line = line.decode("utf-8")
 
 				key_value_list = line.split( "=", 1 )
-				os.environ[key_value_list[0]] = key_value_list[1]
 
-				# Check if the line we're on has the Windows SDK directory listed.
-				if line.startswith( "WindowsSdkDir=" ):
-					WINDOWS_SDK_DIR = key_value_list[1]
+				# Only accept lines that contain key/value pairs.
+				if len( key_value_list ) == 2:
+					os.environ[key_value_list[0]] = key_value_list[1]
+
+					# Check if the line we're on has the Windows SDK directory listed.
+					if key_value_list[0] == "WindowsSdkDir":
+						WINDOWS_SDK_DIR = key_value_list[1]
 
 			HAS_SET_VC_VARS = True
 
@@ -359,8 +362,8 @@ class compiler_msvc( MsvcBase, toolchain.compilerBase ):
 	def getExtendedPrecompilerArgs( self, base_cmd, force_include_file, output_obj, input_file ):
 		split = input_file.rsplit(".", 1)
 		srcFile = os.path.join("{}.{}".format(split[0], "c" if split[1] == "h" else "cpp"))
-
-		fd = os.open(srcFile, os.O_WRONLY | os.O_CREAT | os.O_NOINHERIT, 0666)
+		file_mode = 438 # Octal 0666
+		fd = os.open(srcFile, os.O_WRONLY | os.O_CREAT | os.O_NOINHERIT, file_mode)
 		os.write(fd, "#include \"{}\"\n".format(input_file))
 		os.fsync(fd)
 		os.close(fd)

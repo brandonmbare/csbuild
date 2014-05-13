@@ -1690,6 +1690,27 @@ def clean( silent = False ):
 
 		if not silent:
 			log.LOG_BUILD( "Cleaning {0} ({1})...".format( project.output_name, project.targetName ) )
+
+		# Delete any chunks in the current project.
+		for chunk in project.chunks:
+			if not project.unity:
+				obj = os.path.join(project.obj_dir, "{}_{}{}".format(
+					_utils.get_chunk_name( project.output_name, chunk ),
+					project.targetName,
+					project.activeToolchain.Compiler().get_obj_ext()
+				))
+			else:
+				obj = os.path.join(project.obj_dir, "{}_unity_{}{}".format(
+					project.output_name,
+					project.targetName,
+					project.activeToolchain.Compiler().get_obj_ext()
+				))
+			if os.path.exists( obj ):
+				if not silent:
+					log.LOG_INFO( "Deleting {0}".format( obj ) )
+				os.remove( obj )
+
+		# Individual source files may not be in the chunks list, so we're gonna play it safe and delete any single source file objects that may exist.
 		for source in project.sources:
 			obj = os.path.join( project.obj_dir, "{}_{}{}".format(  os.path.basename( source ).split( '.' )[0],
 				project.targetName, project.activeToolchain.Compiler().get_obj_ext() ) )
@@ -1697,6 +1718,8 @@ def clean( silent = False ):
 				if not silent:
 					log.LOG_INFO( "Deleting {0}".format( obj ) )
 				os.remove( obj )
+
+		# Delete the project's C++ precompiled header.
 		headerfile = os.path.join(project.csbuild_dir, "{}_cpp_precompiled_headers_{}.hpp".format(
 			project.output_name.split( '.' )[0],
 			project.targetName ) )
@@ -1706,6 +1729,7 @@ def clean( silent = False ):
 				log.LOG_INFO( "Deleting {0}".format( obj ) )
 			os.remove( obj )
 
+		# Delete the project's C precompiled header.
 		headerfile = os.path.join(project.csbuild_dir, "{}_c_precompiled_headers_{}.h".format(
 			project.output_name.split( '.' )[0],
 			project.targetName ))
@@ -1715,12 +1739,12 @@ def clean( silent = False ):
 				log.LOG_INFO( "Deleting {0}".format( obj ) )
 			os.remove( obj )
 
+		# Delete the project's output directory.
 		outpath = os.path.join( project.output_dir, project.output_name )
 		if os.path.exists( outpath ):
-			log.LOG_INFO( "Deleting {}".format( outpath ) )
-
-		if not silent:
-			log.LOG_BUILD( "Done." )
+			if not silent:
+				log.LOG_INFO( "Deleting {}".format( outpath ) )
+			os.remove( outpath )
 
 
 def install( ):
@@ -2197,6 +2221,9 @@ def _run( ):
 	_shared_globals.quiet = args.quiet
 	_shared_globals.show_commands = args.show_commands
 	_shared_globals.rebuild = args.rebuild or args.profile
+	if args.gui and _shared_globals.CleanBuild:
+		log.LOG_INFO("The GUI is currently disabled when performing a clean.");
+		args.gui = False
 	if args.profile and not args.gui:
 		log.LOG_WARN("Profile mode has no effect without --gui. Disabling --profile.")
 		args.profile = False

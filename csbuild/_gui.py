@@ -3,7 +3,7 @@ import functools
 import hashlib
 import re
 import stat
-import cStringIO
+import io
 import sys
 import csbuild
 from csbuild import log
@@ -540,7 +540,7 @@ class CodeProfileDisplay(CodeEditor):
 
 				with open(absPath, "r") as f:
 					data = f.read().split("\n")
-				io = cStringIO.StringIO()
+				io = io.StringIO.StringIO()
 
 				absPath = os.path.normcase(absPath)
 				baseFile = self.parentEditor.sourceFile
@@ -1273,7 +1273,7 @@ class MainWindow( QMainWindow ):
 
 		with open(filename, "r") as f:
 			data = f.read().split("\n")
-		io = cStringIO.StringIO()
+		io = io.StringIO.StringIO()
 
 		lineNo = 1
 		for line in data:
@@ -2204,7 +2204,7 @@ class MainWindow( QMainWindow ):
 							else:
 								summedTimes[filename] = project.summedTimes[filename]
 
-					builder = cStringIO.StringIO()
+					builder = io.StringIO.StringIO()
 
 					for item in sorted(summedTimes.items(), key=lambda tup: tup[1], reverse=True):
 						builder.write("{:f}\t::{}\n".format(item[1], item[0]))
