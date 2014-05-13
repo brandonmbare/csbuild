@@ -552,9 +552,9 @@ class projectSettings( object ):
 		self.activeToolchain = self.toolchains[self.activeToolchainName]
 		self.activeToolchain.SetActiveTool("compiler")
 
-		self.obj_dir = os.path.abspath( self.obj_dir )
+		self.obj_dir = os.path.abspath( self.obj_dir ).format(project=self)
 		self.activeToolchain.SetActiveTool("linker")
-		self.output_dir = os.path.abspath( self.output_dir )
+		self.output_dir = os.path.abspath( self.output_dir ).format(project=self)
 		self.activeToolchain.SetActiveTool("compiler")
 		self.csbuild_dir = os.path.join( self.obj_dir, ".csbuild" )
 
