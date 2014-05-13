@@ -93,9 +93,9 @@ class project_generator_qtcreator( project_generator.project_generator ):
 				for header in project.allheaders:
 					f.write( "\t{} \\\n".format( os.path.relpath( header, projectpath ) ) )
 
-			f.write( "\nDESTDIR = {}\n\n".format( projectpath ) )
+			f.write( "\nDESTDIR = {}\n\n".format( project.output_dir ) )
 
-			f.write( "TARGET = {}\n\n".format( launcher ) )
+			f.write( "TARGET = {}\n\n".format( project.output_name ) )
 
 			if project.type == csbuild.ProjectType.Application:
 				f.write( "TEMPLATE = app\n\n" )
@@ -121,43 +121,43 @@ class project_generator_qtcreator( project_generator.project_generator ):
 
 			try:
 				if project.cstandard:
-					f.write( "\nQMAKE_CXXFLAGS += -std={}\n".format( project.cstandard ) )
+					f.write( "\nQMAKE_CFLAGS += -std={}\n".format( project.cstandard ) )
 			except:
 				pass
 
-		with open( launcherpath, "w" ) as f:
-			f.write("#!/bin/bash\n\n")
-			written = False
-			for project in projectDict.values():
-				if written:
-					f.write('el')
-				f.write('if [ "$CSB_BUILD_TARGET" = "{}" ]; then\n'.format(project.targetName))
-				executable = os.path.join(project.output_dir, project.output_name)
-				f.write('\techo "Executing {} $@ ({} target)..."\n'.format(project.targetName, executable))
-				f.write('\tcd {}\n'.format(project.output_dir))
-				f.write('\t./{} $@\n'.format(project.output_name))
-				f.write('\texit $?\n')
-				written = True
+		#with open( launcherpath, "w" ) as f:
+		#	f.write("#!/bin/bash\n\n")
+		#	written = False
+		#	for project in projectDict.values():
+		#		if written:
+		#			f.write('el')
+		#		f.write('if [ "$CSB_BUILD_TARGET" = "{}" ]; then\n'.format(project.targetName))
+		#		executable = os.path.join(project.output_dir, project.output_name)
+		#		f.write('\techo "Executing {} $@ ({} target)..."\n'.format(project.targetName, executable))
+		#		f.write('\tcd {}\n'.format(project.output_dir))
+		#		f.write('\t./{} $@\n'.format(project.output_name))
+		#		f.write('\texit $?\n')
+		#		written = True
 
-			f.write('elif [ "$CSB_BUILD_TARGET"=="ALL TARGETS" ]; then\n')
-			f.write('\techo "No target selected. Please select a target to execute."\n')
-			f.write('\texit 1\n')
-			f.write('else\n')
-			f.write('\techo "No executable defined for project {} / target $CSB_BUILD_TARGET."\n'.format(project.name))
-			f.write('\texit 1\n')
-			f.write('fi')
+		#	f.write('elif [ "$CSB_BUILD_TARGET"=="ALL TARGETS" ]; then\n')
+		#	f.write('\techo "No target selected. Please select a target to execute."\n')
+		#	f.write('\texit 1\n')
+		#	f.write('else\n')
+		#	f.write('\techo "No executable defined for project {} / target $CSB_BUILD_TARGET."\n'.format(project.name))
+		#	f.write('\texit 1\n')
+		#	f.write('fi')
 
-		os.chmod(
-			launcherpath,
-			stat.S_IXUSR |
-			stat.S_IRUSR |
-			stat.S_IWUSR |
-			stat.S_IXGRP |
-			stat.S_IRGRP |
-			stat.S_IWGRP |
-			stat.S_IROTH |
-			stat.S_IXOTH
-		)
+		#os.chmod(
+		#	launcherpath,
+		#	stat.S_IXUSR |
+		#	stat.S_IRUSR |
+		#	stat.S_IWUSR |
+		#	stat.S_IXGRP |
+		#	stat.S_IRGRP |
+		#	stat.S_IWGRP |
+		#	stat.S_IROTH |
+		#	stat.S_IXOTH
+		#)
 
 		with open( os.path.join( projectpath, "Makefile" ), "w" ) as f:
 			projstr = " --project {}".format( project.name )

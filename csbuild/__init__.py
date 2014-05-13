@@ -1440,13 +1440,6 @@ def build( ):
 		for p in pending_links:
 			p.state = _shared_globals.ProjectState.ABORTED
 		_shared_globals.build_success = False
-
-	if not projects_in_flight and not pending_links:
-		for project in pending_builds:
-			if project.postMakeStep:
-				log.LOG_BUILD( "Running post-make step for {} ({})".format( project.output_name, project.targetName ) )
-				project.postMakeStep(project)
-
 	for proj in _shared_globals.sortedProjects:
 		proj.save_md5s( proj.allsources, proj.allheaders )
 
@@ -1459,6 +1452,12 @@ def build( ):
 		linkCond.notify()
 	log.LOG_THREAD("Waiting for linker tasks to finish.")
 	linkThread.join()
+
+	if not projects_in_flight and not pending_links:
+		for project in _shared_globals.sortedProjects:
+			if project.postMakeStep:
+				log.LOG_BUILD( "Running post-make step for {} ({})".format( project.output_name, project.targetName ) )
+				project.postMakeStep(project)
 
 	compiletime = time.time( ) - _shared_globals.starttime
 	totalmin = math.floor( compiletime / 60 )
