@@ -258,7 +258,7 @@ class project_generator_qtcreator( project_generator.project_generator ):
 
 		stepcount = 0
 		for targetName in list(_shared_globals.alltargets) + ["ALL_TARGETS"]:
-			for architecture in list(_shared_globals.allarchitectures) + "ALL_ARCHITECTURES":
+			for architecture in list(_shared_globals.allarchitectures) + ["ALL_ARCHITECTURES"]:
 				target = "{}-{}".format(targetName, architecture)
 
 				vm2 = add( vm, "valuemap", type = "QVariantMap",

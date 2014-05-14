@@ -2276,6 +2276,7 @@ def _run( ):
 
 	if args.generate_solution is not None:
 		args.all_targets = True
+		args.all_architectures = True
 
 	if args.all_targets:
 		_shared_globals.target_list = list(_shared_globals.alltargets)
