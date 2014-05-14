@@ -243,6 +243,7 @@ disable_chunks = False
 project_generators = { }
 
 alltargets = set( )
+allarchitectures = set( )
 alltoolchains = { }
 allgenerators = { }
 

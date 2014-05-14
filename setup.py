@@ -7,7 +7,7 @@ csbuild_version = "Dev-{:%Y.%m.%d-%H%M%S}".format(datetime.datetime.utcnow())
 with open("csbuild/version", "w") as f:
       f.write(csbuild_version)
       f.write("\n")
-	  
+
 setup(name='csbuild',
       version=csbuild_version,
       #py_modules=['csbuild'],

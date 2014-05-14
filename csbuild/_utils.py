@@ -29,8 +29,8 @@ import sys
 import datetime
 import glob
 import traceback
-import cStringIO
 import platform
+import io
 
 import csbuild
 from csbuild import log
@@ -166,9 +166,11 @@ class threaded_build( threading.Thread ):
 				if _shared_globals.show_commands:
 					print(preprocessCmd)
 
-				fd = subprocess.Popen(shlex.split(preprocessCmd), stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+				if platform.system() != "Windows":
+					preprocessCmd = shlex.split(preprocessCmd)
+				fd = subprocess.Popen(preprocessCmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
 
-				data = cStringIO.StringIO()
+				data = io.StringIO.StringIO()
 				lastLine = 0
 				lastFile = 0
 
@@ -209,7 +211,8 @@ class threaded_build( threading.Thread ):
 							data.write("\n")
 							lastLine += 1
 					if platform.system() == "Windows":
-						fd = os.open(self.file, os.O_WRONLY | os.O_CREAT | os.O_NOINHERIT, 0666)
+						file_mode = 438 # Octal 0666
+						fd = os.open(self.file, os.O_WRONLY | os.O_CREAT | os.O_NOINHERIT, file_mode)
 						os.write(fd, data.getvalue())
 						os.fsync(fd)
 						os.close(fd)
@@ -242,7 +245,10 @@ class threaded_build( threading.Thread ):
 
 			errors = StringRef()
 			output = StringRef()
-			fd = subprocess.Popen( shlex.split(cmd), stdout = subprocess.PIPE, stderr = subprocess.PIPE, cwd = self.project.workingDirectory )
+			if platform.system() != "Windows":
+				cmd = shlex.split(cmd)
+
+			fd = subprocess.Popen( cmd, stdout = subprocess.PIPE, stderr = subprocess.PIPE, cwd = self.project.workingDirectory )
 			running = True
 
 			times = {}
@@ -266,6 +272,9 @@ class threaded_build( threading.Thread ):
 						continue
 					if not line:
 						break
+
+					if sys.version_info >= (3, 0):
+						line = line.decode("utf-8");
 
 					stripped = line.strip()
 					baseFile = os.path.basename(self.file)
@@ -483,7 +492,10 @@ def check_version( ):
 	except:
 		return
 	else:
-		RMatch = re.search( "LATEST:\s*(\S*)$", out )
+		pattern = "LATEST:\s*(\S*)$"
+		if sys.version_info >= (3, 0):
+			pattern = pattern.encode("utf-8")
+		RMatch = re.search( pattern, out )
 		if not RMatch:
 			return
 		latest_version = RMatch.group( 1 )

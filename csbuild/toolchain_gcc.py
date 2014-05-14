@@ -39,6 +39,9 @@ class gccBase( object ):
 	def copyTo(self, other):
 		other.isClang = self.isClang
 
+	def GetValidArchitectures(self):
+		return ['x86', 'x64']
+
 	def parseClangOutput(self, outputStr):
 		command = re.compile("^clang(\\+\\+)?: +(fatal +)?(warning|error|note): (.*)$")
 		inLine = re.compile("^In (.*) included from (.*):(\\d+):$")
@@ -263,7 +266,7 @@ class compiler_gcc( gccBase, toolchain.compilerBase ):
 			log.LOG_ERROR("Architecture {} is not natively supported by GCC toolchain. Cross-compiling must be implemented by the makefile.")
 			archArg = ""
 
-		return "{} {}{} -Winvalid-pch -c {}-g{} -O{} {}{}{} {}".format(
+		return "\"{}\" {}{} -Winvalid-pch -c {}-g{} -O{} {}{}{} {}".format(
 			compiler,
 			archArg,
 			exitcodes,
@@ -312,7 +315,7 @@ class compiler_gcc( gccBase, toolchain.compilerBase ):
 
 
 	def get_preprocess_command(self, baseCmd, project, inFile ):
-		return "{} -E {} \"{}\"".format(baseCmd, self.get_include_dirs( project.include_dirs ), inFile)
+		return "\"{}\" -E {} \"{}\"".format(baseCmd, self.get_include_dirs( project.include_dirs ), inFile)
 
 
 	def pragma_message(self, message):
@@ -373,6 +376,8 @@ class linker_gcc( gccBase, toolchain.linkerBase ):
 		toolchain.linkerBase.__init__( self )
 
 		self.strictOrdering = False
+		self._ld = "ld"
+		self._ar = "ar"
 
 
 	def copy(self):
@@ -439,7 +444,7 @@ class linker_gcc( gccBase, toolchain.linkerBase ):
 	def get_link_command( self, project, outputFile, objList ):
 		self.SetupForProject( project )
 		if project.type == csbuild.ProjectType.StaticLibrary:
-			return "ar rcs {} {}".format( outputFile, " ".join( objList ) )
+			return "\"{}\" rcs {} {}".format( self._ar, outputFile, " ".join( objList ) )
 		else:
 			if project.hasCppFiles:
 				cmd = project.cxx
@@ -454,7 +459,7 @@ class linker_gcc( gccBase, toolchain.linkerBase ):
 				log.LOG_ERROR("Architecture {} is not natively supported by GCC toolchain. Cross-compiling must be implemented by the makefile.")
 				archArg = ""
 
-			return "{} {}{}-o{} {} {} {} {}{}{} {} {}-g{} -O{} {} {}".format(
+			return "\"{}\" {}{}-o{} {} {} {} {}{}{} {} {}-g{} -O{} {} {}".format(
 				cmd,
 				archArg,
 				"-pg " if project.profile else "",
@@ -480,11 +485,12 @@ class linker_gcc( gccBase, toolchain.linkerBase ):
 		self.SetupForProject( project )
 		try:
 			if _shared_globals.show_commands:
-				print("ld -o /dev/null --verbose {} {} -l{}".format(
+				print("{} -o /dev/null --verbose {} {} -l{}".format(
+					self._ld,
 					self.get_library_dirs( library_dirs, False ),
 					"-static" if force_static else "-shared" if force_shared else "",
 					library ))
-			cmd = ["ld", "-o", "/dev/null", "--verbose",
+			cmd = [self._ld, "-o", "/dev/null", "--verbose",
 				   "-static" if force_static else "-shared" if force_shared else "", "-l{}".format( library )]
 			cmd += shlex.split( self.get_library_dirs( library_dirs, False ) )
 			out = subprocess.check_output( cmd, stderr = subprocess.STDOUT )

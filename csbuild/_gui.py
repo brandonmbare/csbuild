@@ -3,7 +3,7 @@ import functools
 import hashlib
 import re
 import stat
-import cStringIO
+import io
 import sys
 import csbuild
 from csbuild import log
@@ -540,7 +540,7 @@ class CodeProfileDisplay(CodeEditor):
 
 				with open(absPath, "r") as f:
 					data = f.read().split("\n")
-				io = cStringIO.StringIO()
+				io = io.StringIO.StringIO()
 
 				absPath = os.path.normcase(absPath)
 				baseFile = self.parentEditor.sourceFile
@@ -854,7 +854,7 @@ class EditorWindow( QMainWindow ):
 	def __init__(self, sourceFile, line, column, EditorType, parent, project = None, directory = None, baseFile = None, data = None, filemap = None, *args, **kwargs):
 		QMainWindow.__init__(self, parent, *args, **kwargs)
 
-		self.resize(1100, 600)
+		self.resize(1200, 600)
 		self.project = project
 
 		self.centralWidget = QtGui.QWidget(self)
@@ -995,7 +995,7 @@ class MainWindow( QMainWindow ):
 		
 		self.setObjectName("MainWindow")
 		
-		self.resize(1100, 600)
+		self.resize(1200, 600)
 		
 		self.centralWidget = QtGui.QWidget(self)
 		self.centralWidget.setObjectName("centralWidget")
@@ -1066,7 +1066,7 @@ class MainWindow( QMainWindow ):
 
 		verticalLayout = QtGui.QVBoxLayout(self.buildWidget)
 		self.m_buildTree = QtGui.QTreeWidget(self.buildWidget)
-		self.m_buildTree.setColumnCount(10)
+		self.m_buildTree.setColumnCount(11)
 		self.m_buildTree.setUniformRowHeights(True)
 		
 		self.m_treeHeader = TreeWidgetItem()
@@ -1273,7 +1273,7 @@ class MainWindow( QMainWindow ):
 
 		with open(filename, "r") as f:
 			data = f.read().split("\n")
-		io = cStringIO.StringIO()
+		io = io.StringIO.StringIO()
 
 		lineNo = 1
 		for line in data:
@@ -1323,7 +1323,7 @@ class MainWindow( QMainWindow ):
 			return
 
 		if toggled:
-			self.m_splitter.setSizes( [ 1100, max( self.width() - 1100, 600 ) ] )
+			self.m_splitter.setSizes( [ 1200, max( self.width() - 1200, 600 ) ] )
 			self.m_errorTree.setColumnWidth( 0, 50 )
 			self.m_errorTree.setColumnWidth( 1, max(250, self.m_errorTree.width() - 350) )
 			self.m_errorTree.setColumnWidth( 2, 200 )
@@ -1370,7 +1370,7 @@ class MainWindow( QMainWindow ):
 		QMainWindow.resizeEvent(self, event)
 		textBoxSize = self.m_splitter.sizes()[1]
 		if textBoxSize != 0:
-			self.m_splitter.setSizes( [ 1100, max( self.width() - 1100, 600 ) ] )
+			self.m_splitter.setSizes( [ 1200, max( self.width() - 1200, 600 ) ] )
 			self.m_errorTree.setColumnWidth( 0, 50 )
 			self.m_errorTree.setColumnWidth( 1, max(250, self.m_errorTree.width() - 350) )
 			self.m_errorTree.setColumnWidth( 2, 200 )
@@ -1803,14 +1803,14 @@ class MainWindow( QMainWindow ):
 				brush = QtGui.QBrush( QtCore.Qt.darkYellow )
 				font = QtGui.QFont()
 				font.setBold(True)
-				widget.setForeground( 5, brush )
-				widget.setFont( 5, font )
+				widget.setForeground( 6, brush )
+				widget.setFont( 6, font )
 			if errors > 0:
 				brush = QtGui.QBrush( QtCore.Qt.red )
 				font = QtGui.QFont()
 				font.setBold(True)
-				widget.setForeground( 6, brush )
-				widget.setFont( 6, font )
+				widget.setForeground( 7, brush )
+				widget.setFont( 7, font )
 
 			if ( warnings > 0 or errors > 0 ) and not SharedLocals.foundAnError:
 				self.m_buildTree.setCurrentItem(widget)
@@ -1841,9 +1841,9 @@ class MainWindow( QMainWindow ):
 				progressBar.setFormat( "%p%" )
 
 			if state >= _shared_globals.ProjectState.BUILDING:
-				widget.setText(5, str(warnings))
-				widget.setText(6, str(errors))
-				widget.setText(7, time.asctime(time.localtime(startTime)))
+				widget.setText(6, str(warnings))
+				widget.setText(7, str(errors))
+				widget.setText(8, time.asctime(time.localtime(startTime)))
 
 			if state == _shared_globals.ProjectState.BUILDING:
 				self.animatingBars[progressBar] = ( widget, state, startTime, endTime, percent, forFile, warnings, errors )
@@ -1966,11 +1966,11 @@ class MainWindow( QMainWindow ):
 					""".format( "ADFFD0" if forFile else "00FF80" )
 				)
 
-				widget.setText(8, time.asctime(time.localtime(endTime)))
+				widget.setText(9, time.asctime(time.localtime(endTime)))
 				timeDiff = endTime - startTime
 				minutes = math.floor( timeDiff / 60 )
 				seconds = math.floor( timeDiff % 60 )
-				widget.setText(9, "{0:2}:{1:02}".format( int(minutes), int(seconds) ) )
+				widget.setText(10, "{0:2}:{1:02}".format( int(minutes), int(seconds) ) )
 
 			elif state == _shared_globals.ProjectState.FAILED or state == _shared_globals.ProjectState.LINK_FAILED:
 				if progressBar in self.animatingBars:
@@ -2000,11 +2000,11 @@ class MainWindow( QMainWindow ):
 					widget.setText(2, "Link Failed!")
 					progressBar.setFormat("LINK FAILED!")
 
-				widget.setText(8, time.asctime(time.localtime(endTime)))
+				widget.setText(9, time.asctime(time.localtime(endTime)))
 				timeDiff = endTime - startTime
 				minutes = math.floor( timeDiff / 60 )
 				seconds = math.floor( timeDiff % 60 )
-				widget.setText(9, "{0:2}:{1:02}".format( int(minutes), int(seconds) ) )
+				widget.setText(10, "{0:2}:{1:02}".format( int(minutes), int(seconds) ) )
 
 			elif state == _shared_globals.ProjectState.UP_TO_DATE:
 				self.SetProgressBarUpToDate( progressBar, widget, endTime, startTime, forFile )
@@ -2204,7 +2204,7 @@ class MainWindow( QMainWindow ):
 							else:
 								summedTimes[filename] = project.summedTimes[filename]
 
-					builder = cStringIO.StringIO()
+					builder = io.StringIO.StringIO()
 
 					for item in sorted(summedTimes.items(), key=lambda tup: tup[1], reverse=True):
 						builder.write("{:f}\t::{}\n".format(item[1], item[0]))
@@ -2212,7 +2212,7 @@ class MainWindow( QMainWindow ):
 					window.editor.setPlainText(builder.getvalue())
 
 					window.setWindowTitle("Profile Summary")
-					window.resize(1100,600)
+					window.resize(1200,600)
 
 					window.show()
 
@@ -2238,26 +2238,28 @@ class MainWindow( QMainWindow ):
 		self.m_treeHeader.setText(2, "Status")
 		self.m_treeHeader.setText(3, "Name")
 		self.m_treeHeader.setText(4, "Target")
-		self.m_treeHeader.setText(5, "W")
-		self.m_treeHeader.setText(6, "E")
-		self.m_treeHeader.setText(7, "Build Started")
-		self.m_treeHeader.setText(8, "Build Finished")
-		self.m_treeHeader.setText(9, "Time")
+		self.m_treeHeader.setText(5, "Arch")
+		self.m_treeHeader.setText(6, "W")
+		self.m_treeHeader.setText(7, "E")
+		self.m_treeHeader.setText(8, "Build Started")
+		self.m_treeHeader.setText(9, "Build Finished")
+		self.m_treeHeader.setText(10, "Time")
 		self.m_treeHeader.setColumnNumeric(0)
 		self.m_treeHeader.setColumnNumeric(1)
-		self.m_treeHeader.setColumnNumeric(5)
 		self.m_treeHeader.setColumnNumeric(6)
+		self.m_treeHeader.setColumnNumeric(7)
 
 		self.m_buildTree.setColumnWidth( 0, 50 )
 		self.m_buildTree.setColumnWidth( 1, 250 )
 		self.m_buildTree.setColumnWidth( 2, 75 )
 		self.m_buildTree.setColumnWidth( 3, 125 )
 		self.m_buildTree.setColumnWidth( 4, 75 )
-		self.m_buildTree.setColumnWidth( 5, 25 )
+		self.m_buildTree.setColumnWidth( 5, 75 )
 		self.m_buildTree.setColumnWidth( 6, 25 )
-		self.m_buildTree.setColumnWidth( 7, 175 )
+		self.m_buildTree.setColumnWidth( 7, 25 )
 		self.m_buildTree.setColumnWidth( 8, 175 )
-		self.m_buildTree.setColumnWidth( 9, 50 )
+		self.m_buildTree.setColumnWidth( 9, 175 )
+		self.m_buildTree.setColumnWidth( 10, 50 )
 
 		self.m_timelineHeader.setText(0, "Name")
 		self.timelineWidget.setColumnWidth(0,250)
@@ -2378,11 +2380,11 @@ class MainWindow( QMainWindow ):
 		progressBar.setFormat("Up-to-date!")
 
 		if endTime != 0 and startTime != 0:
-			widget.setText(8, time.asctime(time.localtime(endTime)))
+			widget.setText(9, time.asctime(time.localtime(endTime)))
 			timeDiff = endTime - startTime
 			minutes = math.floor( timeDiff / 60 )
 			seconds = math.floor( timeDiff % 60 )
-			widget.setText(9, "{0:2}:{1:02}".format( int(minutes), int(seconds) ) )
+			widget.setText(10, "{0:2}:{1:02}".format( int(minutes), int(seconds) ) )
 
 
 
@@ -2421,12 +2423,14 @@ class GuiThread( threading.Thread ):
 			widgetItem.setToolTip(3, project.name)
 			widgetItem.setText(4, project.targetName)
 			widgetItem.setToolTip(4, project.targetName)
-			widgetItem.setText(5, "0")
+			widgetItem.setText(5, project.outputArchitecture)
+			widgetItem.setToolTip(5, project.outputArchitecture)
 			widgetItem.setText(6, "0")
+			widgetItem.setText(7, "0")
 
 			widgetItem2 = TreeWidgetWithBarGraph(window.timelineWidget, window.timelineWidget, False)
 			window.timelineWidget.addTopLevelItem(widgetItem2)
-			widgetItem2.setText(0, "{} ({})".format(project.name, project.targetName))
+			widgetItem2.setText(0, "{} ({} {})".format(project.name, project.targetName, project.outputArchitecture))
 
 			window.projectToItem[project] = widgetItem
 			window.itemToProject[str(row)] = project
@@ -2471,8 +2475,10 @@ class GuiThread( threading.Thread ):
 				childItem.setToolTip(3, project.cppheaderfile)
 				childItem.setText(4, project.targetName)
 				childItem.setToolTip(4, project.targetName)
-				childItem.setText(5, "0")
+				childItem.setText(5, project.outputArchitecture)
+				childItem.setToolTip(5, project.outputArchitecture)
 				childItem.setText(6, "0")
+				childItem.setText(7, "0")
 
 				childItem.setFont(0, font)
 				childItem.setFont(1, font)
@@ -2484,6 +2490,7 @@ class GuiThread( threading.Thread ):
 				childItem.setFont(7, font)
 				childItem.setFont(8, font)
 				childItem.setFont(9, font)
+				childItem.setFont(10, font)
 
 				AddProgressBar( childItem )
 
@@ -2518,8 +2525,10 @@ class GuiThread( threading.Thread ):
 				childItem.setToolTip(3, project.cheaderfile)
 				childItem.setText(4, project.targetName)
 				childItem.setToolTip(4, project.targetName)
-				childItem.setText(5, "0")
+				childItem.setText(5, project.outputArchitecture)
+				childItem.setToolTip(5, project.outputArchitecture)
 				childItem.setText(6, "0")
+				childItem.setText(7, "0")
 
 				childItem.setFont(0, font)
 				childItem.setFont(1, font)
@@ -2531,6 +2540,7 @@ class GuiThread( threading.Thread ):
 				childItem.setFont(7, font)
 				childItem.setFont(8, font)
 				childItem.setFont(9, font)
+				childItem.setFont(10, font)
 
 				AddProgressBar( childItem )
 
@@ -2595,8 +2605,10 @@ class GuiThread( threading.Thread ):
 				childItem.setToolTip(3, source)
 				childItem.setText(4, project.targetName)
 				childItem.setToolTip(4, project.targetName)
-				childItem.setText(5, "0")
+				childItem.setText(5, project.outputArchitecture)
+				childItem.setToolTip(5, project.outputArchitecture)
 				childItem.setText(6, "0")
+				childItem.setText(7, "0")
 
 				childItem.setFont(0, font)
 				childItem.setFont(1, font)
@@ -2608,6 +2620,7 @@ class GuiThread( threading.Thread ):
 				childItem.setFont(7, font)
 				childItem.setFont(8, font)
 				childItem.setFont(9, font)
+				childItem.setFont(10, font)
 
 				AddProgressBar( childItem )
 

@@ -840,8 +840,18 @@ class linkerBase( SettingsOverrider ):
 		"""
 		Get the exit code that the compiler returns if the compile process is interrupted.
 
-		@return: The compiler's interrupt exit code
+		@return: The linker's interrupt exit code
 		@rtype: int
+		"""
+		pass
+
+	@abstractmethod
+	def GetValidArchitectures( self ):
+		"""
+		Get the list of architectures supported by this linker.
+
+		@return: List of architectures
+		@rtype: list[str]
 		"""
 		pass
 
@@ -934,6 +944,16 @@ class compilerBase( SettingsOverrider ):
 
 		@return: The compiler's interrupt exit code
 		@rtype: int
+		"""
+		pass
+
+	@abstractmethod
+	def GetValidArchitectures( self ):
+		"""
+		Get the list of architectures supported by this compiler.
+
+		@return: List of architectures
+		@rtype: list[str]
 		"""
 		pass
 
@@ -1180,6 +1200,18 @@ class toolchain( SettingsOverrider ):
 			tools.append( self.tools[arg] )
 		return ClassCombiner( tools )
 
+	def GetValidArchitectures( self ):
+		validArchs = set()
+		first = True
+		for tool in self.tools.values():
+			if hasattr(tool, "GetValidArchitectures"):
+				archsThisTool = tool.GetValidArchitectures()
+				if first:
+					validArchs = set(archsThisTool)
+					first = False
+				else:
+					validArchs &= set(archsThisTool)
+		return list(validArchs)
 
 	def AddCustomTool(self, name, tool):
 		self.tools[name] = tool()
