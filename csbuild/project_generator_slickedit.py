@@ -101,7 +101,7 @@ class project_generator_slickedit(project_generator.project_generator):
 
 	def _WriteSubGroup(self, projectOutputPath, projectGroup, projectFiles):
 		# Write out each project first.
-		for projectName, projectSettingsDict in projectGroup.projects.items():
+		for projectName, projectSettingsMap in projectGroup.projects.items():
 			# Construct the output path to the project file.
 			projectFilePath = os.path.join(projectOutputPath, "{}.{}".format(projectName, ExtensionType.PROJECT))
 
@@ -109,7 +109,7 @@ class project_generator_slickedit(project_generator.project_generator):
 			projectFiles.add(projectFilePath)
 
 			# Save the project file to disk.
-			self._WriteProject(projectFilePath, projectName, list(projectSettingsDict.values())[0])
+			self._WriteProject(projectFilePath, projectName, projectSettingsMap)
 
 		# Next, iterate through each subgroup and handle each one recursively.
 		for subGroupName, subGroup in projectGroup.subgroups.items():
@@ -122,7 +122,7 @@ class project_generator_slickedit(project_generator.project_generator):
 			self._WriteSubGroup(groupPath, subGroup, projectFiles)
 
 
-	def _WriteProject(self, projectFilePath, projectName, projectSettingsDict):
+	def _WriteProject(self, projectFilePath, projectName, projectSettingsMap):
 		CreateRootNode = ET.Element
 		AddNode = ET.SubElement
 
@@ -145,14 +145,24 @@ class project_generator_slickedit(project_generator.project_generator):
 		sourcesNode.set("Name", "Source Files")
 		headersNode.set("Name", "Header Files")
 
+		sourceFileList = set()
+		headerFileList = set()
+
+		# Because the list of sources and headers can differ between configurations and architectures,
+		# we need to generate a complete list so the project can reference them all.
+		for configName, archMap in projectSettingsMap.items():
+			for archName, settings in archMap.items():
+				sourceFileList.update(set(settings.allsources))
+				headerFileList.update(set(settings.allheaders))
+
 		# Add each source file to the project.
-		for sourceFile in projectSettingsDict[list(projectSettingsDict.keys())[0]].allsources:
+		for sourceFile in sourceFileList:
 			relativeFilePath = os.path.relpath(sourceFile, projectDirPath)
 			fileNode = AddNode(sourcesNode, "F")
 			fileNode.set("N", relativeFilePath)
 
 		# Add each header file to the project.
-		for headerFile in projectSettingsDict[list(projectSettingsDict.keys())[0]].allheaders:
+		for headerFile in headerFileList:
 			relativeFilePath = os.path.relpath(headerFile, projectDirPath)
 			fileNode = AddNode(headersNode, "F")
 			fileNode.set("N", relativeFilePath)
@@ -161,7 +171,7 @@ class project_generator_slickedit(project_generator.project_generator):
 		# It's assumed that (ALL_TARGETS) will not be defined by the makefiles.
 		# TODO: Add handling for any custom build targets named (ALL_TARGETS).
 		buildTargets = { "(ALL_TARGETS)": "--all-targets" }
-		for targetName, _ in projectSettingsDict.items():
+		for targetName, _ in projectSettingsMap.items():
 			buildTargets.update({ targetName: targetName })
 
 		# Output nodes for each build target.
