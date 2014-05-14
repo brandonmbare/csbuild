@@ -1219,11 +1219,11 @@ def build( ):
 
 	for project in pending_builds:
 		if project.preMakeStep:
-			log.LOG_BUILD( "Running pre-make step for {} ({})".format( project.output_name, project.targetName ) )
+			log.LOG_BUILD( "Running pre-make step for {} ({} {})".format( project.output_name, project.targetName, project.outputArchitecture ) )
 			project.preMakeStep(project)
 
 	for project in _shared_globals.sortedProjects:
-		log.LOG_BUILD( "Verifying libraries for {} ({})".format( project.output_name, project.targetName ) )
+		log.LOG_BUILD( "Verifying libraries for {} ({} {})".format( project.output_name, project.targetName, project.outputArchitecture ) )
 		if not project.check_libraries( ):
 			Exit( 1 )
 			#if _utils.needs_link(project):
@@ -1247,13 +1247,13 @@ def build( ):
 					seconds = math.floor( totaltime % 60 )
 
 					log.LOG_BUILD(
-						"Compile of {0} ({3}) took {1}:{2:02}".format( otherProj.output_name, int( minutes ),
-							int( seconds ), otherProj.targetName ) )
+						"Compile of {0} ({3} {4}) took {1}:{2:02}".format( otherProj.output_name, int( minutes ),
+							int( seconds ), otherProj.targetName, otherProj.outputArchitecture ) )
 					otherProj.buildEnd = time.time()
 					projects_in_flight.remove( otherProj )
 					if otherProj.compile_failed:
-						log.LOG_ERROR( "Build of {} ({}) failed! Finishing up non-dependent build tasks...".format(
-							otherProj.output_name, otherProj.targetName ) )
+						log.LOG_ERROR( "Build of {} ({} {}) failed! Finishing up non-dependent build tasks...".format(
+							otherProj.output_name, otherProj.targetName, otherProj.outputArchitecture ) )
 						otherProj.state = _shared_globals.ProjectState.FAILED
 						otherProj.linkQueueStart = time.time()
 						otherProj.linkStart = otherProj.linkQueueStart
@@ -1272,8 +1272,8 @@ def build( ):
 						projects_done.add( otherProj.key )
 					else:
 						log.LOG_LINKER(
-							"Linking for {} ({}) deferred until all dependencies have finished building...".format(
-								otherProj.output_name, otherProj.targetName ) )
+							"Linking for {} ({} {}) deferred until all dependencies have finished building...".format(
+								otherProj.output_name, otherProj.targetName, otherProj.outputArchitecture ) )
 						otherProj.state = _shared_globals.ProjectState.WAITING_FOR_LINK
 						pending_links.append( otherProj )
 
@@ -1304,10 +1304,10 @@ def build( ):
 			project.starttime = time.time( )
 
 			if project.preBuildStep:
-				log.LOG_BUILD( "Running pre-build step for {} ({})".format( project.output_name, project.targetName ) )
+				log.LOG_BUILD( "Running pre-build step for {} ({} {})".format( project.output_name, project.targetName, project.outputArchitecture ) )
 				project.preBuildStep( project )
 
-			log.LOG_BUILD( "Building {0} ({1})".format( project.output_name, project.targetName ) )
+			log.LOG_BUILD( "Building {} ({} {})".format( project.output_name, project.targetName, project.outputArchitecture ) )
 			project.state = _shared_globals.ProjectState.BUILDING
 			project.startTime = time.time()
 
@@ -1371,8 +1371,8 @@ def build( ):
 					_shared_globals.current_compile += 1
 			else:
 				projects_in_flight.remove( project )
-				log.LOG_ERROR( "Build of {} ({}) failed! Finishing up non-dependent build tasks...".format(
-					project.output_name, project.targetName ) )
+				log.LOG_ERROR( "Build of {} ({} {}) failed! Finishing up non-dependent build tasks...".format(
+					project.output_name, project.targetName, project.outputArchitecture ) )
 
 				with project.mutex:
 					for chunk in project.final_chunk_set:
@@ -1456,7 +1456,7 @@ def build( ):
 	if not projects_in_flight and not pending_links:
 		for project in _shared_globals.sortedProjects:
 			if project.postMakeStep:
-				log.LOG_BUILD( "Running post-make step for {} ({})".format( project.output_name, project.targetName ) )
+				log.LOG_BUILD( "Running post-make step for {} ({} {})".format( project.output_name, project.targetName, project.outputArchitecture ) )
 				project.postMakeStep(project)
 
 	compiletime = time.time( ) - _shared_globals.starttime
@@ -1493,7 +1493,7 @@ def performLink(project, objs):
 	project.linkStart = time.time()
 
 	if project.preLinkStep:
-		log.LOG_BUILD( "Running pre-link step for {} ({})".format( project.output_name, project.targetName ) )
+		log.LOG_BUILD( "Running pre-link step for {} ({} {})".format( project.output_name, project.targetName, project.outputArchitecture ) )
 		project.preLinkStep(project)
 
 	project.activeToolchain.SetActiveTool("linker")
@@ -1665,7 +1665,7 @@ def linkThreadLoop():
 				project.state = _shared_globals.ProjectState.LINK_FAILED
 			elif ret == LinkStatus.Success:
 				if project.postBuildStep:
-					log.LOG_BUILD( "Running post-build step for {} ({})".format( project.output_name, project.targetName ) )
+					log.LOG_BUILD( "Running post-build step for {} ({} {})".format( project.output_name, project.targetName, project.outputArchitecture ) )
 					try:
 						project.postBuildStep( project )
 					except:
@@ -1674,7 +1674,7 @@ def linkThreadLoop():
 			elif ret == LinkStatus.UpToDate:
 				project.state = _shared_globals.ProjectState.UP_TO_DATE
 			project.endTime = time.time()
-			log.LOG_BUILD( "Finished {} ({})".format( project.output_name, project.targetName ) )
+			log.LOG_BUILD( "Finished {} ({} {})".format( project.output_name, project.targetName, project.outputArchitecture ) )
 
 
 linkThread = threading.Thread(target=linkThreadLoop)
@@ -1688,7 +1688,7 @@ def clean( silent = False ):
 	for project in _shared_globals.sortedProjects:
 
 		if not silent:
-			log.LOG_BUILD( "Cleaning {0} ({1})...".format( project.output_name, project.targetName ) )
+			log.LOG_BUILD( "Cleaning {} ({} {})...".format( project.output_name, project.targetName, project.outputArchitecture ) )
 
 		# Delete any chunks in the current project.
 		for chunk in project.chunks:
@@ -2120,8 +2120,9 @@ def _run( ):
 	parser = argparse.ArgumentParser(
 		prog = mainfile, epilog = epilog, formatter_class = argparse.RawDescriptionHelpFormatter )
 
-	parser.add_argument( 'target', nargs = "*", help = 'Target(s) for build', metavar = "target" )
-	parser.add_argument( '-a', "--all-targets", action = "store_true", help = "Build all targets" )
+	group = parser.add_mutually_exclusive_group( )
+	group.add_argument( '-t', '--target', action='append', help = 'Target(s) for build', default=["release"])
+	group.add_argument( '-a', "--all-targets", action = "store_true", help = "Build all targets" )
 
 	parser.add_argument(
 		"-p",
@@ -2152,10 +2153,14 @@ def _run( ):
 	parser.add_argument( '--force-progress-bar', help = "Force progress bar on or off.",
 		action = "store", choices = ["on", "off"], default = None, const = "on", nargs = "?" )
 	parser.add_argument( '--prefix', help = "install prefix (default /usr/local)", action = "store" )
-	parser.add_argument( '-t', '--toolchain', help = "Toolchain to use for compiling.",
+	parser.add_argument( '-o', '--toolchain', help = "Toolchain to use for compiling.",
 		choices = _shared_globals.alltoolchains, action = "store" )
-	parser.add_argument( '--architecture', '--arch', help = "Architecture to compile for.",
-		choices = ["x86", "x64", "arm"], action = "store" )
+
+	group = parser.add_mutually_exclusive_group( )
+	group.add_argument( '--architecture', '--arch', help = "Architecture to compile for.",
+		choices = ["x86", "x64", "arm"], action = "append" )
+	group.add_argument( "--all-architectures", "--all-arch", action = "store_true", help = "Build all architectures supported by this toolchain" )
+
 	parser.add_argument(
 		"--stop-on-error",
 		help = "Stop compilation after the first error is encountered.",
@@ -2178,10 +2183,21 @@ def _run( ):
 		action = "store", default = "")
 
 	#TODO: Additional args here
-	# for chain in _shared_globals.alltoolchains.items( ):
-	#	if chain[1].Compiler().additional_args != toolchain.compilerBase.additional_args:
-	#		group = parser.add_argument_group( "Options for toolchain {}".format( chain[0] ) )
-	#		chain[1].Compiler().additional_args( group )
+	for chain in _shared_globals.alltoolchains.items( ):
+		chainInst = chain[1]()
+		argfuncs = set()
+		for tool in chainInst.tools.values():
+			if(
+				hasattr(tool.__class__, "additional_args")
+				and tool.__class__.additional_args != toolchain.compilerBase.additional_args
+				and tool.__class__.additional_args != toolchain.linkerBase.additional_args
+			):
+				argfuncs.add(tool.__class__.additional_args)
+
+		if argfuncs:
+			group = parser.add_argument_group( "Options for toolchain {}".format( chain[0] ) )
+			for func in argfuncs:
+				func( group )
 
 	for gen in _shared_globals.allgenerators.items( ):
 		if gen[1].additional_args != project_generator.project_generator.additional_args:
@@ -2243,17 +2259,10 @@ def _run( ):
 		_shared_globals.columns = 0
 
 	if args.prefix:
-		_shared_globals.install_prefix = args.prefix
+		_shared_globals.install_prefix = os.path.abspath(args.prefix)
 
 	if args.toolchain:
 		SetActiveToolchain( args.toolchain )
-
-	if args.architecture:
-		OutputArchitecture( args.architecture )
-	elif platform.machine().endswith('64'):
-		OutputArchitecture("x64")
-	else:
-		OutputArchitecture("x86")
 
 	if args.jobs:
 		_shared_globals.max_threads = args.jobs
@@ -2282,7 +2291,8 @@ def _run( ):
 		if target is not None:
 			_shared_globals.target = target.lower( )
 
-		for project in _shared_globals.tempprojects.values( ):
+		def BuildWithArchitedcture( project, architecture ):
+			_shared_globals.allarchitectures.add(architecture)
 			os.chdir( project.scriptPath )
 
 			newproject = project.copy()
@@ -2298,6 +2308,8 @@ def _run( ):
 				return
 
 			projectSettings.currentProject = newproject
+
+			OutputArchitecture(architecture)
 
 			for targetFunc in newproject.targets[newproject.targetName]:
 				targetFunc( )
@@ -2320,15 +2332,29 @@ def _run( ):
 			alteredLinkDepends = []
 			alteredSrcDepends = []
 			for depend in newproject.linkDepends:
-				alteredLinkDepends.append( "{}@{}".format( depend, projectSettings.currentProject.targetName ) )
+				alteredLinkDepends.append( "{}@{}#{}".format( depend, projectSettings.currentProject.targetName, projectSettings.currentProject.outputArchitecture ) )
 			for depend in newproject.srcDepends:
-				alteredSrcDepends.append( "{}@{}".format( depend, projectSettings.currentProject.targetName ) )
+				alteredSrcDepends.append( "{}@{}#{}".format( depend, projectSettings.currentProject.targetName, projectSettings.currentProject.outputArchitecture ) )
 
 			newproject.linkDepends = alteredLinkDepends
 			newproject.srcDepends = alteredSrcDepends
 
-			newproject.key = "{}@{}".format( newproject.name, newproject.targetName )
+			newproject.key = "{}@{}#{}".format( newproject.name, newproject.targetName, newproject.outputArchitecture )
 			_shared_globals.projects.update( { newproject.key: newproject } )
+
+		for project in _shared_globals.tempprojects.values( ):
+			if args.architecture:
+				for arch in args.architecture:
+					BuildWithArchitedcture(project, arch)
+			elif args.all_architectures:
+				project.activeToolchain = project.toolchains[project.activeToolchainName]
+				for arch in project.activeToolchain.GetValidArchitectures():
+					BuildWithArchitedcture(project, arch)
+			elif platform.machine().endswith('64'):
+				BuildWithArchitedcture(project, "x64")
+			else:
+				BuildWithArchitedcture(project, "x86")
+
 
 	if args.all_targets:
 		for target in _shared_globals.alltargets:

@@ -39,6 +39,9 @@ class gccBase( object ):
 	def copyTo(self, other):
 		other.isClang = self.isClang
 
+	def GetValidArchitectures(self):
+		return ['x86', 'x64']
+
 	def parseClangOutput(self, outputStr):
 		command = re.compile("^clang(\\+\\+)?: +(fatal +)?(warning|error|note): (.*)$")
 		inLine = re.compile("^In (.*) included from (.*):(\\d+):$")

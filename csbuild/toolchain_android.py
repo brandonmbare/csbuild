@@ -50,6 +50,9 @@ class AndroidBase( object ):
 	def JavaHome(self, pathToJava):
 		self._javaHome = pathToJava
 
+	def GetValidArchitectures(self):
+		return ['x86', 'arm', 'mips']
+
 
 class AndroidCompiler(AndroidBase, toolchain_gcc.compiler_gcc):
 	def __init__(self):

@@ -71,7 +71,7 @@ class project_generator_slickedit(project_generator.project_generator):
 
 		projectFiles = set()
 
-		self._WriteSubGroup(self.rootpath, projectSettings.rootProject, projectFiles)
+		self._WriteSubGroup(self.rootpath, projectSettings.rootGroup, projectFiles)
 		self._WriteWorkspace(projectFiles)
 
 
@@ -109,7 +109,7 @@ class project_generator_slickedit(project_generator.project_generator):
 			projectFiles.add(projectFilePath)
 
 			# Save the project file to disk.
-			self._WriteProject(projectFilePath, projectName, projectSettingsDict)
+			self._WriteProject(projectFilePath, projectName, list(projectSettingsDict.values())[0])
 
 		# Next, iterate through each subgroup and handle each one recursively.
 		for subGroupName, subGroup in projectGroup.subgroups.items():

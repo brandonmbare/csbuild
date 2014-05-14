@@ -27,10 +27,9 @@ Defines the projectSettings class.
 block, the project returned will only be a temporary variable that will not be valid for compilation
 @type currentProject: projectSettings
 
-@var rootProject: Actually a project group, this is poorly named. This is the top-level project group
-that all projects and project groups fall under. It has no name and is NOT itself a valid or "real" group.
-@type rootProject: ProjectGroup
-@todo: Rename rootProject to rootProjectGroup
+@var rootGroup: This is the top-level project group that all projects and project groups fall under.
+It has no name and is NOT itself a valid or "real" group.
+@type rootGroup: ProjectGroup
 
 @var currentGroup: The current group that's being populated
 @type currentGroup: ProjectGroup
@@ -555,16 +554,48 @@ class projectSettings( object ):
 		self.obj_dir = os.path.abspath( self.obj_dir ).format(project=self)
 		self.activeToolchain.SetActiveTool("linker")
 		self.output_dir = os.path.abspath( self.output_dir ).format(project=self)
+		if not os.path.exists(self.output_dir):
+			os.makedirs(self.output_dir)
+
 		self.activeToolchain.SetActiveTool("compiler")
 		self.csbuild_dir = os.path.join( self.obj_dir, ".csbuild" )
 
+		alteredIncludeDirs = []
 		for directory in self.include_dirs:
+			directory = directory.format(project=self)
 			if not os.path.exists(directory):
 				log.LOG_WARN("Include path {} does not exist!".format(directory))
+			alteredIncludeDirs.append(directory)
+		self.include_dirs = alteredIncludeDirs
 
+		alteredLibraryDirs = []
 		for directory in self.library_dirs:
+			directory = directory.format(project=self)
 			if not os.path.exists(directory):
 				log.LOG_WARN("Library path {} does not exist!".format(directory))
+			alteredLibraryDirs.append(directory)
+		self.library_dirs = alteredLibraryDirs
+
+		def apply_macro(l):
+			alteredList = []
+			for s in l:
+				s = s.format(project=self)
+				alteredList.append(s)
+			return alteredList
+
+		self.exclude_dirs = apply_macro(self.exclude_dirs)
+
+		self.extraFiles = apply_macro(self.extraFiles)
+		self.extraDirs = apply_macro(self.extraDirs)
+		self.extraObjs = apply_macro(self.extraObjs)
+		self.exclude_files = apply_macro(self.exclude_files)
+		self.precompile = apply_macro(self.precompile)
+		self.precompileAsC = apply_macro(self.precompileAsC)
+		self.precompile_exclude = apply_macro(self.precompile_exclude)
+
+		self.output_install_dir = self.output_install_dir.format(project=self)
+		self.header_install_dir = self.header_install_dir.format(project=self)
+		self.header_subdir = self.header_subdir.format(project=self)
 
 		self.exclude_dirs.append( self.csbuild_dir )
 
@@ -579,10 +610,10 @@ class projectSettings( object ):
 		self.activeToolchain.SetActiveTool("compiler")
 
 		if self.prePrepareBuildStep:
-			log.LOG_BUILD( "Running pre-PrepareBuild step for {} ({})".format( self.output_name, self.targetName ) )
+			log.LOG_BUILD( "Running pre-PrepareBuild step for {} ({} {})".format( self.output_name, self.targetName, self.outputArchitecture ) )
 			self.prePrepareBuildStep(self)
 
-		log.LOG_BUILD( "Preparing tasks for {} ({})...".format( self.output_name, self.targetName ) )
+		log.LOG_BUILD( "Preparing tasks for {} ({} {})...".format( self.output_name, self.targetName, self.outputArchitecture ) )
 
 		if not os.path.exists( self.csbuild_dir ):
 			os.makedirs( self.csbuild_dir )
@@ -615,10 +646,14 @@ class projectSettings( object ):
 
 		if self.name not in self.parentGroup.projects:
 			self.parentGroup.projects[self.name] = {}
-		self.parentGroup.projects[self.name][self.targetName] = self
+
+		if self.targetName not in self.parentGroup.projects[self.name]:
+			self.parentGroup.projects[self.name][self.targetName] = {}
+
+		self.parentGroup.projects[self.name][self.targetName][self.outputArchitecture] = self
 
 		if self.postPrepareBuildStep:
-			log.LOG_BUILD( "Running post-PrepareBuild step for {} ({})".format( self.output_name, self.targetName ) )
+			log.LOG_BUILD( "Running post-PrepareBuild step for {} ({} {})".format( self.output_name, self.targetName, self.outputArchitecture ) )
 			self.postPrepareBuildStep(self)
 
 		os.chdir( wd )
@@ -1554,6 +1589,6 @@ class ProjectGroup( object ):
 		self.parentGroup = parentGroup
 
 
-rootProject = ProjectGroup( "", None )
-currentGroup = rootProject
+rootGroup = ProjectGroup( "", None )
+currentGroup = rootGroup
 currentProject = projectSettings( )

@@ -71,7 +71,8 @@ class project_generator_qtcreator( project_generator.project_generator ):
 		# Grab a random project from the dictionary, first one will do.
 		# These values don't matter much as they're likely to be the same (or close enough to the same for our purposes)
 		# across all targets.
-		project = projectDict[list(projectDict.keys())[0]]
+		archDict = projectDict[list(projectDict.keys())[0]]
+		project = archDict[list(archDict.keys())[0]]
 
 		projectpath = os.path.join( self.rootpath, parentPath, project.name )
 		if not os.path.exists( projectpath ):
@@ -256,70 +257,77 @@ class project_generator_qtcreator( project_generator.project_generator ):
 		add( vm, "value", type = "int", key = "ProjectExplorer.Target.ActiveRunConfiguration" ).text = "0"
 
 		stepcount = 0
-		for target in list(_shared_globals.alltargets) + ["--all-targets"]:
-			vm2 = add( vm, "valuemap", type = "QVariantMap",
-				key = "ProjectExplorer.Target.BuildConfiguration.{}".format( stepcount ) )
-			stepcount += 1
+		for targetName in list(_shared_globals.alltargets) + ["ALL_TARGETS"]:
+			for architecture in list(_shared_globals.allarchitectures) + "ALL_ARCHITECTURES":
+				target = "{}-{}".format(targetName, architecture)
 
-			add( vm2, "value", type = "QString",
-				key = "ProjectExplorer.BuildConfiguration.BuildDirectory" ).text = self.rootpath
+				vm2 = add( vm, "valuemap", type = "QVariantMap",
+					key = "ProjectExplorer.Target.BuildConfiguration.{}".format( stepcount ) )
+				stepcount += 1
 
-
-			def addTarget( clean ):
-				vm3 = add( vm2, "valuemap", type = "QVariantMap",
-					key = "ProjectExplorer.BuildConfiguration.BuildStepList.{}".format( "1" if clean else "0" ) )
-
-				vm4 = add( vm3, "valuemap", type = "QVariantMap", key = "ProjectExplorer.BuildStepList.Step.0" )
-
-				add( vm4, "value", type = "bool", key = "ProjectExplorer.BuildStep.Enabled" ).text = "true"
-				add( vm4, "value", type = "QString",
-					key = "ProjectExplorer.ProjectConfiguration.DefaultDisplayName" ).text = "Make"
-				add( vm4, "value", type = "QString", key = "ProjectExplorer.ProjectConfiguration.DisplayName" )
-				add( vm4, "value", type = "QString",
-					key = "ProjectExplorer.ProjectConfiguration.Id" ).text = "Qt4ProjectManager.MakeStep"
-
-				vl = add( vm4, "valuelist", type = "QVariantList",
-					key = "Qt4ProjectManager.MakeStep.AutomaticallyAddedMakeArguments" )
-				add( vl, "value", type = "QString" ).text = "-w"
-				add( vl, "value", type = "QString" ).text = "-r"
-
-				add( vm4, "value", type = "bool",
-					key = "Qt4ProjectManager.MakeStep.Clean" ).text = "true" if clean else "false"
-				add( vm4, "value", type = "QString",
-					key = "Qt4ProjectManager.MakeStep.MakeArguments" ).text = "{}ARGS='{}{}'".format(
-					"clean " if clean else "", "{} ".format(self.extraargs) if self.extraargs else "", target )
-				add( vm4, "value", type = "QString", key = "Qt4ProjectManager.MakeStep.MakeCommand" )
-
-				add( vm3, "value", type = "int", key = "ProjectExplorer.BuildStepList.StepsCount" ).text = "1"
-				add( vm3, "value", type = "QString",
-					key = "ProjectExplorer.ProjectConfiguration.DefaultDisplayName" ).text = "Clean" if clean else "Build"
-				add( vm3, "value", type = "QString", key = "ProjectExplorer.ProjectConfiguration.DisplayName" )
-				add( vm3, "value", type = "QString",
-					key = "ProjectExplorer.ProjectConfiguration.Id" ).text = "ProjectExplorer.BuildSteps.{}".format(
-					"Clean" if clean else "Build" )
+				add( vm2, "value", type = "QString",
+					key = "ProjectExplorer.BuildConfiguration.BuildDirectory" ).text = self.rootpath
 
 
-			addTarget( False )
-			addTarget( True )
+				def addTarget( clean ):
+					vm3 = add( vm2, "valuemap", type = "QVariantMap",
+						key = "ProjectExplorer.BuildConfiguration.BuildStepList.{}".format( "1" if clean else "0" ) )
 
-			add( vm2, "value", type = "int", key = "ProjectExplorer.BuildConfiguration.BuildStepListCount" ).text = "2"
-			add( vm2, "value", type = "bool",
-				key = "ProjectExplorer.BuildConfiguration.ClearSystemEnvironment" ).text = "false"
-			ev = add( vm2, "valuelist", type = "QVariantList",
-				key = "ProjectExplorer.BuildConfiguration.UserEnvironmentChanges" )
+					vm4 = add( vm3, "valuemap", type = "QVariantMap", key = "ProjectExplorer.BuildStepList.Step.0" )
 
-			add( ev, "value", type = "QString" ).text = "CSB_BUILD_TARGET={}".format( "ALL TARGETS" if target == "--all-targets" else target )
+					add( vm4, "value", type = "bool", key = "ProjectExplorer.BuildStep.Enabled" ).text = "true"
+					add( vm4, "value", type = "QString",
+						key = "ProjectExplorer.ProjectConfiguration.DefaultDisplayName" ).text = "Make"
+					add( vm4, "value", type = "QString", key = "ProjectExplorer.ProjectConfiguration.DisplayName" )
+					add( vm4, "value", type = "QString",
+						key = "ProjectExplorer.ProjectConfiguration.Id" ).text = "Qt4ProjectManager.MakeStep"
 
-			add( vm2, "value", type = "QString",
-				key = "ProjectExplorer.ProjectConfiguration.DefaultDisplayName" ).text = "ALL TARGETS" if target == "--all-targets" else target
-			add( vm2, "value", type = "QString",
-				key = "ProjectExplorer.ProjectConfiguration.DisplayName" ).text = "ALL TARGETS" if target == "--all-targets" else target
-			add( vm2, "value", type = "QString",
-				key = "ProjectExplorer.ProjectConfiguration.Id" ).text = "Qt4ProjectManager.Qt4BuildConfiguration"
-			add( vm2, "value", type = "QString",
-				key = "Qt4ProjectManager.Qt4BuildConfiguration.BuildConfiguration" ).text = "2"
-			add( vm2, "value", type = "bool",
-				key = "Qt4ProjectManager.Qt4BuildConfiguration.UseShadowBuild" ).text = "true"
+					vl = add( vm4, "valuelist", type = "QVariantList",
+						key = "Qt4ProjectManager.MakeStep.AutomaticallyAddedMakeArguments" )
+					add( vl, "value", type = "QString" ).text = "-w"
+					add( vl, "value", type = "QString" ).text = "-r"
+
+					add( vm4, "value", type = "bool",
+						key = "Qt4ProjectManager.MakeStep.Clean" ).text = "true" if clean else "false"
+					add( vm4, "value", type = "QString",
+						key = "Qt4ProjectManager.MakeStep.MakeArguments" ).text = "{}ARGS='{}{} {}'".format(
+						"clean " if clean else "",
+						"{} ".format(self.extraargs) if self.extraargs else "",
+						"-t {}".format(targetName) if targetName != "ALL_TARGETS" else "--all-targets",
+						"--arch {}".format(architecture) if architecture != "ALL_ARCHITECTURES" else "--all-architectures")
+					add( vm4, "value", type = "QString", key = "Qt4ProjectManager.MakeStep.MakeCommand" )
+
+					add( vm3, "value", type = "int", key = "ProjectExplorer.BuildStepList.StepsCount" ).text = "1"
+					add( vm3, "value", type = "QString",
+						key = "ProjectExplorer.ProjectConfiguration.DefaultDisplayName" ).text = "Clean" if clean else "Build"
+					add( vm3, "value", type = "QString", key = "ProjectExplorer.ProjectConfiguration.DisplayName" )
+					add( vm3, "value", type = "QString",
+						key = "ProjectExplorer.ProjectConfiguration.Id" ).text = "ProjectExplorer.BuildSteps.{}".format(
+						"Clean" if clean else "Build" )
+
+
+				addTarget( False )
+				addTarget( True )
+
+				add( vm2, "value", type = "int", key = "ProjectExplorer.BuildConfiguration.BuildStepListCount" ).text = "2"
+				add( vm2, "value", type = "bool",
+					key = "ProjectExplorer.BuildConfiguration.ClearSystemEnvironment" ).text = "false"
+
+				#ev = add( vm2, "valuelist", type = "QVariantList",
+				#	key = "ProjectExplorer.BuildConfiguration.UserEnvironmentChanges" )
+
+				#add( ev, "value", type = "QString" ).text = "CSB_BUILD_TARGET={}".format( targetName )
+
+				add( vm2, "value", type = "QString",
+					key = "ProjectExplorer.ProjectConfiguration.DefaultDisplayName" ).text = target
+				add( vm2, "value", type = "QString",
+					key = "ProjectExplorer.ProjectConfiguration.DisplayName" ).text = target
+				add( vm2, "value", type = "QString",
+					key = "ProjectExplorer.ProjectConfiguration.Id" ).text = "Qt4ProjectManager.Qt4BuildConfiguration"
+				add( vm2, "value", type = "QString",
+					key = "Qt4ProjectManager.Qt4BuildConfiguration.BuildConfiguration" ).text = "2"
+				add( vm2, "value", type = "bool",
+					key = "Qt4ProjectManager.Qt4BuildConfiguration.UseShadowBuild" ).text = "true"
 
 		add( vm, "value", type = "int", key = "ProjectExplorer.Target.BuildConfigurationCount" ).text = str( stepcount )
 
@@ -340,7 +348,7 @@ class project_generator_qtcreator( project_generator.project_generator ):
 		log.LOG_BUILD( "Writing QtCreator solution {}".format( self.solutionname ) )
 		parentNames = []
 		projlist = set( )
-		self._writeSubdirsProject( projectSettings.rootProject, parentNames, projlist )
+		self._writeSubdirsProject( projectSettings.rootGroup, parentNames, projlist )
 		self._writeSharedFile( )
 
 

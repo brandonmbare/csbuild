@@ -103,6 +103,9 @@ class MsvcBase( object ):
 		"""
 		self.msvc_version = msvc_version
 
+	def GetValidArchitectures(self):
+		return ['x86', 'x64']
+
 	def SetupForProject( self, project ):
 		platform_architectures = {
 			"amd64": X64,
@@ -350,9 +353,10 @@ class compiler_msvc( MsvcBase, toolchain.compilerBase ):
 		else:
 			pch = ""
 
-		return '{} /Fo"{}" /Gm- /errorReport:none "{}" {} {} {}'.format(
+		return '{} /Fo"{}" /Fd"{}" /Gm- /errorReport:none "{}" {} {} {}'.format(
 			base_cmd,
 			output_obj,
+			os.path.join(self._project_settings.output_dir, "{}.pdb".format(self._project_settings.output_name.rsplit('.', 1)[0])),
 			input_file,
 			'/FI"{}"'.format( force_include_file ) if force_include_file else "",
 			'/Yu"{}"'.format( force_include_file ) if force_include_file else "",
@@ -371,12 +375,13 @@ class compiler_msvc( MsvcBase, toolchain.compilerBase ):
 		objFile = "{}.obj".format(split[0])
 
 		self._project_settings.extraObjs.append("{}.obj".format(split[0]))
-		return '{} /Yc"{}" /Gm- /errorReport:none /Fp"{}" /FI"{}" /Fo"{}" "{}"'.format(
+		return '{} /Yc"{}" /Gm- /errorReport:none /Fp"{}" /FI"{}" /Fo"{}" /Fd"{}" "{}"'.format(
 			base_cmd,
 			input_file,
 			output_obj,
 			input_file,
 			objFile,
+			os.path.join(self._project_settings.output_dir, "{}.pdb".format(self._project_settings.output_name.rsplit('.', 1)[0])),
 			srcFile )
 
 
