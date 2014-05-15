@@ -313,14 +313,37 @@ class compiler_msvc( MsvcBase, toolchain.compilerBase ):
 	def _get_default_compiler_args( self ):
 		return "/nologo /c "
 
+	def _get_debug_arg(self):
+		debugLevel = self._project_settings.debug_level
+		if debugLevel == csbuild.DebugLevel.EmbeddedSymbols:
+			return "/Z7 "
+		if debugLevel == csbuild.DebugLevel.ExternalSymbols:
+			return "/Zi "
+		if debugLevel == csbuild.DebugLevel.ExternalSymbolsPlus:
+			return "/ZI "
+		return " "
+
+	def _get_opt_arg(self):
+		optLevel = self._project_settings.opt_level
+		if optLevel == csbuild.OptimizationLevel.Max:
+			return "/Ox "
+		if optLevel == csbuild.OptimizationLevel.Speed:
+			return "/O2 "
+		if optLevel == csbuild.OptimizationLevel.Size:
+			return "/O1 "
+		return "/Od "
 
 	def _get_compiler_args( self ):
-		return "{}{}{}{}{}".format(
+		return "{}{}{}{}{}{}{}/Oi /GS {} ".format(
 			self._get_default_compiler_args( ),
 			self._get_preprocessor_definition_args( ),
 			self._get_runtime_linkage_arg( ),
 			self._get_warning_args( ),
-			self._get_include_directory_args( ) )
+			self._get_include_directory_args( ),
+			self._get_debug_arg( ),
+			self._get_opt_arg( ),
+			"/RTC1" if self._project_settings.opt_level == csbuild.OptimizationLevel.Disabled else ""
+		)
 
 
 	def _get_preprocessor_definition_args( self ):
@@ -487,7 +510,7 @@ class linker_msvc( MsvcBase, toolchain.linkerBase ):
 		return "" if self._project_settings.type == csbuild.ProjectType.StaticLibrary else "{}{}{}{}".format(
 			self._get_runtime_library_arg( ),
 			"/PROFILE " if self._project_settings.profile else "",
-			"/DEBUG " if self._project_settings.profile or self._project_settings.debug_level > 0 else "",
+			"/DEBUG " if self._project_settings.profile or self._project_settings.debug_level != csbuild.DebugLevel.Disabled else "",
 			"/DLL " if self._project_settings.type == csbuild.ProjectType.SharedLibrary else "" )
 
 

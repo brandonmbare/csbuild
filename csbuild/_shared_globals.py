@@ -223,6 +223,8 @@ precompiles_done = 0
 total_compiles = 0
 
 install_prefix = "/usr/local/"
+install_libdir = "{prefix}/lib"
+install_incdir = "{prefix}/include"
 
 makefile_dict = { }
 

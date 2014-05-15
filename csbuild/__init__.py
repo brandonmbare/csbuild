@@ -80,6 +80,19 @@ class ProjectType( object ):
 	SharedLibrary = 1
 	StaticLibrary = 2
 
+class DebugLevel( object ):
+	Disabled = 0
+	EmbeddedSymbols = 1
+	ExternalSymbols = 2
+	ExternalSymbolsPlus = 3
+
+class OptimizationLevel( object ):
+	Disabled = 0
+	Size = 1
+	Speed = 2
+	Max = 3
+
+
 from csbuild import _utils
 from csbuild import toolchain
 from csbuild import toolchain_msvc
@@ -123,20 +136,19 @@ def NoBuiltinTargets( ):
 		del arr[arr.index( release )]
 
 
-def InstallOutput( s = "lib" ):
+def InstallOutput( ):
 	"""
 	Enables installation of the compiled output file.
-	Default target is /usr/local/lib, unless the --prefix option is specified.
-	If --prefix is specified, the target will be I{{prefix}}/lib
+	Argument is a subdirectory of the libdir (by default, /usr/local/lib)
 
 	@type s: str
-	@param s: Override directory - i.e., if you specify this as "libraries", the libraries will be installed
-	to I{{prefix}}/libraries.
+	@param s: Install sdirectory - i.e., if you specify this as "libraries", the libraries will be installed
+	to I{{libdir}}/libraries.
 	"""
-	projectSettings.currentProject.output_install_dir = s
+	projectSettings.currentProject.install_output = True
 
 
-def InstallHeaders( s = "include" ):
+def InstallHeaders( ):
 	"""
 	Enables installation of the project's headers
 	Default target is /usr/local/include, unless the --prefix option is specified.
@@ -146,7 +158,7 @@ def InstallHeaders( s = "include" ):
 	@param s: Override directory - i.e., if you specify this as "headers", the headers will be installed
 	to I{{prefix}}/headers.
 	"""
-	projectSettings.currentProject.header_install_dir = s
+	projectSettings.currentProject.install_headers = True
 
 
 def InstallSubdir( s ):
@@ -292,8 +304,8 @@ def Opt( i ):
 	"""
 	Sets the optimization level. Due to toolchain differences, this should be called per-toolchain, usually.
 
-	@type i: either str or int
-	@param i: A toolchain-appropriate optimization level.
+	@type i: OptimizationLevel
+	@param i: The level of optimization to use
 	"""
 	projectSettings.currentProject.opt_level = i
 	projectSettings.currentProject.opt_set = True
@@ -303,8 +315,8 @@ def Debug( i ):
 	"""
 	Sets the debug level. Due to toolchain differences, this should be called per-toolchain, usually.
 
-	@type i: either str or int
-	@param i: A toolchain-appropriate debug level.
+	@type i: DebugLevel
+	@param i: How (and if) symbols should be generated
 	"""
 	projectSettings.currentProject.debug_level = i
 	projectSettings.currentProject.debug_set = True
@@ -1758,42 +1770,41 @@ def install( ):
 		output = os.path.join( project.output_dir, project.output_name )
 		install_something = False
 
-		if not project.output_install_dir or os.path.exists( output ):
+		if project.install_output:
 			#install output file
-			if project.output_install_dir:
-				outputDir = os.path.join( _shared_globals.install_prefix, project.output_install_dir )
+			if os.path.exists( output ):
+				outputDir = _shared_globals.install_libdir
 				if not os.path.exists( outputDir ):
 					os.makedirs( outputDir )
 				log.LOG_INSTALL( "Installing {0} to {1}...".format( output, outputDir ) )
 				shutil.copy( output, outputDir )
 				install_something = True
-
-			#install headers
-			subdir = project.header_subdir
-			if not subdir:
-				subdir = _utils.get_base_name( project.output_name )
-			if project.header_install_dir:
-				install_dir = os.path.join( _shared_globals.install_prefix,
-					project.header_install_dir, subdir )
-				if not os.path.exists( install_dir ):
-					os.makedirs( install_dir )
-				headers = []
-				cheaders = []
-				project.get_files( headers = headers, cheaders = cheaders )
-				for header in headers:
-					log.LOG_INSTALL( "Installing {0} to {1}...".format( header, install_dir ) )
-					shutil.copy( header, install_dir )
-				for header in cheaders:
-					log.LOG_INSTALL( "Installing {0} to {1}...".format( header, install_dir ) )
-					shutil.copy( header, install_dir )
-				install_something = True
-
-			if not install_something:
-				log.LOG_INSTALL( "Nothing to install." )
 			else:
-				log.LOG_INSTALL( "Done." )
+				log.LOG_ERROR( "Output file {0} does not exist! You must build without --install first.".format( output ) )
+
+		#install headers
+		subdir = project.header_subdir
+		if not subdir:
+			subdir = _utils.get_base_name( project.output_name )
+		if project.install_headers:
+			install_dir = os.path.join( _shared_globals.install_incdir, subdir )
+			if not os.path.exists( install_dir ):
+				os.makedirs( install_dir )
+			headers = []
+			cheaders = []
+			project.get_files( headers = headers, cheaders = cheaders )
+			for header in headers:
+				log.LOG_INSTALL( "Installing {0} to {1}...".format( header, install_dir ) )
+				shutil.copy( header, install_dir )
+			for header in cheaders:
+				log.LOG_INSTALL( "Installing {0} to {1}...".format( header, install_dir ) )
+				shutil.copy( header, install_dir )
+			install_something = True
+
+		if not install_something:
+			log.LOG_INSTALL( "Nothing to install." )
 		else:
-			log.LOG_ERROR( "Output file {0} does not exist! You must build without --install first.".format( output ) )
+			log.LOG_INSTALL( "Done." )
 
 
 def make( ):
@@ -1833,9 +1844,13 @@ def AddScript( incFile ):
 def debug( ):
 	"""Default debug target."""
 	if not projectSettings.currentProject.opt_set:
-		Opt( 0 )
+		Opt( OptimizationLevel.Disabled )
 	if not projectSettings.currentProject.debug_set:
-		Debug( 3 )
+		Debug( DebugLevel.EmbeddedSymbols )
+		Toolchain("msvc").Debug( DebugLevel.ExternalSymbols )
+
+	Define("_DEBUG")
+
 	if not projectSettings.currentProject.output_dir_set:
 		projectSettings.currentProject.output_dir = "Debug"
 	if not projectSettings.currentProject.obj_dir_set:
@@ -1849,9 +1864,13 @@ def debug( ):
 def release( ):
 	"""Default release target."""
 	if not projectSettings.currentProject.opt_set:
-		Opt( 3 )
+		Opt( OptimizationLevel.Max )
 	if not projectSettings.currentProject.debug_set:
-		Debug( 0 )
+		Debug( DebugLevel.Disabled )
+		Toolchain("msvc").Debug( DebugLevel.ExternalSymbols )
+
+	Define("NDEBUG")
+
 	if not projectSettings.currentProject.output_dir_set:
 		projectSettings.currentProject.output_dir = "Release"
 	if not projectSettings.currentProject.obj_dir_set:
@@ -2121,7 +2140,7 @@ def _run( ):
 		prog = mainfile, epilog = epilog, formatter_class = argparse.RawDescriptionHelpFormatter )
 
 	group = parser.add_mutually_exclusive_group( )
-	group.add_argument( '-t', '--target', action='append', help = 'Target(s) for build', default=["release"])
+	group.add_argument( '-t', '--target', action='append', help = 'Target(s) for build', default=[])
 	group.add_argument( '-a', "--all-targets", action = "store_true", help = "Build all targets" )
 
 	parser.add_argument(
@@ -2153,6 +2172,8 @@ def _run( ):
 	parser.add_argument( '--force-progress-bar', help = "Force progress bar on or off.",
 		action = "store", choices = ["on", "off"], default = None, const = "on", nargs = "?" )
 	parser.add_argument( '--prefix', help = "install prefix (default /usr/local)", action = "store" )
+	parser.add_argument( '--libdir', help = "install location for libraries (default {prefix}/lib)", action = "store" )
+	parser.add_argument( '--incdir', help = "install prefix (default {prefix}/include)", action = "store" )
 	parser.add_argument( '-o', '--toolchain', help = "Toolchain to use for compiling.",
 		choices = _shared_globals.alltoolchains, action = "store" )
 
@@ -2260,6 +2281,13 @@ def _run( ):
 
 	if args.prefix:
 		_shared_globals.install_prefix = os.path.abspath(args.prefix)
+	if args.libdir:
+		_shared_globals.install_libdir = args.libdir
+	if args.incdir:
+		_shared_globals.install_incdir = args.incdir
+
+	_shared_globals.install_libdir = os.path.abspath(_shared_globals.install_libdir.format(prefix=_shared_globals.install_prefix))
+	_shared_globals.install_incdir = os.path.abspath(_shared_globals.install_incdir.format(prefix=_shared_globals.install_prefix))
 
 	if args.toolchain:
 		SetActiveToolchain( args.toolchain )

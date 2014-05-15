@@ -81,7 +81,7 @@ class SettingsOverrider( object ):
 
 		return ret
 
-	def InstallOutput( self, s = "lib" ):
+	def InstallOutput( self ):
 		"""
 		Enables installation of the compiled output file.
 		Default target is /usr/local/lib, unless the --prefix option is specified.
@@ -91,10 +91,10 @@ class SettingsOverrider( object ):
 		@param s: Override directory - i.e., if you specify this as "libraries", the libraries will be installed
 		to I{{prefix}}/libraries.
 		"""
-		self.settingsOverrides["output_install_dir"] = s
+		self.settingsOverrides["install_output"] = True
 
 
-	def InstallHeaders( self, s = "include" ):
+	def InstallHeaders( self ):
 		"""
 		Enables installation of the project's headers
 		Default target is /usr/local/include, unless the --prefix option is specified.
@@ -104,7 +104,7 @@ class SettingsOverrider( object ):
 		@param s: Override directory - i.e., if you specify this as "headers", the headers will be installed
 		to I{{prefix}}/headers.
 		"""
-		self.settingsOverrides["header_install_dir"] = s
+		self.settingsOverrides["install_headers"] = True
 
 
 	def InstallSubdir( self, s ):

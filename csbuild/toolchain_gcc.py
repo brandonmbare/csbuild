@@ -245,6 +245,15 @@ class compiler_gcc( gccBase, toolchain.compilerBase ):
 		ret += "-I/usr/include -I/usr/local/include "
 		return ret
 
+	def _getOptFlag(self, optLevel):
+		if optLevel == csbuild.OptimizationLevel.Max:
+			return "3"
+		elif optLevel == csbuild.OptimizationLevel.Speed:
+			return ""
+		elif optLevel == csbuild.OptimizationLevel.Size:
+			return "s"
+		else:
+			return "0"
 
 	def get_base_command( self, compiler, project, isCpp ):
 		exitcodes = ""
@@ -266,13 +275,13 @@ class compiler_gcc( gccBase, toolchain.compilerBase ):
 			log.LOG_ERROR("Architecture {} is not natively supported by GCC toolchain. Cross-compiling must be implemented by the makefile.")
 			archArg = ""
 
-		return "\"{}\" {}{} -Winvalid-pch -c {}-g{} -O{} {}{}{} {}".format(
+		return "\"{}\" {}{} -Winvalid-pch -c {}{} -O{} {}{}{} {}".format(
 			compiler,
 			archArg,
 			exitcodes,
 			self.get_defines( project.defines, project.undefines ),
-			project.debug_level,
-			project.opt_level,
+			"-g" if project.debug_level != csbuild.DebugLevel.Disabled else "",
+			self._getOptFlag(project.opt_level),
 			"-fPIC " if project.type == csbuild.ProjectType.SharedLibrary else "",
 			"-pg " if project.profile else "",
 			"--std={0}".format( standard ) if standard != "" else "",

@@ -91,10 +91,10 @@ class projectSettings( object ):
 	@type library_dirs: list[str]
 
 	@ivar opt_level: Optimization level for this project
-	@type opt_level: int or str
+	@type opt_level: csbuild.OptimizationLevel
 
 	@ivar debug_level: Debug level for this project
-	@type debug_level: int or str
+	@type debug_level: csbuild.DebugLevel
 
 	@ivar defines: #define declarations for this project
 	@type defines: list[str]
@@ -122,12 +122,6 @@ class projectSettings( object ):
 
 	@ivar output_name: Final filename to be generated for this project
 	@type output_name: str
-
-	@ivar output_install_dir: Directory in which to install the output
-	@type output_install_dir: str
-
-	@ivar header_install_dir: Directory in which to install the project's headers
-	@type header_install_dir: str
 
 	@ivar header_subdir: Subdirectory that headers live in for this project
 	@type header_subdir: str
@@ -376,8 +370,8 @@ class projectSettings( object ):
 		self.include_dirs = []
 		self.library_dirs = []
 
-		self.opt_level = 0
-		self.debug_level = 0
+		self.opt_level = csbuild.OptimizationLevel.Disabled
+		self.debug_level = csbuild.DebugLevel.Disabled
 		self.defines = []
 		self.undefines = []
 		self.cxx = ""
@@ -388,8 +382,8 @@ class projectSettings( object ):
 		self.output_dir = "."
 		self.csbuild_dir = ".csbuild"
 		self.output_name = ""
-		self.output_install_dir = ""
-		self.header_install_dir = ""
+		self.install_output = False
+		self.install_headers = False
 		self.header_subdir = ""
 
 		self.sources = []
@@ -593,8 +587,6 @@ class projectSettings( object ):
 		self.precompileAsC = apply_macro(self.precompileAsC)
 		self.precompile_exclude = apply_macro(self.precompile_exclude)
 
-		self.output_install_dir = self.output_install_dir.format(project=self)
-		self.header_install_dir = self.header_install_dir.format(project=self)
 		self.header_subdir = self.header_subdir.format(project=self)
 
 		self.exclude_dirs.append( self.csbuild_dir )
@@ -769,8 +761,8 @@ class projectSettings( object ):
 			"output_dir": self.output_dir,
 			"csbuild_dir": self.csbuild_dir,
 			"output_name": self.output_name,
-			"output_install_dir": self.output_install_dir,
-			"header_install_dir": self.header_install_dir,
+			"install_output": self.install_output,
+			"install_headers": self.install_headers,
 			"header_subdir": self.header_subdir,
 			"sources": list( self.sources ),
 			"allsources": list( self.allsources ),
