@@ -1576,12 +1576,19 @@ def performLink(project, objs):
 
 			#Even though we didn't build anything, we should verify all our libraries are up to date too.
 			#If they're not, we need to relink.
-			for i in range( len( project.library_mtimes ) ):
-				if project.library_mtimes[i] > mtime:
+			for i in range( len( project.library_locs ) ):
+				if os.path.getmtime(project.library_locs[i]) > mtime:
 					log.LOG_LINKER(
 						"Library {0} has been modified since the last successful build. Relinking to new library."
 						.format(
-							project.libraries[i] ) )
+							project.library_locs[i] ) )
+					project.built_something = True
+			for dep in project.linkDepends:
+				depProj = _shared_globals.projects[dep]
+				if depProj.state != _shared_globals.ProjectState.UP_TO_DATE:
+					log.LOG_LINKER(
+						"Dependent project {0} has been modified since the last successful build. Relinking to new library."
+						.format( depProj.name ) )
 					project.built_something = True
 
 			#Barring the two above cases, there's no point linking if the compiler did nothing.

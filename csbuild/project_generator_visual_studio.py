@@ -523,9 +523,9 @@ class project_generator_visual_studio(project_generator.project_generator):
 						projectArg = " --project={}".format(projectData.name) if not projectData.isBuildAllProject else ""
 						mainMakefile = os.path.relpath(os.path.join(os.getcwd(), csbuild.mainfile), projectData.outputPath)
 
-						buildCommandNode.text = "{} {} --target={} --architecture={}{}".format(sys.executable, mainMakefile, configName, archName, projectArg)
-						cleanCommandNode.text = "{} {} --clean --target={} --architecture={}{}".format(sys.executable, mainMakefile, configName, archName, projectArg)
-						rebuildCommandNode.text = "{} {} --rebuild --target={} --architecture={}{}".format(sys.executable, mainMakefile, configName, archName, projectArg)
+						buildCommandNode.text = "{} {} --target={} --architecture={}{} {}".format(sys.executable, mainMakefile, configName, archName, projectArg, self.extraargs)
+						cleanCommandNode.text = "{} {} --clean --target={} --architecture={}{} {}".format(sys.executable, mainMakefile, configName, archName, projectArg, self.extraargs)
+						rebuildCommandNode.text = "{} {} --rebuild --target={} --architecture={}{} {}".format(sys.executable, mainMakefile, configName, archName, projectArg, self.extraargs)
 
 						if not projectData.isBuildAllProject:
 							outputNode = AddNode(propertyGroupNode, "NMakeOutput")

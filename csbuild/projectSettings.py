@@ -293,9 +293,8 @@ class projectSettings( object ):
 	@ivar outputArchitecture: The architecture to build against
 	@type outputArchitecture: csbuild.ArchitectureType
 
-	@ivar library_mtimes: Last modified times of all the project's libraries, with no information about what library
-	each timestamp belongs to
-	@type library_mtimes: list[int]
+	@ivar library_locs: evaluated locations of the project's libraries
+	@type library_locs: list[str]
 
 	@ivar scriptPath: The location of the script file this project is defined in
 	@type scriptPath: str
@@ -473,7 +472,7 @@ class projectSettings( object ):
 
 		self.outputArchitecture = ""
 
-		self.library_mtimes = []
+		self.library_locs = []
 
 		self.scriptPath = ""
 
@@ -828,7 +827,7 @@ class projectSettings( object ):
 			"warnings_as_errors": self.warnings_as_errors,
 			"built_something": self.built_something,
 			"outputArchitecture": self.outputArchitecture,
-			"library_mtimes": list( self.library_mtimes ),
+			"library_locs": list( self.library_locs ),
 			"scriptPath": self.scriptPath,
 			"mutex": threading.Lock( ),
 			"preBuildStep" : self.preBuildStep,
@@ -1297,9 +1296,8 @@ class projectSettings( object ):
 				lib = self.activeToolchain.Linker().find_library( self, library, self.library_dirs,
 					force_static, force_shared )
 				if lib:
-					mtime = os.path.getmtime( lib )
 					log.LOG_INFO( "Found library lib{0} at {1}".format( library, lib ) )
-					self.library_mtimes.append( mtime )
+					self.library_locs.append( lib )
 				else:
 					log.LOG_ERROR( "Could not locate library: {0}".format( library ) )
 					libraries_ok = False
