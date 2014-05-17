@@ -124,9 +124,9 @@ class project_generator_visual_studio(project_generator.project_generator):
 	def __init__(self, path, solutionName, extraArgs):
 		project_generator.project_generator.__init__(self, path, solutionName, extraArgs)
 
-		versionNumber = csbuild.get_option("visualStudioVersion")
+		versionNumber = csbuild.get_option("visual-studio-version")
 
-		self._createNativeProject = False # csbuild.get_option("createNativeProject")
+		self._createNativeProject = False # csbuild.get_option("create-native-project")
 		self._visualStudioVersion = versionNumber
 		self._projectMap = {}
 		self._configList = []
@@ -156,10 +156,10 @@ class project_generator_visual_studio(project_generator.project_generator):
 
 	@staticmethod
 	def additional_args(parser):
-		parser.add_argument("--visualStudioVersion",
+		parser.add_argument("--visual-studio-version",
 			help = "Select the version of Visual Studio the generated solution will be compatible with (i.e, --visualStudioVersion=2012).",
 			default = 2012)
-		#parser.add_argument("--createNativeProject",
+		#parser.add_argument("--create-native-project",
 		#	help = "Create a native solution that calls into MSBuild and NOT the makefiles.",
 		#	default = False)
 
@@ -412,137 +412,138 @@ class project_generator_visual_studio(project_generator.project_generator):
 		AddNode = ET.SubElement
 
 		for projectName, projectData in self._projectMap.items():
-			rootNode = CreateRootNode("Project")
-			rootNode.set("DefaultTargets", "Build")
-			rootNode.set("ToolsVersion", "4.0")
-			rootNode.set("xmlns", "http://schemas.microsoft.com/developer/msbuild/2003")
+			if not projectData.isFilter:
+				rootNode = CreateRootNode("Project")
+				rootNode.set("DefaultTargets", "Build")
+				rootNode.set("ToolsVersion", "4.0")
+				rootNode.set("xmlns", "http://schemas.microsoft.com/developer/msbuild/2003")
 
-			itemGroupNode = AddNode(rootNode, "ItemGroup")
-			itemGroupNode.set("Label", "ProjectConfigurations")
-
-			# Add the project configurations
-			for configName, platformName, _ in projectData.platformConfigList:
-				projectConfigNode = AddNode(itemGroupNode, "ProjectConfiguration")
-				configNode = AddNode(projectConfigNode, "Configuration")
-				platformNode = AddNode(projectConfigNode, "Platform")
-
-				projectConfigNode.set("Include", "{}|{}".format(configName, platformName))
-				configNode.text = configName
-				platformNode.text = platformName
-
-			# Add the project's source files.
-			if len(projectData.fullSourceFileList) > 0:
 				itemGroupNode = AddNode(rootNode, "ItemGroup")
-				for sourceFilePath in projectData.fullSourceFileList:
-					sourceFileNode = AddNode(itemGroupNode, "ClCompile")
-					sourceFileNode.set("Include", os.path.relpath(sourceFilePath, projectData.outputPath))
+				itemGroupNode.set("Label", "ProjectConfigurations")
 
-					# Handle any configuration or platform excludes for the current file.
-					for configName, platformName, settings in projectData.platformConfigList:
-						if not sourceFilePath in settings.allsources:
-							excludeNode = AddNode(sourceFileNode, "ExcludedFromBuild")
-							excludeNode.text = "true"
-							excludeNode.set("Condition", "'$(Configuration)|$(Platform)'=='{}|{}'".format(configName, platformName))
+				# Add the project configurations
+				for configName, platformName, _ in projectData.platformConfigList:
+					projectConfigNode = AddNode(itemGroupNode, "ProjectConfiguration")
+					configNode = AddNode(projectConfigNode, "Configuration")
+					platformNode = AddNode(projectConfigNode, "Platform")
 
-			# Add the project's header files.
-			if len(projectData.fullHeaderFileList) > 0:
-				itemGroupNode = AddNode(rootNode, "ItemGroup")
-				for sourceFilePath in projectData.fullHeaderFileList:
-					sourceFileNode = AddNode(itemGroupNode, "ClInclude")
-					sourceFileNode.set("Include", os.path.relpath(sourceFilePath, projectData.outputPath))
+					projectConfigNode.set("Include", "{}|{}".format(configName, platformName))
+					configNode.text = configName
+					platformNode.text = platformName
 
-					# Handle any configuration or platform excludes for the current file.
-					for configName, platformName, settings in projectData.platformConfigList:
-						if not sourceFilePath in settings.allheaders:
-							excludeNode = AddNode(sourceFileNode, "ExcludedFromBuild")
-							excludeNode.text = "true"
-							excludeNode.set("Condition", "'$(Configuration)|$(Platform)'=='{}|{}'".format(configName, platformName))
+				# Add the project's source files.
+				if len(projectData.fullSourceFileList) > 0:
+					itemGroupNode = AddNode(rootNode, "ItemGroup")
+					for sourceFilePath in projectData.fullSourceFileList:
+						sourceFileNode = AddNode(itemGroupNode, "ClCompile")
+						sourceFileNode.set("Include", os.path.relpath(sourceFilePath, projectData.outputPath))
 
-			propertyGroupNode = AddNode(rootNode, "PropertyGroup")
-			importNode = AddNode(rootNode, "Import")
-			projectGuidNode = AddNode(propertyGroupNode, "ProjectGuid")
-			namespaceNode = AddNode(propertyGroupNode, "RootNamespace")
+						# Handle any configuration or platform excludes for the current file.
+						for configName, platformName, settings in projectData.platformConfigList:
+							if not sourceFilePath in settings.allsources:
+								excludeNode = AddNode(sourceFileNode, "ExcludedFromBuild")
+								excludeNode.text = "true"
+								excludeNode.set("Condition", "'$(Configuration)|$(Platform)'=='{}|{}'".format(configName, platformName))
 
-			propertyGroupNode.set("Label", "Globals")
-			importNode.set("Project", r"$(VCTargetsPath)\Microsoft.Cpp.Default.props")
-			projectGuidNode.text = projectData.id
-			namespaceNode.text = projectData.name
+				# Add the project's header files.
+				if len(projectData.fullHeaderFileList) > 0:
+					itemGroupNode = AddNode(rootNode, "ItemGroup")
+					for sourceFilePath in projectData.fullHeaderFileList:
+						sourceFileNode = AddNode(itemGroupNode, "ClInclude")
+						sourceFileNode.set("Include", os.path.relpath(sourceFilePath, projectData.outputPath))
 
-			# If we're not creating a native project, Visual Studio needs to know this is a makefile project.
-			if not self._createNativeProject:
-				keywordNode = AddNode(propertyGroupNode, "Keyword")
-				keywordNode.text = "MakeFileProj"
+						# Handle any configuration or platform excludes for the current file.
+						for configName, platformName, settings in projectData.platformConfigList:
+							if not sourceFilePath in settings.allheaders:
+								excludeNode = AddNode(sourceFileNode, "ExcludedFromBuild")
+								excludeNode.text = "true"
+								excludeNode.set("Condition", "'$(Configuration)|$(Platform)'=='{}|{}'".format(configName, platformName))
 
-			for configName, platformName, _ in projectData.platformConfigList:
 				propertyGroupNode = AddNode(rootNode, "PropertyGroup")
-				propertyGroupNode.set("Label", "Configuration")
-				propertyGroupNode.set("Condition", "'$(Configuration)|$(Platform)'=='{}|{}'".format(configName, platformName))
+				importNode = AddNode(rootNode, "Import")
+				projectGuidNode = AddNode(propertyGroupNode, "ProjectGuid")
+				namespaceNode = AddNode(propertyGroupNode, "RootNamespace")
 
-				if IsMicrosoftPlatform(platformName):
-					platformToolsetNode = AddNode(propertyGroupNode, "PlatformToolset")
-					platformToolsetNode.text = GetPlatformToolsetString(self._visualStudioVersion)
+				propertyGroupNode.set("Label", "Globals")
+				importNode.set("Project", r"$(VCTargetsPath)\Microsoft.Cpp.Default.props")
+				projectGuidNode.text = projectData.id
+				namespaceNode.text = projectData.name
 
-				if self._createNativeProject:
-					# TODO: Add properties for native projects.
-					pass
-				else:
-					configTypeNode = AddNode(propertyGroupNode, "ConfigurationType")
-					configTypeNode.text = "Makefile"
+				# If we're not creating a native project, Visual Studio needs to know this is a makefile project.
+				if not self._createNativeProject:
+					keywordNode = AddNode(propertyGroupNode, "Keyword")
+					keywordNode.text = "MakeFileProj"
 
-			importNode = AddNode(rootNode, "Import")
-			importNode.set("Project", r"$(VCTargetsPath)\Microsoft.Cpp.props")
+				for configName, platformName, _ in projectData.platformConfigList:
+					propertyGroupNode = AddNode(rootNode, "PropertyGroup")
+					propertyGroupNode.set("Label", "Configuration")
+					propertyGroupNode.set("Condition", "'$(Configuration)|$(Platform)'=='{}|{}'".format(configName, platformName))
 
-			for configName, platformName, _ in projectData.platformConfigList:
-				importGroupNode = AddNode(rootNode, "ImportGroup")
-				importGroupNode.set("Label", "PropertySheets")
-				importGroupNode.set("Condition", "'$(Configuration)|$(Platform)'=='{}|{}'".format(configName, platformName))
+					if IsMicrosoftPlatform(platformName):
+						platformToolsetNode = AddNode(propertyGroupNode, "PlatformToolset")
+						platformToolsetNode.text = GetPlatformToolsetString(self._visualStudioVersion)
 
-				# Microsoft platforms import special property sheets.
-				if IsMicrosoftPlatform(platformName):
-					importNode = AddNode(importGroupNode, "Import")
-					importNode.set("Label", "LocalAppDataPlatform")
-					importNode.set("Project", r"$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props")
-					importNode.set("Condition", "exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')")
-
-			for configName, platformName, settings in projectData.platformConfigList:
-				propertyGroupNode = AddNode(rootNode, "PropertyGroup")
-				propertyGroupNode.set("Condition", "'$(Configuration)|$(Platform)'=='{}|{}'".format(configName, platformName))
-
-				if self._createNativeProject:
-					# TODO: Add properties for non-native projects.
-					pass
-				else:
-					buildCommandNode = AddNode(propertyGroupNode, "NMakeBuildCommandLine")
-					cleanCommandNode = AddNode(propertyGroupNode, "NMakeCleanCommandLine")
-					rebuildCommandNode = AddNode(propertyGroupNode, "NMakeReBuildCommandLine")
-					outDirNode = AddNode(propertyGroupNode, "OutDir")
-					intDirNode = AddNode(propertyGroupNode, "IntDir")
-
-					archName = self._archMap[platformName]
-					projectArg = " --project={}".format(projectData.name) if not projectData.isBuildAllProject else ""
-					mainMakefile = os.path.relpath(os.path.join(os.getcwd(), csbuild.mainfile), projectData.outputPath)
-
-					buildCommandNode.text = "{} {} --target={} --architecture={}{}".format(sys.executable, mainMakefile, configName, archName, projectArg)
-					cleanCommandNode.text = "{} {} --clean --target={} --architecture={}{}".format(sys.executable, mainMakefile, configName, archName, projectArg)
-					rebuildCommandNode.text = "{} {} --rebuild --target={} --architecture={}{}".format(sys.executable, mainMakefile, configName, archName, projectArg)
-
-					if not projectData.isBuildAllProject:
-						outputNode = AddNode(propertyGroupNode, "NMakeOutput")
-						includePathNode = AddNode(propertyGroupNode, "NMakeIncludeSearchPath")
-
-						outDirNode.text = os.path.relpath(settings.output_dir, projectData.outputPath)
-						intDirNode.text = os.path.relpath(settings.obj_dir, projectData.outputPath)
-						outputNode.text = os.path.relpath(os.path.join(settings.output_dir, settings.output_name), projectData.outputPath)
-						includePathNode.text = ";".join(settings.include_dirs)
+					if self._createNativeProject:
+						# TODO: Add properties for native projects.
+						pass
 					else:
-						# Gotta put this stuff somewhere for the Build All project.
-						outDirNode.text = projectData.name + "_log"
-						intDirNode.text = outDirNode.text
+						configTypeNode = AddNode(propertyGroupNode, "ConfigurationType")
+						configTypeNode.text = "Makefile"
 
-			importNode = AddNode(rootNode, "Import")
-			importNode.set("Project", r"$(VCTargetsPath)\Microsoft.Cpp.targets")
+				importNode = AddNode(rootNode, "Import")
+				importNode.set("Project", r"$(VCTargetsPath)\Microsoft.Cpp.props")
 
-			self._SaveXmlFile(rootNode, os.path.join(projectData.outputPath, "{}.{}".format(projectData.name, self._projectFileType)))
+				for configName, platformName, _ in projectData.platformConfigList:
+					importGroupNode = AddNode(rootNode, "ImportGroup")
+					importGroupNode.set("Label", "PropertySheets")
+					importGroupNode.set("Condition", "'$(Configuration)|$(Platform)'=='{}|{}'".format(configName, platformName))
+
+					# Microsoft platforms import special property sheets.
+					if IsMicrosoftPlatform(platformName):
+						importNode = AddNode(importGroupNode, "Import")
+						importNode.set("Label", "LocalAppDataPlatform")
+						importNode.set("Project", r"$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props")
+						importNode.set("Condition", "exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')")
+
+				for configName, platformName, settings in projectData.platformConfigList:
+					propertyGroupNode = AddNode(rootNode, "PropertyGroup")
+					propertyGroupNode.set("Condition", "'$(Configuration)|$(Platform)'=='{}|{}'".format(configName, platformName))
+
+					if self._createNativeProject:
+						# TODO: Add properties for non-native projects.
+						pass
+					else:
+						buildCommandNode = AddNode(propertyGroupNode, "NMakeBuildCommandLine")
+						cleanCommandNode = AddNode(propertyGroupNode, "NMakeCleanCommandLine")
+						rebuildCommandNode = AddNode(propertyGroupNode, "NMakeReBuildCommandLine")
+						outDirNode = AddNode(propertyGroupNode, "OutDir")
+						intDirNode = AddNode(propertyGroupNode, "IntDir")
+
+						archName = self._archMap[platformName]
+						projectArg = " --project={}".format(projectData.name) if not projectData.isBuildAllProject else ""
+						mainMakefile = os.path.relpath(os.path.join(os.getcwd(), csbuild.mainfile), projectData.outputPath)
+
+						buildCommandNode.text = "{} {} --target={} --architecture={}{}".format(sys.executable, mainMakefile, configName, archName, projectArg)
+						cleanCommandNode.text = "{} {} --clean --target={} --architecture={}{}".format(sys.executable, mainMakefile, configName, archName, projectArg)
+						rebuildCommandNode.text = "{} {} --rebuild --target={} --architecture={}{}".format(sys.executable, mainMakefile, configName, archName, projectArg)
+
+						if not projectData.isBuildAllProject:
+							outputNode = AddNode(propertyGroupNode, "NMakeOutput")
+							includePathNode = AddNode(propertyGroupNode, "NMakeIncludeSearchPath")
+
+							outDirNode.text = os.path.relpath(settings.output_dir, projectData.outputPath)
+							intDirNode.text = os.path.relpath(settings.obj_dir, projectData.outputPath)
+							outputNode.text = os.path.relpath(os.path.join(settings.output_dir, settings.output_name), projectData.outputPath)
+							includePathNode.text = ";".join(settings.include_dirs)
+						else:
+							# Gotta put this stuff somewhere for the Build All project.
+							outDirNode.text = projectData.name + "_log"
+							intDirNode.text = outDirNode.text
+
+				importNode = AddNode(rootNode, "Import")
+				importNode.set("Project", r"$(VCTargetsPath)\Microsoft.Cpp.targets")
+
+				self._SaveXmlFile(rootNode, os.path.join(projectData.outputPath, "{}.{}".format(projectData.name, self._projectFileType)))
 
 
 	def _WriteVcxprojFiltersFiles(self):
@@ -550,49 +551,49 @@ class project_generator_visual_studio(project_generator.project_generator):
 		AddNode = ET.SubElement
 
 		for projectName, projectData in self._projectMap.items():
+			if not projectData.isFilter:
+				rootNode = CreateRootNode("Project")
+				rootNode.set("ToolsVersion", "4.0")
+				rootNode.set("xmlns", "http://schemas.microsoft.com/developer/msbuild/2003")
 
-			rootNode = CreateRootNode("Project")
-			rootNode.set("ToolsVersion", "4.0")
-			rootNode.set("xmlns", "http://schemas.microsoft.com/developer/msbuild/2003")
-
-			if not projectData.isBuildAllProject:
-				itemGroupNode = AddNode(rootNode, "ItemGroup")
-
-				# TODO: Add better source file filters.
-				sourceFileFilterNode = AddNode(itemGroupNode, "Filter")
-				headerFileFilterNode = AddNode(itemGroupNode, "Filter")
-
-				filterGuidList = set()
-
-				sourceFileFilterNode.set("Include", "Source Files")
-				headerFileFilterNode.set("Include", "Header Files")
-
-				uniqueIdNode = AddNode(sourceFileFilterNode, "UniqueIdentifier")
-				uniqueIdNode.text = "{{{}}}".format(GenerateNewUuid(filterGuidList))
-
-				uniqueIdNode = AddNode(headerFileFilterNode, "UniqueIdentifier")
-				uniqueIdNode.text = "{{{}}}".format(GenerateNewUuid(filterGuidList))
-
-				# Add the project's source files.
-				if len(projectData.fullSourceFileList) > 0:
+				if not projectData.isBuildAllProject:
 					itemGroupNode = AddNode(rootNode, "ItemGroup")
-					for sourceFilePath in projectData.fullSourceFileList:
-						sourceFileNode = AddNode(itemGroupNode, "ClCompile")
-						filterNode = AddNode(sourceFileNode, "Filter")
-						sourceFileNode.set("Include", os.path.relpath(sourceFilePath, projectData.outputPath))
-						filterNode.text = "Source Files"
+
+					# TODO: Add better source file filters.
+					sourceFileFilterNode = AddNode(itemGroupNode, "Filter")
+					headerFileFilterNode = AddNode(itemGroupNode, "Filter")
+
+					filterGuidList = set()
+
+					sourceFileFilterNode.set("Include", "Source Files")
+					headerFileFilterNode.set("Include", "Header Files")
+
+					uniqueIdNode = AddNode(sourceFileFilterNode, "UniqueIdentifier")
+					uniqueIdNode.text = "{{{}}}".format(GenerateNewUuid(filterGuidList))
+
+					uniqueIdNode = AddNode(headerFileFilterNode, "UniqueIdentifier")
+					uniqueIdNode.text = "{{{}}}".format(GenerateNewUuid(filterGuidList))
+
+					# Add the project's source files.
+					if len(projectData.fullSourceFileList) > 0:
+						itemGroupNode = AddNode(rootNode, "ItemGroup")
+						for sourceFilePath in projectData.fullSourceFileList:
+							sourceFileNode = AddNode(itemGroupNode, "ClCompile")
+							filterNode = AddNode(sourceFileNode, "Filter")
+							sourceFileNode.set("Include", os.path.relpath(sourceFilePath, projectData.outputPath))
+							filterNode.text = "Source Files"
 
 
-				# Add the project's header files.
-				if len(projectData.fullHeaderFileList) > 0:
-					itemGroupNode = AddNode(rootNode, "ItemGroup")
-					for headerFilePath in projectData.fullHeaderFileList:
-						headerFileNode = AddNode(itemGroupNode, "ClInclude")
-						filterNode = AddNode(headerFileNode, "Filter")
-						headerFileNode.set("Include", os.path.relpath(headerFilePath, projectData.outputPath))
-						filterNode.text = "Header Files"
+					# Add the project's header files.
+					if len(projectData.fullHeaderFileList) > 0:
+						itemGroupNode = AddNode(rootNode, "ItemGroup")
+						for headerFilePath in projectData.fullHeaderFileList:
+							headerFileNode = AddNode(itemGroupNode, "ClInclude")
+							filterNode = AddNode(headerFileNode, "Filter")
+							headerFileNode.set("Include", os.path.relpath(headerFilePath, projectData.outputPath))
+							filterNode.text = "Header Files"
 
-			self._SaveXmlFile(rootNode, os.path.join(projectData.outputPath, "{}.{}.filters".format(projectData.name, self._projectFileType)))
+				self._SaveXmlFile(rootNode, os.path.join(projectData.outputPath, "{}.{}.filters".format(projectData.name, self._projectFileType)))
 
 
 	def _WriteVcxprojUserFiles(self):
@@ -600,26 +601,26 @@ class project_generator_visual_studio(project_generator.project_generator):
 		AddNode = ET.SubElement
 
 		for projectName, projectData in self._projectMap.items():
+			if not projectData.isFilter:
+				rootNode = CreateRootNode("Project")
+				rootNode.set("ToolsVersion", "4.0")
+				rootNode.set("xmlns", "http://schemas.microsoft.com/developer/msbuild/2003")
 
-			rootNode = CreateRootNode("Project")
-			rootNode.set("ToolsVersion", "4.0")
-			rootNode.set("xmlns", "http://schemas.microsoft.com/developer/msbuild/2003")
+				if not projectData.isBuildAllProject:
+					for configName, platformName, _ in projectData.platformConfigList:
+						if IsMicrosoftPlatform(platformName):
+							propertyGroupNode = AddNode(rootNode, "PropertyGroup")
+							workingDirNode = AddNode(propertyGroupNode, "LocalDebuggerWorkingDirectory")
+							debuggerTypeNode = AddNode(propertyGroupNode, "LocalDebuggerDebuggerType")
+							debuggerFlavorNode = AddNode(propertyGroupNode, "DebuggerFlavor")
 
-			if not projectData.isBuildAllProject:
-				for configName, platformName, _ in projectData.platformConfigList:
-					if IsMicrosoftPlatform(platformName):
-						propertyGroupNode = AddNode(rootNode, "PropertyGroup")
-						workingDirNode = AddNode(propertyGroupNode, "LocalDebuggerWorkingDirectory")
-						debuggerTypeNode = AddNode(propertyGroupNode, "LocalDebuggerDebuggerType")
-						debuggerFlavorNode = AddNode(propertyGroupNode, "DebuggerFlavor")
-
-						propertyGroupNode.set("Condition", "'$(Configuration)|$(Platform)'=='{}|{}'".format(configName, platformName))
-						workingDirNode.text = "$(OutDir)"
-						debuggerTypeNode.text = "NativeOnly"
-						debuggerFlavorNode.text = "WindowsLocalDebugger"
+							propertyGroupNode.set("Condition", "'$(Configuration)|$(Platform)'=='{}|{}'".format(configName, platformName))
+							workingDirNode.text = "$(OutDir)"
+							debuggerTypeNode.text = "NativeOnly"
+							debuggerFlavorNode.text = "WindowsLocalDebugger"
 
 
-			self._SaveXmlFile(rootNode, os.path.join(projectData.outputPath, "{}.{}.user".format(projectData.name, self._projectFileType)))
+				self._SaveXmlFile(rootNode, os.path.join(projectData.outputPath, "{}.{}.user".format(projectData.name, self._projectFileType)))
 
 
 	def _SaveXmlFile(self, rootNode, xmlFilename):
