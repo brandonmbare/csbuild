@@ -71,7 +71,7 @@ class MsvcBase( object ):
 		self.debug_runtime = False
 		self.debug_runtime_set = False
 		self.msvc_version = 100
-		
+
 		self._vc_env_var = ""
 		self._toolchain_path = ""
 		self._bin_path = ""
@@ -85,7 +85,7 @@ class MsvcBase( object ):
 		other.debug_runtime = self.debug_runtime
 		other.debug_runtime_set = self.debug_runtime_set
 		other.msvc_version = self.msvc_version
-		
+
 		other._vc_env_var = self._vc_env_var
 		other._toolchain_path = self._toolchain_path
 		other._bin_path = self._bin_path
@@ -391,7 +391,10 @@ class compiler_msvc( MsvcBase, toolchain.compilerBase ):
 		srcFile = os.path.join("{}.{}".format(split[0], "c" if split[1] == "h" else "cpp"))
 		file_mode = 438 # Octal 0666
 		fd = os.open(srcFile, os.O_WRONLY | os.O_CREAT | os.O_NOINHERIT, file_mode)
-		os.write(fd, "#include \"{}\"\n".format(input_file))
+		data = "#include \"{}\"\n".format(input_file)
+		if sys.version_info >= (3, 0):
+			data = data.encode("utf-8")
+		os.write(fd, data)
 		os.fsync(fd)
 		os.close(fd)
 
