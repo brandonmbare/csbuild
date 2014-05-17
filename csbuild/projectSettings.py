@@ -600,6 +600,7 @@ class projectSettings( object ):
 		self.output_name += self.ext
 		self.activeToolchain.SetActiveTool("compiler")
 
+		self.activeToolchain.prePrepareBuildStep(self)
 		if self.prePrepareBuildStep:
 			log.LOG_BUILD( "Running pre-PrepareBuild step for {} ({} {})".format( self.output_name, self.targetName, self.outputArchitecture ) )
 			self.prePrepareBuildStep(self)
@@ -643,6 +644,7 @@ class projectSettings( object ):
 
 		self.parentGroup.projects[self.name][self.targetName][self.outputArchitecture] = self
 
+		self.activeToolchain.postPrepareBuildStep(self)
 		if self.postPrepareBuildStep:
 			log.LOG_BUILD( "Running post-PrepareBuild step for {} ({} {})".format( self.output_name, self.targetName, self.outputArchitecture ) )
 			self.postPrepareBuildStep(self)

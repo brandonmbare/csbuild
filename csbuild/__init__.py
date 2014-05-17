@@ -1216,6 +1216,10 @@ def build( ):
 	global building
 	building = True
 
+	linker_threads_blocked = _shared_globals.max_linker_threads - 1
+	for i in range( linker_threads_blocked ):
+		_shared_globals.link_semaphore.acquire(True)
+
 	linkThread.start()
 
 	for project in _shared_globals.sortedProjects:
@@ -1231,6 +1235,7 @@ def build( ):
 	#projects_needing_links = set()
 
 	for project in pending_builds:
+		project.activeToolchain.preMakeStep(project)
 		if project.preMakeStep:
 			log.LOG_BUILD( "Running pre-make step for {} ({} {})".format( project.output_name, project.targetName, project.outputArchitecture ) )
 			project.preMakeStep(project)
@@ -1316,6 +1321,7 @@ def build( ):
 
 			project.starttime = time.time( )
 
+			project.activeToolchain.preBuildStep(project)
 			if project.preBuildStep:
 				log.LOG_BUILD( "Running pre-build step for {} ({} {})".format( project.output_name, project.targetName, project.outputArchitecture ) )
 				project.preBuildStep( project )
@@ -1432,6 +1438,11 @@ def build( ):
 
 				ReconcilePostBuild()
 				_shared_globals.semaphore.acquire( True )
+
+				if linker_threads_blocked > 0:
+					_shared_globals.link_semaphore.release()
+					linker_threads_blocked -= 1
+
 				if _shared_globals.interrupted:
 					Exit( 2 )
 
@@ -1468,6 +1479,7 @@ def build( ):
 
 	if not projects_in_flight and not pending_links:
 		for project in _shared_globals.sortedProjects:
+			project.activeToolchain.postMakeStep(project)
 			if project.postMakeStep:
 				log.LOG_BUILD( "Running post-make step for {} ({} {})".format( project.output_name, project.targetName, project.outputArchitecture ) )
 				project.postMakeStep(project)
@@ -1505,6 +1517,7 @@ def link( project, *objs ):
 def performLink(project, objs):
 	project.linkStart = time.time()
 
+	project.activeToolchain.preLinkStep(project)
 	if project.preLinkStep:
 		log.LOG_BUILD( "Running pre-link step for {} ({} {})".format( project.output_name, project.targetName, project.outputArchitecture ) )
 		project.preLinkStep(project)
@@ -1660,6 +1673,40 @@ def performLink(project, objs):
 
 	return LinkStatus.Success
 
+class LinkThread(threading.Thread):
+	def __init__(self, project, objs):
+		threading.Thread.__init__( self )
+		self._project = project
+		self._objs = objs
+		#Prevent certain versions of python from choking on dummy threads.
+		if not hasattr( threading.Thread, "_Thread__block" ):
+			threading.Thread._Thread__block = _shared_globals.dummy_block( )
+
+
+	def run( self ):
+		project = self._project
+		project.state = _shared_globals.ProjectState.LINKING
+		ret = performLink(project, self._objs)
+
+		if ret == LinkStatus.Fail:
+			_shared_globals.build_success = False
+			project.state = _shared_globals.ProjectState.LINK_FAILED
+		elif ret == LinkStatus.Success:
+			project.activeToolchain.postBuildStep(project)
+			if project.postBuildStep:
+				log.LOG_BUILD( "Running post-build step for {} ({} {})".format( project.output_name, project.targetName, project.outputArchitecture ) )
+				try:
+					project.postBuildStep( project )
+				except:
+					traceback.print_exc()
+			project.state = _shared_globals.ProjectState.FINISHED
+		elif ret == LinkStatus.UpToDate:
+			project.state = _shared_globals.ProjectState.UP_TO_DATE
+		project.endTime = time.time()
+		log.LOG_BUILD( "Finished {} ({} {})".format( project.output_name, project.targetName, project.outputArchitecture ) )
+		_shared_globals.link_semaphore.release()
+
+
 def linkThreadLoop():
 	global linkQueue
 	global linkMutex
@@ -1677,25 +1724,8 @@ def linkThreadLoop():
 			linkQueue = []
 
 		for ( project, objs ) in projectsToLink:
-			project.state = _shared_globals.ProjectState.LINKING
-			ret = performLink(project, objs)
-
-			if ret == LinkStatus.Fail:
-				_shared_globals.build_success = False
-				project.state = _shared_globals.ProjectState.LINK_FAILED
-			elif ret == LinkStatus.Success:
-				if project.postBuildStep:
-					log.LOG_BUILD( "Running post-build step for {} ({} {})".format( project.output_name, project.targetName, project.outputArchitecture ) )
-					try:
-						project.postBuildStep( project )
-					except:
-						traceback.print_exc()
-				project.state = _shared_globals.ProjectState.FINISHED
-			elif ret == LinkStatus.UpToDate:
-				project.state = _shared_globals.ProjectState.UP_TO_DATE
-			project.endTime = time.time()
-			log.LOG_BUILD( "Finished {} ({} {})".format( project.output_name, project.targetName, project.outputArchitecture ) )
-
+			_shared_globals.link_semaphore.acquire(True)
+			LinkThread(project, objs).start()
 
 linkThread = threading.Thread(target=linkThreadLoop)
 
@@ -2172,6 +2202,18 @@ def _run( ):
 	group2.add_argument( '-qq', '--very-quiet', action = "store_const", const = 3, dest = "quiet",
 		help = "Very quiet. Disables all csb-specific logging.", default = 1 )
 	parser.add_argument( "-j", "--jobs", action = "store", dest = "jobs", type = int, help = "Number of simultaneous build processes" )
+	if platform.system() != "Windows":
+		#link.exe likes to lock files on Windows, so this can't be supported there.
+		parser.add_argument(
+			"-l",
+			"--linker-jobs",
+			action = "store",
+			dest = "linker_jobs",
+			type = int,
+			help = "Max number of simultaneous link processes. (If not specified, same value as -j.)"
+			"Note that this pool is shared with build threads, and linker will only get one thread from the pool until compile threads start becoming free."
+			"This value only specifies a maximum."
+		)
 	parser.add_argument( "-g", "--gui", action = "store_true", dest = "gui", help = "Show GUI while building (experimental)")
 	parser.add_argument( "--auto-close-gui", action = "store_true", help = "Automatically close the gui on build success (will stay open on failure)")
 	parser.add_argument("--profile", action="store_true", help="Collect detailed line-by-line profiling information on compile time. --gui option required to see this information.")
@@ -2304,6 +2346,14 @@ def _run( ):
 	if args.jobs:
 		_shared_globals.max_threads = args.jobs
 		_shared_globals.semaphore = threading.BoundedSemaphore( value = _shared_globals.max_threads )
+
+	if platform.system() == "Windows":
+		#Parallel link not supported on Windows.
+		_shared_globals.max_linker_threads = 1
+		_shared_globals.link_semaphore = threading.BoundedSemaphore( value = _shared_globals.max_linker_threads )
+	elif args.linker_jobs:
+		_shared_globals.max_linker_threads = max(args.linker_jobs, _shared_globals.max_threads)
+		_shared_globals.link_semaphore = threading.BoundedSemaphore( value = _shared_globals.max_linker_threads )
 
 	_shared_globals.profile = args.profile
 	_shared_globals.disable_chunks = args.no_chunks

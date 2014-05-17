@@ -817,6 +817,27 @@ class linkerBase( SettingsOverrider ):
 	def __init__(self):
 		SettingsOverrider.__init__(self)
 
+	def prePrepareBuildStep(self, project):
+		pass
+
+	def postPrepareBuildStep(self, project):
+		pass
+
+	def preMakeStep(self, project):
+		pass
+
+	def postMakeStep(self, project):
+		pass
+
+	def preBuildStep(self, project):
+		pass
+
+	def preLinkStep(self, project):
+		pass
+
+	def postBuildStep(self, project):
+		pass
+
 	def parseOutput(self, outputStr):
 		return None
 
@@ -918,6 +939,27 @@ class linkerBase( SettingsOverrider ):
 class compilerBase( SettingsOverrider ):
 	def __init__(self):
 		SettingsOverrider.__init__(self)
+
+	def prePrepareBuildStep(self, project):
+		pass
+
+	def postPrepareBuildStep(self, project):
+		pass
+
+	def preMakeStep(self, project):
+		pass
+
+	def postMakeStep(self, project):
+		pass
+
+	def preBuildStep(self, project):
+		pass
+
+	def preLinkStep(self, project):
+		pass
+
+	def postBuildStep(self, project):
+		pass
 
 	def parseOutput(self, outputStr):
 		return None
@@ -1200,6 +1242,7 @@ class toolchain( SettingsOverrider ):
 			tools.append( self.tools[arg] )
 		return ClassCombiner( tools )
 
+
 	def GetValidArchitectures( self ):
 		validArchs = set()
 		first = True
@@ -1213,6 +1256,7 @@ class toolchain( SettingsOverrider ):
 					validArchs &= set(archsThisTool)
 		return list(validArchs)
 
+
 	def AddCustomTool(self, name, tool):
 		self.tools[name] = tool()
 
@@ -1223,6 +1267,34 @@ class toolchain( SettingsOverrider ):
 			self.activeTool = self.tools[name]
 		else:
 			self.activeTool = None
+
+	def _runStep(self, name, project):
+		for tool in self.tools.values():
+			try:
+				getattr(tool, name)(project)
+			except:
+				continue
+
+	def prePrepareBuildStep(self, project):
+		self._runStep("prePrepareBuildStep", project)
+
+	def postPrepareBuildStep(self, project):
+		self._runStep("postPrepareBuildStep", project)
+
+	def preMakeStep(self, project):
+		self._runStep("preMakeStep", project)
+
+	def postMakeStep(self, project):
+		self._runStep("postMakeStep", project)
+
+	def preBuildStep(self, project):
+		self._runStep("preBuildStep", project)
+
+	def preLinkStep(self, project):
+		self._runStep("preLinkStep", project)
+
+	def postBuildStep(self, project):
+		self._runStep("postBuildStep", project)
 
 
 	def __getattr__( self, name ):

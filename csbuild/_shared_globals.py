@@ -183,8 +183,11 @@ columns = terminfo.TermInfo.GetNumColumns( ) if color_supported else 0
 printmutex = threading.Lock( )
 
 max_threads = multiprocessing.cpu_count( )
+max_linker_threads = max_threads
 
 semaphore = threading.BoundedSemaphore( value = max_threads )
+link_semaphore = threading.BoundedSemaphore( value = max_linker_threads )
+
 lock = threading.Lock( )
 
 build_success = True

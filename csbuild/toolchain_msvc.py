@@ -385,9 +385,15 @@ class compiler_msvc( MsvcBase, toolchain.compilerBase ):
 			'/Yu"{}"'.format( force_include_file ) if force_include_file else "",
 			pch )
 
+	def preLinkStep(self, project):
+		if project.cheaderfile:
+			self._project_settings.extraObjs.append("{}.obj".format(project.cheaderfile.rsplit(".", 1)[0]))
+		if project.cppheaderfile:
+			self._project_settings.extraObjs.append("{}.obj".format(project.cppheaderfile.rsplit(".", 1)[0]))
 
 	def getExtendedPrecompilerArgs( self, base_cmd, force_include_file, output_obj, input_file ):
 		split = input_file.rsplit(".", 1)
+		#This is safe to do because csbuild always creates C++ precompiled headers with a .hpp extension.
 		srcFile = os.path.join("{}.{}".format(split[0], "c" if split[1] == "h" else "cpp"))
 		file_mode = 438 # Octal 0666
 		fd = os.open(srcFile, os.O_WRONLY | os.O_CREAT | os.O_NOINHERIT, file_mode)
@@ -400,7 +406,6 @@ class compiler_msvc( MsvcBase, toolchain.compilerBase ):
 
 		objFile = "{}.obj".format(split[0])
 
-		self._project_settings.extraObjs.append("{}.obj".format(split[0]))
 		return '{} /Yc"{}" /Gm- /errorReport:none /Fp"{}" /FI"{}" /Fo"{}" /Fd"{}" "{}"'.format(
 			base_cmd,
 			input_file,
