@@ -103,6 +103,7 @@ from csbuild import _shared_globals
 from csbuild import projectSettings
 from csbuild import project_generator_qtcreator
 from csbuild import project_generator_slickedit
+from csbuild import project_generator_visual_studio
 from csbuild import project_generator
 
 
@@ -1888,6 +1889,7 @@ def _setupdefaults( ):
 
 	RegisterProjectGenerator( "qtcreator", project_generator_qtcreator.project_generator_qtcreator )
 	RegisterProjectGenerator( "slickedit", project_generator_slickedit.project_generator_slickedit )
+	RegisterProjectGenerator( "visualstudio", project_generator_visual_studio.project_generator_visual_studio )
 
 	if platform.system( ) == "Windows":
 		SetActiveToolchain( "msvc" )
@@ -1904,7 +1906,7 @@ sysExit = sys.exit
 def Done( code = 0 ):
 	"""
 	Exit the build process early
-	
+
 	@param code: Exit code to exit with
 	@type code: int
 	"""
@@ -1914,7 +1916,7 @@ def Done( code = 0 ):
 def Exit( code = 0 ):
 	"""
 	Exit the build process early
-	
+
 	@param code: Exit code to exit with
 	@type code: int
 	"""
