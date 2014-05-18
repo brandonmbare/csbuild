@@ -24,6 +24,7 @@ import os
 import sys
 import uuid
 import codecs
+import tempfile
 
 from csbuild import project_generator
 from csbuild import projectSettings
@@ -93,6 +94,7 @@ class Project:
 
 		self.name = ""
 		self.outputPath = ""
+		self.tempOutputPath = ""
 		self.dependencyList = set()
 		self.id = "{{{}}}".format(str(GenerateNewUuid(PROJECT_UUID_LIST)).upper())
 		self.isFilter = False
@@ -100,6 +102,8 @@ class Project:
 		self.platformConfigList = [] # Needs to be a list so it can be sorted.
 		self.fullSourceFileList = set()
 		self.fullHeaderFileList = set()
+		self.fullIncludePathList = set()
+		self.md5FileHash = None
 
 
 	def HasConfigAndPlatform(self, config, platform):
@@ -134,6 +138,8 @@ class project_generator_visual_studio(project_generator.project_generator):
 		self._archMap = {}
 		self._projectFileType = ProjectFileType.Unknown
 		self._extraBuildArgs = self.extraargs.replace(",", " ")
+		self._fullIncludePathList = set()
+		self._tempDirRoot = tempfile.mkdtemp()
 
 		for configName in _shared_globals.alltargets:
 			self._configList.append(CorrectConfigName(configName))
@@ -173,7 +179,8 @@ class project_generator_visual_studio(project_generator.project_generator):
 				# Fill in the project data.
 				projectData = Project() # Create a new object to contain project data.
 				projectData.name = projectName
-				projectData.outputPath = projectOutputPath
+				projectData.outputPath = os.path.join(self.rootpath, projectOutputPath)
+				projectData.tempOutputPath = os.path.join(self._tempDirRoot, projectOutputPath)
 
 				# Add the current project to the parent filter dependency list. In the case of filters,
 				# this isn't really a depencency list, it's just a list of nested projects.
@@ -190,6 +197,7 @@ class project_generator_visual_studio(project_generator.project_generator):
 						projectData.platformConfigList.append((configName, platformName, settings))
 						projectData.fullSourceFileList.update(set(settings.allsources))
 						projectData.fullHeaderFileList.update(set(settings.allheaders))
+						projectData.fullIncludePathList.update(set(settings.include_dirs))
 
 				projectData.platformConfigList = sorted(projectData.platformConfigList)
 
@@ -211,6 +219,9 @@ class project_generator_visual_studio(project_generator.project_generator):
 			for subGroupName, subGroup in projectGroup.subgroups.items():
 				groupPath = os.path.join(projectOutputPath, subGroupName)
 
+				groupPathFinal = os.path.join(self.rootpath, groupPath)
+				groupPathTemp = os.path.join(self._tempDirRoot, groupPath)
+
 				filterData = Project() # Subgroups should be treated as project filters in the solution.
 
 				filterData.name = subGroupName
@@ -220,8 +231,8 @@ class project_generator_visual_studio(project_generator.project_generator):
 				projectMap_out["{}.Filter".format(filterData.name)] = filterData
 
 				# Create the group path if it doesn't exist.
-				if not os.path.exists(groupPath):
-					os.makedirs(groupPath)
+				if not os.path.exists(groupPathFinal):
+					os.makedirs(groupPathFinal)
 
 				recurseGroups(projectMap_out, filterData, groupPath, subGroup)
 
@@ -249,6 +260,7 @@ class project_generator_visual_studio(project_generator.project_generator):
 			buildAllProjectData = Project() # Create a new object to contain project data.
 			buildAllProjectData.name = "(BUILD_ALL)"
 			buildAllProjectData.outputPath = self.rootpath
+			buildAllProjectData.tempOutputPath = self._tempDirRoot
 			buildAllProjectData.isBuildAllProject = True
 
 			# The Build All project doesn't have any project settings, but it still needs all of the platforms and configurations.
@@ -259,8 +271,11 @@ class project_generator_visual_studio(project_generator.project_generator):
 			# Add the Build All project to the project map.
 			self._projectMap[buildAllProjectData.name] = buildAllProjectData
 
-		recurseGroups(self._projectMap, None, self.rootpath, projectSettings.rootGroup)
+		recurseGroups(self._projectMap, None, "", projectSettings.rootGroup)
 		resolveDependencies(self._projectMap)
+
+		for projectName, projectData in self._projectMap.items():
+			self._fullIncludePathList.update(projectData.fullIncludePathList)
 
 		is2005 = (self._visualStudioVersion == 2005)
 		is2008 = (self._visualStudioVersion == 2008)
@@ -516,6 +531,7 @@ class project_generator_visual_studio(project_generator.project_generator):
 						buildCommandNode = AddNode(propertyGroupNode, "NMakeBuildCommandLine")
 						cleanCommandNode = AddNode(propertyGroupNode, "NMakeCleanCommandLine")
 						rebuildCommandNode = AddNode(propertyGroupNode, "NMakeReBuildCommandLine")
+						includePathNode = AddNode(propertyGroupNode, "NMakeIncludeSearchPath")
 						outDirNode = AddNode(propertyGroupNode, "OutDir")
 						intDirNode = AddNode(propertyGroupNode, "IntDir")
 
@@ -523,18 +539,17 @@ class project_generator_visual_studio(project_generator.project_generator):
 						projectArg = " --project={}".format(projectData.name) if not projectData.isBuildAllProject else ""
 						mainMakefile = os.path.relpath(os.path.join(os.getcwd(), csbuild.mainfile), projectData.outputPath)
 
-						buildCommandNode.text = "{} {} --target={} --architecture={}{} {}".format(sys.executable, mainMakefile, configName, archName, projectArg, self.extraargs)
-						cleanCommandNode.text = "{} {} --clean --target={} --architecture={}{} {}".format(sys.executable, mainMakefile, configName, archName, projectArg, self.extraargs)
-						rebuildCommandNode.text = "{} {} --rebuild --target={} --architecture={}{} {}".format(sys.executable, mainMakefile, configName, archName, projectArg, self.extraargs)
+						buildCommandNode.text = "{} {} --target={} --architecture={}{} {}".format(sys.executable, mainMakefile, configName, archName, projectArg, self._extraBuildArgs)
+						cleanCommandNode.text = "{} {} --clean --target={} --architecture={}{} {}".format(sys.executable, mainMakefile, configName, archName, projectArg, self._extraBuildArgs)
+						rebuildCommandNode.text = "{} {} --rebuild --target={} --architecture={}{} {}".format(sys.executable, mainMakefile, configName, archName, projectArg, self._extraBuildArgs)
+						includePathNode.text = ";".join(self._fullIncludePathList)
 
 						if not projectData.isBuildAllProject:
 							outputNode = AddNode(propertyGroupNode, "NMakeOutput")
-							includePathNode = AddNode(propertyGroupNode, "NMakeIncludeSearchPath")
 
 							outDirNode.text = os.path.relpath(settings.output_dir, projectData.outputPath)
 							intDirNode.text = os.path.relpath(settings.obj_dir, projectData.outputPath)
 							outputNode.text = os.path.relpath(os.path.join(settings.output_dir, settings.output_name), projectData.outputPath)
-							includePathNode.text = ";".join(settings.include_dirs)
 						else:
 							# Gotta put this stuff somewhere for the Build All project.
 							outDirNode.text = projectData.name + "_log"
