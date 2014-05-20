@@ -24,6 +24,7 @@ Contains a plugin class for creating android NDK projects
 import glob
 import platform
 import os
+import shutil
 import subprocess
 import sys
 import shlex
@@ -38,7 +39,7 @@ class AndroidBase( object ):
 	def __init__(self):
 		self._ndkHome = os.getenv("NDK_HOME")
 		self._sdkHome = os.getenv("ANDROID_HOME")
-		self._javaHome = os.getenv("JAVA_HOME")
+		self._antHome = os.getenv("ANT_HOME")
 		self._adkVersion = 19
 
 	def NdkHome(self, pathToNdk):
@@ -47,11 +48,14 @@ class AndroidBase( object ):
 	def SdkHome(self, pathToSdk):
 		self._sdkHome = pathToSdk
 
-	def JavaHome(self, pathToJava):
-		self._javaHome = pathToJava
+	def AntHome(self, pathToAnt):
+		self._antHome = pathToAnt
+
+	def AdkVersion(self, adkVersion):
+		self._adkVersion = adkVersion
 
 	def GetValidArchitectures(self):
-		return ['x86', 'arm', 'mips']
+		return ['x86', 'arm', 'armv7', 'mips']
 
 
 class AndroidCompiler(AndroidBase, toolchain_gcc.compiler_gcc):
@@ -61,6 +65,12 @@ class AndroidCompiler(AndroidBase, toolchain_gcc.compiler_gcc):
 
 		self._toolchainPath = ""
 		self._setupCompleted = False
+
+	def postPrepareBuildStep(self, project):
+		appGlueDir = os.path.join( self._ndkHome, "sources", "android", "native_app_glue" )
+		project.include_dirs.append(appGlueDir)
+		project.extraDirs.append(appGlueDir)
+		project.RediscoverFiles()
 
 	def _SetupCompiler(self, project):
 		#TODO: Let user choose which compiler version to use; for now, using the highest numbered version.
@@ -114,6 +124,7 @@ class AndroidCompiler(AndroidBase, toolchain_gcc.compiler_gcc):
 			cc = dirs[0]
 			cxx = "{}-{}".format(prefix, cxxName)
 
+		print "CC IS ", cc
 		self.settingsOverrides["cc"] = cc
 		self.settingsOverrides["cxx"] = cxx
 
@@ -122,6 +133,9 @@ class AndroidCompiler(AndroidBase, toolchain_gcc.compiler_gcc):
 		if not self._setupCompleted:
 			self._SetupCompiler(project)
 			self._setupCompleted = True
+
+	def prePrepareBuildStep(self, project):
+		self.SetupForProject(project)
 
 	def get_base_command( self, compiler, project, isCpp ):
 		self.SetupForProject(project)
@@ -217,7 +231,7 @@ class AndroidLinker(AndroidBase, toolchain_gcc.linker_gcc):
 			else:
 				cmd = project.activeToolchain.Compiler().settingsOverrides["cc"]
 
-			return "\"{}\" {}-o{} {} {} {} {}{}{} {} {}-g{} -O{} {} {} {} --sysroot \"{}\"".format(
+			return "\"{}\" {}-o{} {} {} {} {}{}{} {} {}-g{} -O{} {} {} {} --sysroot \"{}\" -L \"{}\"".format(
 				cmd,
 				"-pg " if project.profile else "",
 				outputFile,
@@ -234,7 +248,8 @@ class AndroidLinker(AndroidBase, toolchain_gcc.linker_gcc):
 				"-shared" if project.type == csbuild.ProjectType.SharedLibrary else "",
 				" ".join( project.linker_flags ),
 				"-L\"{}\" -lstlport_static".format(os.path.join( self._ndkHome, "sources", "cxx-stl", "stlport", "libs", "armeabi")) if project.hasCppFiles else "",
-				os.path.join( self._ndkHome, "platforms", "android-{}".format(self._adkVersion), "arch-{}".format(project.outputArchitecture))
+				os.path.join( self._ndkHome, "platforms", "android-{}".format(self._adkVersion), "arch-{}".format(project.outputArchitecture)),
+				os.path.join( self._ndkHome, "platforms", "android-{}".format(self._adkVersion), "arch-{}".format(project.outputArchitecture), "usr", "lib")
 			)
 
 	def find_library( self, project, library, library_dirs, force_static, force_shared ):
@@ -269,3 +284,87 @@ class AndroidLinker(AndroidBase, toolchain_gcc.linker_gcc):
 				return lib
 			elif not success:
 				return None
+
+	def prePrepareBuildStep(self, project):
+		#Everything on Android has to build as a shared library
+		project.metaType = project.type
+		project.type = csbuild.ProjectType.SharedLibrary
+		if not project.output_name.startswith("lib"):
+			project.output_name = "lib{}".format(project.output_name)
+
+	def postBuildStep(self, project):
+		if project.metaType != csbuild.ProjectType.Application:
+			return
+
+		appDir = os.path.join(project.csbuild_dir, "apk", project.name)
+		if os.path.exists(appDir):
+			shutil.rmtree(appDir)
+
+		androidTool = os.path.join(self._sdkHome, "tools", "android.bat" if platform.system() == "Windows" else "android.sh")
+		fd = subprocess.Popen(
+			[
+				androidTool, "create", "project",
+				"--path", appDir,
+				"--target", "android-{}".format(self._adkVersion),
+				"--name", project.name,
+				"--package", "com.csbuild.autopackage.{}".format(project.name),
+				"--activity", "CSBNativeAppActivity"
+			]
+		)
+		ret = fd.communicate()
+		libDir = ""
+		if project.outputArchitecture == "x86":
+			libDir = "x86"
+		elif project.outputArchitecture == "mips":
+			libDir = "mips"
+		elif project.outputArchitecture == "arm":
+			libDir = "armeabi-v7a"
+		else:
+			libDir = "armeabi"
+
+		libDir = os.path.join(appDir, "libs", libDir)
+
+		if not os.path.exists(libDir):
+			os.makedirs(libDir)
+
+		for library in project.library_locs:
+			#don't copy android system libraries
+			if library.startswith(self._ndkHome):
+				continue
+			shutil.copyfile(library, os.path.join(libDir, os.path.basename(library)))
+
+		for dep in project.linkDepends:
+			depProj = _shared_globals.projects[dep]
+			libFile = os.path.join(depProj.output_dir, depProj.output_name)
+			shutil.copyfile(libFile, os.path.join(libDir, os.path.basename(libFile)))
+
+		shutil.copyfile(os.path.join(project.output_dir, project.output_name), os.path.join(libDir, os.path.basename(project.output_name)))
+
+		with open(os.path.join(appDir, "AndroidManifest.xml"), "w") as f:
+			f.write("<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\"\n")
+			f.write("  package=\"com.csbuild.autopackage.{}\"\n".format(project.name))
+			f.write("  android:versionCode=\"1\"\n")
+			f.write("  android:versionName=\"1.0\">\n")
+			f.write("  <uses-sdk android:minSdkVersion=\"{}\" android:targetSdkVersion=\"{}\"/>\n".format(self._adkVersion, self._adkVersion))
+			#TODO: f.write("  <uses-feature android:glEsVersion=\"0x00020000\"></uses-feature>")
+			f.write("  <application android:label=\"{}\" android:hasCode=\"false\">\n".format(project.name))
+			f.write("    <activity android:name=\"android.app.NativeActivity\"\n")
+			f.write("      android:label=\"{}\">\n".format(project.name))
+			f.write("      android:configChanges=\"orientation|keyboardHidden\">\n")
+			f.write("      <meta-data android:name=\"android.app.lib_name\" android:value=\"{}\"/>\n".format(project.output_name[3:-3]))
+			f.write("      <intent-filter>\n")
+			f.write("        <action android:name=\"android.intent.action.MAIN\"/>\n")
+			f.write("        <category android:name=\"android.intent.category.LAUNCHER\"/>\n")
+			f.write("      </intent-filter>\n")
+			f.write("    </activity>\n")
+			f.write("  </application>\n")
+			f.write("</manifest>\n")
+
+		if project.debug_level != csbuild.DebugLevel.Disabled:
+			antBuildType = "debug"
+		else:
+			antBuildType = "release"
+
+		fd = subprocess.Popen([os.path.join(self._antHome, "bin", "ant.bat" if platform.system() == "Windows" else "ant.sh"), antBuildType], cwd=appDir)
+		ret = fd.communicate()
+

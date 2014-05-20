@@ -593,17 +593,17 @@ class projectSettings( object ):
 		global currentProject
 		currentProject = self
 
+		self.activeToolchain.prePrepareBuildStep(self)
+		if self.prePrepareBuildStep:
+			log.LOG_BUILD( "Running pre-PrepareBuild step for {} ({} {})".format( self.output_name, self.targetName, self.outputArchitecture ) )
+			self.prePrepareBuildStep(self)
+
 		self.activeToolchain.SetActiveTool("linker")
 		if self.ext is None:
 			self.ext = self.activeToolchain.Linker().get_default_extension( self.type )
 
 		self.output_name += self.ext
 		self.activeToolchain.SetActiveTool("compiler")
-
-		self.activeToolchain.prePrepareBuildStep(self)
-		if self.prePrepareBuildStep:
-			log.LOG_BUILD( "Running pre-PrepareBuild step for {} ({} {})".format( self.output_name, self.targetName, self.outputArchitecture ) )
-			self.prePrepareBuildStep(self)
 
 		log.LOG_BUILD( "Preparing tasks for {} ({} {})...".format( self.output_name, self.targetName, self.outputArchitecture ) )
 
@@ -1425,8 +1425,8 @@ class projectSettings( object ):
 
 	def save_md5( self, inFile ):
 		# If we're running on Windows, we need to remove the drive letter from the input file path.
-		if platform.system( ) == "Windows":
-			inFile = inFile[2:]
+		#if platform.system( ) == "Windows":
+		#	inFile = inFile[2:]
 
 		if sys.version_info >= (3,0):
 			inFile = inFile.encode("utf-8")

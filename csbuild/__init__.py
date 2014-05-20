@@ -1692,12 +1692,17 @@ class LinkThread(threading.Thread):
 			_shared_globals.build_success = False
 			project.state = _shared_globals.ProjectState.LINK_FAILED
 		elif ret == LinkStatus.Success:
-			project.activeToolchain.postBuildStep(project)
+
+			try:
+				project.activeToolchain.postBuildStep(project)
+			except Exception:
+				traceback.print_exc()
+
 			if project.postBuildStep:
 				log.LOG_BUILD( "Running post-build step for {} ({} {})".format( project.output_name, project.targetName, project.outputArchitecture ) )
 				try:
 					project.postBuildStep( project )
-				except:
+				except Exception:
 					traceback.print_exc()
 			project.state = _shared_globals.ProjectState.FINISHED
 		elif ret == LinkStatus.UpToDate:

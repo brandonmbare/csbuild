@@ -1270,10 +1270,8 @@ class toolchain( SettingsOverrider ):
 
 	def _runStep(self, name, project):
 		for tool in self.tools.values():
-			try:
+			if hasattr(tool, name):
 				getattr(tool, name)(project)
-			except:
-				continue
 
 	def prePrepareBuildStep(self, project):
 		self._runStep("prePrepareBuildStep", project)
