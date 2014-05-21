@@ -1212,6 +1212,9 @@ def build( ):
 	And spawning a build thread for each one that does.
 	"""
 
+	if _guiModule:
+		_guiModule.run()
+
 	_barWriter.start()
 
 	built = False
@@ -2219,18 +2222,17 @@ def _run( ):
 	group2.add_argument( '-qq', '--very-quiet', action = "store_const", const = 3, dest = "quiet",
 		help = "Very quiet. Disables all csb-specific logging.", default = 1 )
 	parser.add_argument( "-j", "--jobs", action = "store", dest = "jobs", type = int, help = "Number of simultaneous build processes" )
-	if platform.system() != "Windows":
-		#link.exe likes to lock files on Windows, so this can't be supported there.
-		parser.add_argument(
-			"-l",
-			"--linker-jobs",
-			action = "store",
-			dest = "linker_jobs",
-			type = int,
-			help = "Max number of simultaneous link processes. (If not specified, same value as -j.)"
-			"Note that this pool is shared with build threads, and linker will only get one thread from the pool until compile threads start becoming free."
-			"This value only specifies a maximum."
-		)
+
+	#	parser.add_argument(
+	#		"-l",
+	#		"--linker-jobs",
+	#		action = "store",
+	#		dest = "linker_jobs",
+	#		type = int,
+	#		help = "Max number of simultaneous link processes. (If not specified, same value as -j.)"
+	#		"Note that this pool is shared with build threads, and linker will only get one thread from the pool until compile threads start becoming free."
+	#		"This value only specifies a maximum."
+	#	)
 	parser.add_argument( "-g", "--gui", action = "store_true", dest = "gui", help = "Show GUI while building (experimental)")
 	parser.add_argument( "--auto-close-gui", action = "store_true", help = "Automatically close the gui on build success (will stay open on failure)")
 	parser.add_argument("--profile", action="store_true", help="Collect detailed line-by-line profiling information on compile time. --gui option required to see this information.")
@@ -2363,13 +2365,13 @@ def _run( ):
 		_shared_globals.max_threads = args.jobs
 		_shared_globals.semaphore = threading.BoundedSemaphore( value = _shared_globals.max_threads )
 
-	if platform.system() == "Windows":
-		#Parallel link not supported on Windows.
-		_shared_globals.max_linker_threads = 1
-		_shared_globals.link_semaphore = threading.BoundedSemaphore( value = _shared_globals.max_linker_threads )
-	elif args.linker_jobs:
-		_shared_globals.max_linker_threads = max(args.linker_jobs, _shared_globals.max_threads)
-		_shared_globals.link_semaphore = threading.BoundedSemaphore( value = _shared_globals.max_linker_threads )
+	#if platform.system() == "Windows":
+	#Parallel link doesn't currently work correctly on any platform.
+	_shared_globals.max_linker_threads = 1
+	_shared_globals.link_semaphore = threading.BoundedSemaphore( value = _shared_globals.max_linker_threads )
+	#elif args.linker_jobs:
+	#	_shared_globals.max_linker_threads = max(args.linker_jobs, _shared_globals.max_threads)
+	#	_shared_globals.link_semaphore = threading.BoundedSemaphore( value = _shared_globals.max_linker_threads )
 
 	_shared_globals.profile = args.profile
 	_shared_globals.disable_chunks = args.no_chunks
@@ -2568,7 +2570,6 @@ def _run( ):
 		from csbuild import _gui
 		global _guiModule
 		_guiModule = _gui
-		_guiModule.run()
 
 	if args.generate_solution is not None:
 		if not args.solution_path:
