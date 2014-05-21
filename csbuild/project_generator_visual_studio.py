@@ -34,18 +34,23 @@ from csbuild import _shared_globals
 import csbuild
 
 
-PROJECT_UUID_LIST = set()
+def GenerateNewUuid(uuidList, name):
+	nameIndex = 0
+	nameToHash = name
 
-
-def GenerateNewUuid(uuidList):
 	# Keep generating new UUIDs until we've found one that isn't already in use. This is only useful in cases where we have a pool of objects
 	# and each one needs to be guaranteed to have a UUID that doesn't collide with any other object in the same pool.  Though, because of the
 	# way UUIDs work, having a collision should be extremely rare anyway.
 	while True:
-		newUuid = uuid.uuid4()
+		newUuid = uuid.uuid5(uuid.NAMESPACE_OID, nameToHash)
 		if not newUuid in uuidList:
 			uuidList.add(newUuid)
 			return newUuid
+
+		# Name collision!  The easy solution here is to slightly modify the name in a predictable way.
+		nameToHash = "{}{}".format(name, nameIndex)
+		++nameIndex
+
 
 def GetPlatformName(architecture):
 	# The mapped architectures have special names in Visual Studio.
@@ -81,7 +86,7 @@ def CorrectConfigName(configName):
 	# you may run into problems with Visual Studio showing that alongside it's own "Debug" configuration, which is may have decided
 	# to just add alongside your own.  The solution is to just put the configurations in a format it expects (first letter upper case,
 	# the rest lowercase).  That way, it will see "Debug" already there and won't try to silently 'fix' that up for you.
-	return configName[0].upper() + configName[1:].lower()
+	return configName.capitalize()
 
 
 class Project:
@@ -89,21 +94,19 @@ class Project:
 	Container class for Visual Studio projects.
 	"""
 
-	def __init__(self):
-		global PROJECT_UUID_LIST
-
-		self.name = ""
+	def __init__(self, name, globalProjectUuidList):
+		self.name = name
 		self.outputPath = ""
 		self.tempOutputPath = ""
 		self.dependencyList = set()
-		self.id = "{{{}}}".format(str(GenerateNewUuid(PROJECT_UUID_LIST)).upper())
+		self.id = "{{{}}}".format(str(GenerateNewUuid(globalProjectUuidList, name)).upper())
 		self.isFilter = False
 		self.isBuildAllProject = False
 		self.platformConfigList = [] # Needs to be a list so it can be sorted.
 		self.fullSourceFileList = set()
 		self.fullHeaderFileList = set()
 		self.fullIncludePathList = set()
-		self.md5FileHash = None
+		self.makefilePath = ""
 
 
 	def HasConfigAndPlatform(self, config, platform):
@@ -140,6 +143,7 @@ class project_generator_visual_studio(project_generator.project_generator):
 		self._extraBuildArgs = self.extraargs.replace(",", " ")
 		self._fullIncludePathList = set()
 		self._tempDirRoot = tempfile.mkdtemp()
+		self._projectUuidList = set()
 
 		for configName in _shared_globals.alltargets:
 			self._configList.append(CorrectConfigName(configName))
@@ -163,7 +167,7 @@ class project_generator_visual_studio(project_generator.project_generator):
 	@staticmethod
 	def additional_args(parser):
 		parser.add_argument("--visual-studio-version",
-			help = "Select the version of Visual Studio the generated solution will be compatible with (i.e, --visualStudioVersion=2012).",
+			help = "Select the version of Visual Studio the generated solution will be compatible with (i.e, --visual-studio-version=2012).",
 			default = 2012)
 		#parser.add_argument("--create-native-project",
 		#	help = "Create a native solution that calls into MSBuild and NOT the makefiles.",
@@ -177,7 +181,7 @@ class project_generator_visual_studio(project_generator.project_generator):
 			for projectName, projectSettingsMap in projectGroup.projects.items():
 
 				# Fill in the project data.
-				projectData = Project() # Create a new object to contain project data.
+				projectData = Project(projectName, self._projectUuidList) # Create a new object to contain project data.
 				projectData.name = projectName
 				projectData.outputPath = os.path.join(self.rootpath, projectOutputPath)
 				projectData.tempOutputPath = os.path.join(self._tempDirRoot, projectOutputPath)
@@ -208,6 +212,9 @@ class project_generator_visual_studio(project_generator.project_generator):
 				for dependentProjectKey in settings.linkDepends:
 					projectData.dependencyList.add(_shared_globals.projects[dependentProjectKey].name)
 
+				# Grab the path to this project's makefile.
+				projectData.makefilePath = settings.scriptFile
+
 				projectData.dependencyList = set(sorted(projectData.dependencyList)) # Sort the dependency list.
 				projectMap_out[projectData.name] = projectData
 
@@ -222,9 +229,7 @@ class project_generator_visual_studio(project_generator.project_generator):
 				groupPathFinal = os.path.join(self.rootpath, groupPath)
 				groupPathTemp = os.path.join(self._tempDirRoot, groupPath)
 
-				filterData = Project() # Subgroups should be treated as project filters in the solution.
-
-				filterData.name = subGroupName
+				filterData = Project(subGroupName, self._projectUuidList) # Subgroups should be treated as project filters in the solution.
 				filterData.isFilter = True
 
 				# Explicitly map the filter names with a different name to help avoid possible naming collisions.
@@ -257,11 +262,12 @@ class project_generator_visual_studio(project_generator.project_generator):
 		# since Visual Studio doesn't give us a way to override the behavior of the "Build Solution" command.
 		if not self._createNativeProject:
 			# Fill in the project data.
-			buildAllProjectData = Project() # Create a new object to contain project data.
-			buildAllProjectData.name = "(BUILD_ALL)"
+			buildAllProjectName = "(BUILD_ALL)"
+			buildAllProjectData = Project(buildAllProjectName, self._projectUuidList) # Create a new object to contain project data.
 			buildAllProjectData.outputPath = self.rootpath
 			buildAllProjectData.tempOutputPath = self._tempDirRoot
 			buildAllProjectData.isBuildAllProject = True
+			buildAllProjectData.makefilePath = csbuild.scriptfiles[0] # Reference the main makefile.
 
 			# The Build All project doesn't have any project settings, but it still needs all of the platforms and configurations.
 			for platformName in self._platformList:
@@ -474,6 +480,12 @@ class project_generator_visual_studio(project_generator.project_generator):
 								excludeNode.text = "true"
 								excludeNode.set("Condition", "'$(Configuration)|$(Platform)'=='{}|{}'".format(configName, platformName))
 
+				if not self._createNativeProject:
+					itemGroupNode = AddNode(rootNode, "ItemGroup")
+					makefileNode = AddNode(itemGroupNode, "None")
+
+					makefileNode.set("Include", os.path.relpath(projectData.makefilePath, projectData.outputPath))
+
 				propertyGroupNode = AddNode(rootNode, "PropertyGroup")
 				importNode = AddNode(rootNode, "Import")
 				projectGuidNode = AddNode(propertyGroupNode, "ProjectGuid")
@@ -579,15 +591,17 @@ class project_generator_visual_studio(project_generator.project_generator):
 					headerFileFilterNode = AddNode(itemGroupNode, "Filter")
 
 					filterGuidList = set()
+					sourceFileFilterName = "Source Files"
+					headerFileFilterName = "Header Files"
 
-					sourceFileFilterNode.set("Include", "Source Files")
-					headerFileFilterNode.set("Include", "Header Files")
+					sourceFileFilterNode.set("Include", sourceFileFilterName)
+					headerFileFilterNode.set("Include", headerFileFilterName)
 
 					uniqueIdNode = AddNode(sourceFileFilterNode, "UniqueIdentifier")
-					uniqueIdNode.text = "{{{}}}".format(GenerateNewUuid(filterGuidList))
+					uniqueIdNode.text = "{{{}}}".format(GenerateNewUuid(filterGuidList, sourceFileFilterName))
 
 					uniqueIdNode = AddNode(headerFileFilterNode, "UniqueIdentifier")
-					uniqueIdNode.text = "{{{}}}".format(GenerateNewUuid(filterGuidList))
+					uniqueIdNode.text = "{{{}}}".format(GenerateNewUuid(filterGuidList, headerFileFilterName))
 
 					# Add the project's source files.
 					if len(projectData.fullSourceFileList) > 0:
