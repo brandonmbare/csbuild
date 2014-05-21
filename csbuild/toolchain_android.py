@@ -88,7 +88,7 @@ class AndroidBase( object ):
 				return "-target armv7-linux-androideabi"
 		else:
 			return ""
-		
+
 	def _getSimplifiedArch(self, project):
 		return project.outputArchitecture
 
@@ -118,7 +118,7 @@ class AndroidBase( object ):
 			platformName = "linux-x86_64"
 
 		self._binDir = os.path.join(toolchainsDir, bestCompilerVersion, "prebuilt", platformName)
-	
+
 	def _getCommands(self, project, cmd1, cmd2, searchInLlvmPath = False):
 		toolchainsDir = os.path.join(self._ndkHome, "toolchains")
 		arch = self._getSimplifiedArch(project)
@@ -313,7 +313,7 @@ class AndroidLinker(AndroidBase, toolchain_gcc.linker_gcc):
 			cmd += shlex.split( self.get_library_dirs( library_dirs, False ) )
 
 			if _shared_globals.show_commands:
-				print " ".join(cmd)
+				print(" ".join(cmd))
 
 			out = subprocess.check_output( cmd, stderr = subprocess.STDOUT )
 		except subprocess.CalledProcessError as e:
