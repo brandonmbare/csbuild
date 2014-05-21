@@ -687,7 +687,7 @@ def chunked_build( ):
 		return
 
 	if totalChunksWithMultipleFiles == 1 and not owningProject.unity:
-		chunkname = get_chunk_name( owningProject.output_name, chunks_to_build[0] )
+		chunkname = chunks_to_build[0]
 
 		obj = os.path.join(owningProject.obj_dir, "{}_{}{}".format( chunkname,
 			owningProject.targetName, owningProject.activeToolchain.Compiler().get_obj_ext() ))

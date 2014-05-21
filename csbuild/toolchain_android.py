@@ -35,12 +35,33 @@ from csbuild import log
 from csbuild import _shared_globals
 import csbuild
 
+if platform.system() == "Windows":
+	__CSL = None
+	import ctypes
+	def symlink(source, link_name):
+		'''symlink(source, link_name)
+		   Creates a symbolic link pointing to source named link_name'''
+		global __CSL
+		if __CSL is None:
+			csl = ctypes.windll.kernel32.CreateSymbolicLinkW
+			csl.argtypes = (ctypes.c_wchar_p, ctypes.c_wchar_p, ctypes.c_uint32)
+			csl.restype = ctypes.c_ubyte
+			__CSL = csl
+		flags = 0
+		if source is not None and os.path.isdir(source):
+			flags = 1
+		if __CSL(link_name, source, flags) == 0:
+			raise ctypes.WinError()
+else:
+	symlink = os.symlink
+
 class AndroidBase( object ):
 	def __init__(self):
 		self._ndkHome = os.getenv("NDK_HOME")
 		self._sdkHome = os.getenv("ANDROID_HOME")
 		self._antHome = os.getenv("ANT_HOME")
 		self._adkVersion = 19
+		self._binDir = ""
 
 	def NdkHome(self, pathToNdk):
 		self._ndkHome = pathToNdk
@@ -55,7 +76,92 @@ class AndroidBase( object ):
 		self._adkVersion = adkVersion
 
 	def GetValidArchitectures(self):
-		return ['x86', 'arm', 'armv7', 'mips']
+		return ['x86', 'arm', 'mips']
+
+	def _getTargetTriple(self, project):
+		if self.isClang:
+			if project.outputArchitecture == "x86":
+				return "-target i686-linux-android"
+			elif project.outputArchitecture == "mips":
+				return "-target mipsel-linux-android"
+			else:
+				return "-target armv7-linux-androideabi"
+		else:
+			return ""
+		
+	def _getSimplifiedArch(self, project):
+		return project.outputArchitecture
+
+	def _setBinDir(self, project):
+		toolchainsDir = os.path.join(self._ndkHome, "toolchains")
+		arch = self._getSimplifiedArch(project)
+
+		dirs = glob.glob(os.path.join(toolchainsDir, "{}*".format(arch)))
+
+		bestCompilerVersion = ""
+
+		for dirname in dirs:
+			prebuilt = os.path.join(toolchainsDir, dirname, "prebuilt")
+			if not os.path.exists(prebuilt):
+				continue
+
+			if dirname > bestCompilerVersion:
+				bestCompilerVersion = dirname
+
+		if not bestCompilerVersion:
+			log.LOG_ERROR("Couldn't find compiler for architecture {}.".format(project.outputArchitecture))
+			csbuild.Exit(1)
+
+		if platform.system() == "Windows":
+			platformName = "windows-x86_64"
+		else:
+			platformName = "linux-x86_64"
+
+		self._binDir = os.path.join(toolchainsDir, bestCompilerVersion, "prebuilt", platformName)
+	
+	def _getCommands(self, project, cmd1, cmd2, searchInLlvmPath = False):
+		toolchainsDir = os.path.join(self._ndkHome, "toolchains")
+		arch = self._getSimplifiedArch(project)
+
+		dirs = glob.glob(os.path.join(toolchainsDir, "{}*".format("llvm" if searchInLlvmPath else arch)))
+
+		bestCompilerVersion = ""
+
+		for dirname in dirs:
+			prebuilt = os.path.join(toolchainsDir, dirname, "prebuilt")
+			if not os.path.exists(prebuilt):
+				continue
+
+			if dirname > bestCompilerVersion:
+				bestCompilerVersion = dirname
+
+		if not bestCompilerVersion:
+			log.LOG_ERROR("Couldn't find compiler for architecture {}.".format(project.outputArchitecture))
+			csbuild.Exit(1)
+
+		if platform.system() == "Windows":
+			platformName = "windows-x86_64"
+			ext = ".exe"
+		else:
+			platformName = "linux-x86_64"
+			ext = ""
+
+		cmd1Name = cmd1 + ext
+		cmd2Name = cmd2 + ext
+
+		binDir = os.path.join(toolchainsDir, bestCompilerVersion, "prebuilt", platformName, "bin")
+		maybeCmd1 = os.path.join(binDir, cmd1Name)
+
+		if os.path.exists(maybeCmd1):
+			cmd1Result = maybeCmd1
+			cmd2Result = os.path.join(binDir, cmd2Name)
+		else:
+			dirs = list(glob.glob(os.path.join(binDir, "*-{}".format(cmd1Name))))
+			prefix = dirs[0].rsplit('-', 1)[0]
+			cmd1Result = dirs[0]
+			cmd2Result = "{}-{}".format(prefix, cmd2Name)
+
+		return cmd1Result, cmd2Result
 
 
 class AndroidCompiler(AndroidBase, toolchain_gcc.compiler_gcc):
@@ -74,64 +180,23 @@ class AndroidCompiler(AndroidBase, toolchain_gcc.compiler_gcc):
 
 	def _SetupCompiler(self, project):
 		#TODO: Let user choose which compiler version to use; for now, using the highest numbered version.
-		toolchainsDir = os.path.join(self._ndkHome, "toolchains")
-		dirs = glob.glob(os.path.join(toolchainsDir, "{}*".format(project.outputArchitecture)))
-
-		bestClang = ""
-		bestGcc = ""
-
-		for dirname in dirs:
-			prebuilt = os.path.join(toolchainsDir, dirname, "prebuilt")
-			if not os.path.exists(prebuilt):
-				continue
-
-			if "llvm" in dirname:
-				if dirname > bestClang:
-					bestClang = dirname
-			else:
-				if dirname > bestGcc:
-					bestGcc = dirname
-
-		if not bestGcc:
-			log.LOG_ERROR("Architecture {} is not supported by the android toolchain.".format(project.outputArchitecture))
-			csbuild.Exit(1)
-
-		if platform.system() == "Windows":
-			platformName = "windows-x86_64"
-			ext = ".exe"
-		else:
-			platformName = "linux-x86_64"
-			ext = ""
 
 		if self.isClang:
-			compilerDir = bestClang
-			ccName = "clang" + ext
-			cxxName = "clang++" + ext
+			ccName = "clang"
+			cxxName = "clang++"
 		else:
-			compilerDir = bestGcc
-			ccName = "gcc" + ext
-			cxxName = "g++" + ext
+			ccName = "gcc"
+			cxxName = "g++"
 
-		binDir = os.path.join(toolchainsDir, compilerDir, "prebuilt", platformName, "bin")
-		maybecc = os.path.join(binDir, ccName)
-
-		if os.path.exists(maybecc):
-			cc = maybecc
-			cxx = os.path.join(binDir, cxxName)
-		else:
-			dirs = list(glob.glob(os.path.join(binDir, "*-{}".format(ccName))))
-			prefix = dirs[0].rsplit('-', 1)[0]
-			cc = dirs[0]
-			cxx = "{}-{}".format(prefix, cxxName)
-
-		print "CC IS ", cc
-		self.settingsOverrides["cc"] = cc
-		self.settingsOverrides["cxx"] = cxx
+		self.settingsOverrides["cc"], self.settingsOverrides["cxx"] = self._getCommands(project, ccName, cxxName, self.isClang)
 
 	def SetupForProject( self, project ):
 		#toolchain_gcc.compiler_gcc.SetupForProject(self, project)
 		if not self._setupCompleted:
+			if "clang" in project.cc or "clang" in project.cxx:
+				self.isClang = True
 			self._SetupCompiler(project)
+			self._setBinDir(project)
 			self._setupCompleted = True
 
 	def prePrepareBuildStep(self, project):
@@ -140,14 +205,17 @@ class AndroidCompiler(AndroidBase, toolchain_gcc.compiler_gcc):
 	def get_base_command( self, compiler, project, isCpp ):
 		self.SetupForProject(project)
 
-		exitcodes = "-pass-exit-codes"
+		if not self.isClang:
+			exitcodes = "-pass-exit-codes"
+		else:
+			exitcodes = ""
 
 		if isCpp:
 			standard = self.cppStandard
 		else:
 			standard = self.cStandard
 
-		return "\"{}\" {} -Winvalid-pch -c {}-g{} -O{} {}{}{} {} {} --sysroot \"{}\"".format(
+		return "\"{}\" {} -Winvalid-pch -c {}-g{} -O{} {}{}{} {} {} --sysroot \"{}\" {} -isystem \"{}\"".format(
 			compiler,
 			exitcodes,
 			self.get_defines( project.defines, project.undefines ),
@@ -158,7 +226,9 @@ class AndroidCompiler(AndroidBase, toolchain_gcc.compiler_gcc):
 			"--std={0}".format( standard ) if standard != "" else "",
 			" ".join( project.cpp_compiler_flags ) if isCpp else " ".join( project.c_compiler_flags ),
 			"-isystem \"{}\"".format(os.path.join( self._ndkHome, "sources", "cxx-stl", "stlport", "stlport")) if isCpp else "",
-			os.path.join( self._ndkHome, "platforms", "android-{}".format(self._adkVersion), "arch-{}".format(project.outputArchitecture))
+			self._binDir,
+			self._getTargetTriple(project),
+			os.path.join( self._ndkHome, "platforms", "android-{}".format(self._adkVersion), "arch-{}".format(self._getSimplifiedArch(project)), "usr", "include")
 		)
 
 
@@ -170,54 +240,15 @@ class AndroidLinker(AndroidBase, toolchain_gcc.linker_gcc):
 
 	def _SetupLinker(self, project):
 		#TODO: Let user choose which compiler version to use; for now, using the highest numbered version.
-		toolchainsDir = os.path.join(self._ndkHome, "toolchains")
-		dirs = glob.glob(os.path.join(toolchainsDir, "{}*".format(project.outputArchitecture)))
-
-		compilerDir = ""
-
-		for dirname in dirs:
-			prebuilt = os.path.join(toolchainsDir, dirname, "prebuilt")
-			if not os.path.exists(prebuilt):
-				continue
-
-			if "llvm" in dirname:
-				continue
-
-			if dirname > compilerDir:
-				compilerDir = dirname
-
-		if not compilerDir:
-			log.LOG_ERROR("Architecture {} is not supported by the android toolchain.".format(project.outputArchitecture))
-
-		if platform.system() == "Windows":
-			platformName = "windows-x86_64"
-			ext = ".exe"
-		else:
-			platformName = "linux-x86_64"
-			ext = ""
-
-		ldName = "ld" + ext
-		arName = "ar" + ext
-
-		binDir = os.path.join(toolchainsDir, compilerDir, "prebuilt", platformName, "bin")
-		maybeld = os.path.join(binDir, ldName)
-
-		if os.path.exists(maybeld):
-			ld = maybeld
-			ar = os.path.join(binDir, arName)
-		else:
-			dirs = list(glob.glob(os.path.join(binDir, "*-{}".format(ldName))))
-			prefix = dirs[0].rsplit('-', 1)[0]
-			ld = dirs[0]
-			ar = "{}-{}".format(prefix, arName)
-
-		self._ld = ld
-		self._ar = ar
+		self._ld, self._ar = self._getCommands(project, "ld", "ar")
 
 	def SetupForProject( self, project ):
 		toolchain_gcc.linker_gcc.SetupForProject(self, project)
 		if not self._setupCompleted:
+			if "clang" in project.cc or "clang" in project.cxx:
+				self.isClang = True
 			self._SetupLinker(project)
+			self._setBinDir(project)
 			self._setupCompleted = True
 
 
@@ -231,12 +262,21 @@ class AndroidLinker(AndroidBase, toolchain_gcc.linker_gcc):
 			else:
 				cmd = project.activeToolchain.Compiler().settingsOverrides["cc"]
 
-			return "\"{}\" {}-o{} {} {} {} {}{}{} {} {}-g{} -O{} {} {} {} --sysroot \"{}\" -L \"{}\"".format(
+			libDir = os.path.join( self._ndkHome, "platforms", "android-{}".format(self._adkVersion), "arch-{}".format(self._getSimplifiedArch(project)), "usr", "lib")
+
+			if self.isClang:
+				crtbegin = os.path.join(project.obj_dir, "crtbegin_so.o")
+				if not os.path.exists(crtbegin):
+					symlink(os.path.join(libDir, "crtbegin_so.o"), crtbegin)
+				crtend = os.path.join(project.obj_dir, "crtend_so.o")
+				if not os.path.exists(crtend):
+					symlink(os.path.join(libDir, "crtend_so.o"), crtend)
+
+			return "\"{}\" {}-o{} {} {} {}{}{} {} {}-g{} -O{} {} {} {} --sysroot \"{}\" {} -L\"{}\"".format(
 				cmd,
 				"-pg " if project.profile else "",
 				outputFile,
 				" ".join( objList ),
-				"-static-libgcc -static-libstdc++ " if project.static_runtime else "",
 				"-Wl,--no-as-needed -Wl,--start-group" if not self.strictOrdering else "",
 				self.get_libraries( project.libraries ),
 				self.get_static_libraries( project.static_libraries ),
@@ -247,31 +287,41 @@ class AndroidLinker(AndroidBase, toolchain_gcc.linker_gcc):
 				project.opt_level,
 				"-shared" if project.type == csbuild.ProjectType.SharedLibrary else "",
 				" ".join( project.linker_flags ),
-				"-L\"{}\" -lstlport_static".format(os.path.join( self._ndkHome, "sources", "cxx-stl", "stlport", "libs", "armeabi")) if project.hasCppFiles else "",
-				os.path.join( self._ndkHome, "platforms", "android-{}".format(self._adkVersion), "arch-{}".format(project.outputArchitecture)),
-				os.path.join( self._ndkHome, "platforms", "android-{}".format(self._adkVersion), "arch-{}".format(project.outputArchitecture), "usr", "lib")
+				"-L\"{}\" -lstlport_static".format(os.path.join(
+					self._ndkHome,
+					"sources",
+					"cxx-stl",
+					"stlport",
+					"libs",
+					"armeabi-v7a" if project.outputArchitecture == "arm" else project.outputArchitecture)
+				) if project.hasCppFiles else "",
+				self._binDir,
+				#os.path.join( self._ndkHome, "platforms", "android-{}".format(self._adkVersion), "arch-{}".format(self._getSimplifiedArch(project))),
+				self._getTargetTriple(project),
+				libDir
 			)
 
 	def find_library( self, project, library, library_dirs, force_static, force_shared ):
 		success = True
 		out = ""
 		self.SetupForProject( project )
+		nullOut = os.path.join(project.csbuild_dir, "null")
 		try:
-			if _shared_globals.show_commands:
-				print("{} -o /dev/null --verbose {} {} -l{}".format(
-					self._ld,
-					self.get_library_dirs( library_dirs, False ),
-					"-static" if force_static else "-shared" if force_shared else "",
-					library ))
-			cmd = [self._ld, "-o", "/dev/null", "--verbose",
+			cmd = [self._ld, "-o", nullOut, "--verbose",
 				   "-static" if force_static else "-shared" if force_shared else "", "-l{}".format( library ),
-				   "--sysroot", os.path.join( self._ndkHome, "platforms", "android-{}".format(self._adkVersion), "arch-{}".format(project.outputArchitecture))]
+				   "-L", os.path.join( self._ndkHome, "platforms", "android-{}".format(self._adkVersion), "arch-{}".format(self._getSimplifiedArch(project)), "usr", "lib")]
 			cmd += shlex.split( self.get_library_dirs( library_dirs, False ) )
+
+			if _shared_globals.show_commands:
+				print " ".join(cmd)
+
 			out = subprocess.check_output( cmd, stderr = subprocess.STDOUT )
 		except subprocess.CalledProcessError as e:
 			out = e.output
 			success = False
 		finally:
+			if os.path.exists(nullOut):
+				os.remove(nullOut)
 			if sys.version_info >= (3, 0):
 				RMatch = re.search( "attempt to open (.*) succeeded".encode( 'utf-8' ), out, re.I )
 			else:
@@ -293,6 +343,7 @@ class AndroidLinker(AndroidBase, toolchain_gcc.linker_gcc):
 			project.output_name = "lib{}".format(project.output_name)
 
 	def postBuildStep(self, project):
+		log.LOG_BUILD("Generating APK for {} ({} {})".format(project.output_name, project.targetName, project.outputArchitecture))
 		if project.metaType != csbuild.ProjectType.Application:
 			return
 
@@ -309,18 +360,22 @@ class AndroidLinker(AndroidBase, toolchain_gcc.linker_gcc):
 				"--name", project.name,
 				"--package", "com.csbuild.autopackage.{}".format(project.name),
 				"--activity", "CSBNativeAppActivity"
-			]
+			],
+			stderr=subprocess.STDOUT,
+			stdout=subprocess.PIPE
 		)
-		ret = fd.communicate()
+		output, errors = fd.communicate()
+		if fd.returncode != 0:
+			log.LOG_ERROR("Android tool failed to generate project skeleton!\n{}".format(output))
+			return
+
 		libDir = ""
 		if project.outputArchitecture == "x86":
 			libDir = "x86"
 		elif project.outputArchitecture == "mips":
 			libDir = "mips"
-		elif project.outputArchitecture == "arm":
-			libDir = "armeabi-v7a"
 		else:
-			libDir = "armeabi"
+			libDir = "armeabi-v7a"
 
 		libDir = os.path.join(appDir, "libs", libDir)
 
@@ -365,6 +420,25 @@ class AndroidLinker(AndroidBase, toolchain_gcc.linker_gcc):
 		else:
 			antBuildType = "release"
 
-		fd = subprocess.Popen([os.path.join(self._antHome, "bin", "ant.bat" if platform.system() == "Windows" else "ant.sh"), antBuildType], cwd=appDir)
-		ret = fd.communicate()
+		fd = subprocess.Popen(
+			[
+				os.path.join(self._antHome, "bin", "ant.bat" if platform.system() == "Windows" else "ant.sh"),
+				antBuildType
+			],
+			stderr=subprocess.STDOUT,
+			stdout=subprocess.PIPE,
+			cwd=appDir
+		)
 
+		output, errors = fd.communicate()
+		if fd.returncode != 0:
+			log.LOG_ERROR("Ant build failed!\n{}".format(output))
+			return
+
+		appName = "{}-{}.apk".format(project.output_name[3:-3], antBuildType)
+		appEndLoc = os.path.join(project.output_dir, appName)
+		if os.path.exists(appEndLoc):
+			os.remove(appEndLoc)
+
+		shutil.move(os.path.join(appDir, "bin", appName), project.output_dir)
+		log.LOG_BUILD("Finished generating APK for {} ({} {})".format(project.output_name, project.targetName, project.outputArchitecture))

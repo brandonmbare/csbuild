@@ -922,6 +922,7 @@ def SetActiveToolchain( name ):
 
 #<editor-fold desc="decorators">
 
+scriptfiles = []
 
 def project( name, workingDirectory, linkDepends = None, srcDepends = None, priority = -1 ):
 	"""
@@ -962,6 +963,7 @@ def project( name, workingDirectory, linkDepends = None, srcDepends = None, prio
 		newProject.name = name
 		newProject.workingDirectory = os.path.abspath( workingDirectory )
 		newProject.scriptPath = os.getcwd( )
+		newProject.scriptFile = scriptfiles[-1]
 
 		newProject.linkDepends = linkDepends
 		newProject.srcDepends = srcDepends
@@ -1625,7 +1627,7 @@ def performLink(project, objs):
 	if platform.system() != "Windows":
 		cmd = shlex.split(cmd)
 
-	fd = subprocess.Popen( cmd, stdout = subprocess.PIPE, stderr = subprocess.PIPE, cwd = project.workingDirectory )
+	fd = subprocess.Popen( cmd, stdout = subprocess.PIPE, stderr = subprocess.PIPE, cwd = project.obj_dir )
 
 	(output, errors) = fd.communicate( )
 	ret = fd.returncode
@@ -1801,30 +1803,10 @@ def clean( silent = False ):
 			os.remove( outpath )
 
 
-def install( ):
-	"""
-	Installer.
-	Invoked with --install.
-	Installs the generated output file and/or header files to the specified directory.
-	Does nothing if neither InstallHeaders() nor InstallOutput() has been called in the make script.
-	"""
+def install_headers( ):
+	log.LOG_INSTALL("Installing headers...")
+
 	for project in _shared_globals.sortedProjects:
-		os.chdir( project.workingDirectory )
-		output = os.path.join( project.output_dir, project.output_name )
-		install_something = False
-
-		if project.install_output:
-			#install output file
-			if os.path.exists( output ):
-				outputDir = _shared_globals.install_libdir
-				if not os.path.exists( outputDir ):
-					os.makedirs( outputDir )
-				log.LOG_INSTALL( "Installing {0} to {1}...".format( output, outputDir ) )
-				shutil.copy( output, outputDir )
-				install_something = True
-			else:
-				log.LOG_ERROR( "Output file {0} does not exist! You must build without --install first.".format( output ) )
-
 		#install headers
 		subdir = project.header_subdir
 		if not subdir:
@@ -1844,10 +1826,35 @@ def install( ):
 				shutil.copy( header, install_dir )
 			install_something = True
 
-		if not install_something:
-			log.LOG_INSTALL( "Nothing to install." )
-		else:
-			log.LOG_INSTALL( "Done." )
+def install_output( ):
+	log.LOG_INSTALL("Installing output...")
+
+	for project in _shared_globals.sortedProjects:
+		os.chdir( project.workingDirectory )
+		output = os.path.join( project.output_dir, project.output_name )
+		install_something = False
+
+		if project.install_output:
+			#install output file
+			if os.path.exists( output ):
+				outputDir = _shared_globals.install_libdir
+				if not os.path.exists( outputDir ):
+					os.makedirs( outputDir )
+				log.LOG_INSTALL( "Installing {0} to {1}...".format( output, outputDir ) )
+				shutil.copy( output, outputDir )
+				install_something = True
+			else:
+				log.LOG_ERROR( "Output file {0} does not exist! You must build without --install first.".format( output ) )
+
+def install( ):
+	"""
+	Installer.
+	Invoked with --install.
+	Installs the generated output file and/or header files to the specified directory.
+	Does nothing if neither InstallHeaders() nor InstallOutput() has been called in the make script.
+	"""
+	install_headers()
+	install_output()
 
 
 def make( ):
@@ -1880,7 +1887,9 @@ def AddScript( incFile ):
 	incFile = os.path.abspath( incFile )
 	wd = os.getcwd( )
 	os.chdir( path )
+	scriptfiles.append(incFile)
 	_execfile( incFile, _shared_globals.makefile_dict, _shared_globals.makefile_dict )
+	del scriptfiles[-1]
 	os.chdir( wd )
 
 
@@ -1895,9 +1904,9 @@ def debug( ):
 	Define("_DEBUG")
 
 	if not projectSettings.currentProject.output_dir_set:
-		projectSettings.currentProject.output_dir = "Debug"
+		projectSettings.currentProject.output_dir = "{project.activeToolchainName}-{project.outputArchitecture}-{project.targetName}"
 	if not projectSettings.currentProject.obj_dir_set:
-		projectSettings.currentProject.obj_dir = os.path.join("Debug", "obj")
+		projectSettings.currentProject.obj_dir = os.path.join(projectSettings.currentProject.output_dir, "obj")
 	if not projectSettings.currentProject.toolchains["msvc"].Compiler().debug_runtime_set:
 		projectSettings.currentProject.toolchains["msvc"].Compiler().debug_runtime = True
 	if not projectSettings.currentProject.toolchains["msvc"].Linker().debug_runtime_set:
@@ -1915,9 +1924,9 @@ def release( ):
 	Define("NDEBUG")
 
 	if not projectSettings.currentProject.output_dir_set:
-		projectSettings.currentProject.output_dir = "Release"
+		projectSettings.currentProject.output_dir = "{project.activeToolchainName}-{project.outputArchitecture}-{project.targetName}"
 	if not projectSettings.currentProject.obj_dir_set:
-		projectSettings.currentProject.obj_dir =  os.path.join("Release", "obj")
+		projectSettings.currentProject.obj_dir = os.path.join(projectSettings.currentProject.output_dir, "obj")
 	if not projectSettings.currentProject.toolchains["msvc"].Compiler().debug_runtime_set:
 		projectSettings.currentProject.toolchains["msvc"].Compiler().debug_runtime = False
 	if not projectSettings.currentProject.toolchains["msvc"].Linker().debug_runtime_set:
@@ -2099,6 +2108,7 @@ def _run( ):
 			mainfile = os.path.basename( os.path.abspath( mainfile ) )
 		else:
 			mainfileDir = os.path.abspath( os.getcwd( ) )
+		scriptfiles.append(os.path.join(mainfileDir, mainfile))
 		if "-h" in sys.argv or "--help" in sys.argv:
 			global helpMode
 			helpMode = True
@@ -2197,6 +2207,8 @@ def _run( ):
 	group = parser.add_mutually_exclusive_group( )
 	group.add_argument( '-c', '--clean', action = "store_true", help = 'Clean the target build' )
 	group.add_argument( '--install', action = "store_true", help = 'Install the target build' )
+	group.add_argument( '--install-headers', action = "store_true", help = 'Install only headers for the target build' )
+	group.add_argument( '--install-output', action = "store_true", help = 'Install only the output for the target build' )
 	group.add_argument( '--version', action = "store_true", help = "Print version information and exit" )
 	group.add_argument( '-r', '--rebuild', action = "store_true", help = 'Clean the target build and then build it' )
 	group2 = parser.add_mutually_exclusive_group( )
@@ -2234,8 +2246,7 @@ def _run( ):
 		choices = _shared_globals.alltoolchains, action = "store" )
 
 	group = parser.add_mutually_exclusive_group( )
-	group.add_argument( '--architecture', '--arch', help = "Architecture to compile for.",
-		choices = ["x86", "x64", "arm"], action = "append" )
+	group.add_argument( '--architecture', '--arch', help = "Architecture to compile for.", action = "append" )
 	group.add_argument( "--all-architectures", "--all-arch", action = "store_true", help = "Build all architectures supported by this toolchain" )
 
 	parser.add_argument(
@@ -2309,7 +2320,7 @@ def _run( ):
 		return
 
 	_shared_globals.CleanBuild = args.clean
-	_shared_globals.do_install = args.install
+	_shared_globals.do_install = args.install or args.install_headers or args.install_output
 	_shared_globals.quiet = args.quiet
 	_shared_globals.show_commands = args.show_commands
 	_shared_globals.rebuild = args.rebuild or args.profile
@@ -2436,12 +2447,16 @@ def _run( ):
 			_shared_globals.projects.update( { newproject.key: newproject } )
 
 		for project in _shared_globals.tempprojects.values( ):
+			project.activeToolchain = project.toolchains[project.activeToolchainName]
+			archList = project.activeToolchain.GetValidArchitectures()
 			if args.architecture:
 				for arch in args.architecture:
+					if arch not in archList:
+						log.LOG_ERROR("Toolchain {} does not support architecture {}".format(project.activeToolchainName, arch))
+						Exit(1)
 					BuildWithArchitedcture(project, arch)
 			elif args.all_architectures:
-				project.activeToolchain = project.toolchains[project.activeToolchainName]
-				for arch in project.activeToolchain.GetValidArchitectures():
+				for arch in archList:
 					BuildWithArchitedcture(project, arch)
 			elif platform.machine().endswith('64'):
 				BuildWithArchitedcture(project, "x64")
@@ -2568,8 +2583,12 @@ def _run( ):
 
 	elif _shared_globals.CleanBuild:
 		clean( )
-	elif _shared_globals.do_install:
+	elif args.install:
 		install( )
+	elif args.install_headers:
+		install_headers()
+	elif args.install_output:
+		install_output()
 	elif _shared_globals.rebuild:
 		clean( )
 		make( )

@@ -475,6 +475,7 @@ class projectSettings( object ):
 		self.library_locs = []
 
 		self.scriptPath = ""
+		self.scriptFile = ""
 
 		self.mutex = threading.Lock( )
 
@@ -542,15 +543,14 @@ class projectSettings( object ):
 		os.chdir( self.workingDirectory )
 
 		self.activeToolchain = self.toolchains[self.activeToolchainName]
-		self.activeToolchain.SetActiveTool("compiler")
 
-		self.obj_dir = os.path.abspath( self.obj_dir ).format(project=self)
 		self.activeToolchain.SetActiveTool("linker")
 		self.output_dir = os.path.abspath( self.output_dir ).format(project=self)
 		if not os.path.exists(self.output_dir):
 			os.makedirs(self.output_dir)
 
 		self.activeToolchain.SetActiveTool("compiler")
+		self.obj_dir = os.path.abspath( self.obj_dir ).format(project=self)
 		self.csbuild_dir = os.path.join( self.obj_dir, ".csbuild" )
 
 		alteredIncludeDirs = []
@@ -831,6 +831,7 @@ class projectSettings( object ):
 			"outputArchitecture": self.outputArchitecture,
 			"library_locs": list( self.library_locs ),
 			"scriptPath": self.scriptPath,
+			"scriptFile": self.scriptFile,
 			"mutex": threading.Lock( ),
 			"preBuildStep" : self.preBuildStep,
 			"postBuildStep" : self.postBuildStep,
