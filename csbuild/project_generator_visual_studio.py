@@ -25,6 +25,7 @@ import sys
 import uuid
 import codecs
 import tempfile
+import hashlib
 
 from csbuild import project_generator
 from csbuild import projectSettings
@@ -97,12 +98,11 @@ class Project:
 	def __init__(self, name, globalProjectUuidList):
 		self.name = name
 		self.outputPath = ""
-		self.tempOutputPath = ""
 		self.dependencyList = set()
 		self.id = "{{{}}}".format(str(GenerateNewUuid(globalProjectUuidList, name)).upper())
 		self.isFilter = False
 		self.isBuildAllProject = False
-		self.platformConfigList = [] # Needs to be a list so it can be sorted.
+		self.platformConfigList = []
 		self.fullSourceFileList = set()
 		self.fullHeaderFileList = set()
 		self.fullIncludePathList = set()
@@ -115,6 +115,34 @@ class Project:
 				return True
 
 		return False
+
+
+class CachedFileData:
+
+	def __init__(self, outputFilePath, fileData):
+		self._outputFilePath = outputFilePath
+		self._fileData = fileData
+		self._md5FileDataHash = hashlib.md5()
+		self._md5FileDataHash.update(self._fileData)
+		self._md5FileDataHash = self._md5FileDataHash.hexdigest()
+
+
+	def SaveFile(self):
+		canWriteOutputFile = True
+		if os.path.exists(self._outputFilePath):
+			with open(self._outputFilePath, "rb") as fileHandle:
+				fileData = fileHandle.read()
+				fileDataHash = hashlib.md5()
+				fileDataHash.update(fileData)
+				fileDataHash = fileDataHash.hexdigest()
+				canWriteOutputFile = (fileDataHash != self._md5FileDataHash)
+
+		if canWriteOutputFile:
+			print("Writing file {}...".format(self._outputFilePath))
+			with open(self._outputFilePath, "wb") as fileHandle:
+				fileHandle.write(self._fileData)
+		else:
+			print("Up-to-date: {}".format(self._outputFilePath))
 
 
 class ProjectFileType:
@@ -139,14 +167,17 @@ class project_generator_visual_studio(project_generator.project_generator):
 		self._configList = []
 		self._platformList = []
 		self._archMap = {}
+		self._reverseConfigMap = {} # A reverse look-up map for the configuration names.
 		self._projectFileType = ProjectFileType.Unknown
 		self._extraBuildArgs = self.extraargs.replace(",", " ")
-		self._fullIncludePathList = set()
-		self._tempDirRoot = tempfile.mkdtemp()
+		self._fullIncludePathList = set() # Should be a set starting out so duplicates are eliminated.
 		self._projectUuidList = set()
+		self._orderedProjectList = []
 
 		for configName in _shared_globals.alltargets:
-			self._configList.append(CorrectConfigName(configName))
+			correctedConfigName = CorrectConfigName(configName)
+			self._configList.append(correctedConfigName)
+			self._reverseConfigMap[correctedConfigName] = configName
 
 		# Compile a list of the platforms for the solution.
 		for archName in _shared_globals.allarchitectures:
@@ -184,7 +215,6 @@ class project_generator_visual_studio(project_generator.project_generator):
 				projectData = Project(projectName, self._projectUuidList) # Create a new object to contain project data.
 				projectData.name = projectName
 				projectData.outputPath = os.path.join(self.rootpath, projectOutputPath)
-				projectData.tempOutputPath = os.path.join(self._tempDirRoot, projectOutputPath)
 
 				# Add the current project to the parent filter dependency list. In the case of filters,
 				# this isn't really a depencency list, it's just a list of nested projects.
@@ -203,6 +233,8 @@ class project_generator_visual_studio(project_generator.project_generator):
 						projectData.fullHeaderFileList.update(set(settings.allheaders))
 						projectData.fullIncludePathList.update(set(settings.include_dirs))
 
+				projectData.fullSourceFileList = sorted(projectData.fullSourceFileList)
+				projectData.fullHeaderFileList = sorted(projectData.fullHeaderFileList)
 				projectData.platformConfigList = sorted(projectData.platformConfigList)
 
 				# Grab the projectSettings for the first key in the config map and fill in a set of names for dependent projects.
@@ -227,7 +259,6 @@ class project_generator_visual_studio(project_generator.project_generator):
 				groupPath = os.path.join(projectOutputPath, subGroupName)
 
 				groupPathFinal = os.path.join(self.rootpath, groupPath)
-				groupPathTemp = os.path.join(self._tempDirRoot, groupPath)
 
 				filterData = Project(subGroupName, self._projectUuidList) # Subgroups should be treated as project filters in the solution.
 				filterData.isFilter = True
@@ -245,6 +276,9 @@ class project_generator_visual_studio(project_generator.project_generator):
 		def resolveDependencies(projectMap):
 			for projectId, projectData in projectMap.items():
 				resolvedDependencyList = []
+
+				# Sort the dependency name list before parsing it.
+				projectData.dependencyList = sorted(projectData.dependencyList)
 
 				# Resolve each project name to their associated project objects.
 				for dependentProjectName in projectData.dependencyList:
@@ -265,7 +299,6 @@ class project_generator_visual_studio(project_generator.project_generator):
 			buildAllProjectName = "(BUILD_ALL)"
 			buildAllProjectData = Project(buildAllProjectName, self._projectUuidList) # Create a new object to contain project data.
 			buildAllProjectData.outputPath = self.rootpath
-			buildAllProjectData.tempOutputPath = self._tempDirRoot
 			buildAllProjectData.isBuildAllProject = True
 			buildAllProjectData.makefilePath = csbuild.scriptfiles[0] # Reference the main makefile.
 
@@ -280,8 +313,23 @@ class project_generator_visual_studio(project_generator.project_generator):
 		recurseGroups(self._projectMap, None, "", projectSettings.rootGroup)
 		resolveDependencies(self._projectMap)
 
+		# Copy the project names into a list.
+		for projectName, projectData in self._projectMap.items():
+			self._orderedProjectList.append(projectName)
+
+		# Sort the list of project names.
+		self._orderedProjectList = sorted(self._orderedProjectList)
+
+		# Replace the list of names in the project list with the actual project data.
+		for i in range(0, len(self._orderedProjectList)):
+			projectName = self._orderedProjectList[i]
+			self._orderedProjectList[i] = self._projectMap[projectName]
+
+		# Create a single list of every include search path.
 		for projectName, projectData in self._projectMap.items():
 			self._fullIncludePathList.update(projectData.fullIncludePathList)
+
+		self._fullIncludePathList = sorted(self._fullIncludePathList)
 
 		is2005 = (self._visualStudioVersion == 2005)
 		is2008 = (self._visualStudioVersion == 2008)
@@ -350,19 +398,25 @@ class project_generator_visual_studio(project_generator.project_generator):
 			2013: "12.00",
 		}
 
-		solutionPath = "{}.sln".format(os.path.join(self.rootpath, self.solutionname))
+		tempRootPath = tempfile.mkdtemp()
+		finalSolutionPath = "{}.sln".format(os.path.join(self.rootpath, self.solutionname))
+		tempSolutionPath = "{}.sln".format(tempRootPath, self.solutionname)
+
+		# Create the temporary root path.
+		if not os.path.exists(tempRootPath):
+			os.makedirs(tempRootPath)
 
 		# Visual Studio solution files need to be UTF-8 with the byte order marker because Visual Studio is VERY picky about these files.
 		# If ANYTHING is missing or not formatted properly, the Visual Studio version selector may not open the right version or Visual
 		# Studio itself may refuse to even attempt to load the file.
-		with codecs.open(solutionPath, "w", "utf-8-sig") as fileHandle:
+		with codecs.open(tempSolutionPath, "w", "utf-8-sig") as fileHandle:
 			writeLineToFile(0, fileHandle, "") # Required empty line.
 			writeLineToFile(0, fileHandle, "Microsoft Visual Studio Solution File, Format Version {}".format(fileFormatVersionNumber[self._visualStudioVersion]))
 			writeLineToFile(0, fileHandle, "# Visual Studio {}".format(self._visualStudioVersion))
 
 			projectFilterList = []
 
-			for projectName, projectData in self._projectMap.items():
+			for projectData in self._orderedProjectList:
 				if not projectData.isFilter:
 					relativeProjectPath = os.path.relpath(projectData.outputPath, self.rootpath)
 					projectFilePath = os.path.join(relativeProjectPath, "{}.{}".format(projectData.name, self._projectFileType))
@@ -402,7 +456,7 @@ class project_generator_visual_studio(project_generator.project_generator):
 			writeLineToFile(1, fileHandle, "EndGlobalSection")
 
 			writeLineToFile(1, fileHandle, "GlobalSection(ProjectConfigurationPlatforms) = postSolution")
-			for projectName, projectData in self._projectMap.items():
+			for projectData in self._orderedProjectList:
 				if not projectData.isFilter:
 					for buildTarget in self._configList:
 						for platformName in self._platformList:
@@ -427,12 +481,26 @@ class project_generator_visual_studio(project_generator.project_generator):
 
 			writeLineToFile(0, fileHandle, "EndGlobal")
 
+		with open(tempSolutionPath, "rb") as fileHandle:
+			fileData = fileHandle.read()
+			cachedFile = CachedFileData(finalSolutionPath, fileData)
+			cachedFile.SaveFile()
+
+		if os.path.exists(tempSolutionPath):
+			os.remove(tempSolutionPath)
+			try:
+				# Attempt to remove the temp directory.  This will only fail if the directory already existed with files in it.
+				# In that case, just catch the exception and move on.
+				os.rmdir(tempRootPath)
+			except:
+				pass
+
 
 	def _WriteVcxprojFiles(self):
 		CreateRootNode = ET.Element
 		AddNode = ET.SubElement
 
-		for projectName, projectData in self._projectMap.items():
+		for projectData in self._orderedProjectList:
 			if not projectData.isFilter:
 				rootNode = CreateRootNode("Project")
 				rootNode.set("DefaultTargets", "Build")
@@ -550,10 +618,11 @@ class project_generator_visual_studio(project_generator.project_generator):
 						archName = self._archMap[platformName]
 						projectArg = " --project={}".format(projectData.name) if not projectData.isBuildAllProject else ""
 						mainMakefile = os.path.relpath(os.path.join(os.getcwd(), csbuild.mainfile), projectData.outputPath)
+						properConfigName = self._reverseConfigMap[configName]
 
-						buildCommandNode.text = "{} {} --target={} --architecture={}{} {}".format(sys.executable, mainMakefile, configName, archName, projectArg, self._extraBuildArgs)
-						cleanCommandNode.text = "{} {} --clean --target={} --architecture={}{} {}".format(sys.executable, mainMakefile, configName, archName, projectArg, self._extraBuildArgs)
-						rebuildCommandNode.text = "{} {} --rebuild --target={} --architecture={}{} {}".format(sys.executable, mainMakefile, configName, archName, projectArg, self._extraBuildArgs)
+						buildCommandNode.text = "{} {} --target={} --architecture={}{} {}".format(sys.executable, mainMakefile, properConfigName, archName, projectArg, self._extraBuildArgs)
+						cleanCommandNode.text = "{} {} --clean --target={} --architecture={}{} {}".format(sys.executable, mainMakefile, properConfigName, archName, projectArg, self._extraBuildArgs)
+						rebuildCommandNode.text = "{} {} --rebuild --target={} --architecture={}{} {}".format(sys.executable, mainMakefile, properConfigName, archName, projectArg, self._extraBuildArgs)
 						includePathNode.text = ";".join(self._fullIncludePathList)
 
 						if not projectData.isBuildAllProject:
@@ -565,7 +634,7 @@ class project_generator_visual_studio(project_generator.project_generator):
 						else:
 							# Gotta put this stuff somewhere for the Build All project.
 							outDirNode.text = projectData.name + "_log"
-							intDirNode.text = outDirNode.text
+							intDirNode.text = "$(OutDir)"
 
 				importNode = AddNode(rootNode, "Import")
 				importNode.set("Project", r"$(VCTargetsPath)\Microsoft.Cpp.targets")
@@ -674,7 +743,8 @@ class project_generator_visual_studio(project_generator.project_generator):
 
 		# Concatenate each string with a newline.
 		finalXmlString = "\n".join(outputLines)
+		if sys.version_info >= (3, 0):
+			finalXmlString = finalXmlString.encode("utf-8")
 
-		# Open the output file and write the new XML string to it.
-		with open(xmlFilename, "w") as f:
-			f.write(finalXmlString)
+		cachedFile = CachedFileData(xmlFilename, finalXmlString)
+		cachedFile.SaveFile()
