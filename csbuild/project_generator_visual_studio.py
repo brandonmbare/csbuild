@@ -138,11 +138,11 @@ class CachedFileData:
 				canWriteOutputFile = (fileDataHash != self._md5FileDataHash)
 
 		if canWriteOutputFile:
-			print("Writing file {}...".format(self._outputFilePath))
+			log.LOG_INFO("Writing file {}...".format(self._outputFilePath))
 			with open(self._outputFilePath, "wb") as fileHandle:
 				fileHandle.write(self._fileData)
 		else:
-			print("Up-to-date: {}".format(self._outputFilePath))
+			log.LOG_INFO("Up-to-date: {}".format(self._outputFilePath))
 
 
 class ProjectFileType:
