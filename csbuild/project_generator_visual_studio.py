@@ -646,7 +646,7 @@ class project_generator_visual_studio(project_generator.project_generator):
 		CreateRootNode = ET.Element
 		AddNode = ET.SubElement
 
-		for projectName, projectData in self._projectMap.items():
+		for projectData in self._orderedProjectList:
 			if not projectData.isFilter:
 				rootNode = CreateRootNode("Project")
 				rootNode.set("ToolsVersion", "4.0")
@@ -698,7 +698,7 @@ class project_generator_visual_studio(project_generator.project_generator):
 		CreateRootNode = ET.Element
 		AddNode = ET.SubElement
 
-		for projectName, projectData in self._projectMap.items():
+		for projectData in self._orderedProjectList:
 			if not projectData.isFilter:
 				rootNode = CreateRootNode("Project")
 				rootNode.set("ToolsVersion", "4.0")
