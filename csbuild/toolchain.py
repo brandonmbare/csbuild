@@ -811,6 +811,13 @@ class SettingsOverrider( object ):
 			for filename in glob.glob(pattern):
 				self.settingsOverrides["chunkExcludes"].add(os.path.abspath(filename))
 
+	def SupportedArchitectures(self, *architectures):
+		"""
+		Specifies the architectures that this project supports. This can be used to limit
+		--all-architectures from building everything supported by the toolchain, if the project
+		is not set up to support all of the toolchain's architectures.
+		"""
+		self.settingsOverrides["supportedArchitectures"] = set(architectures)
 
 @_shared_globals.MetaClass(ABCMeta)
 class linkerBase( SettingsOverrider ):

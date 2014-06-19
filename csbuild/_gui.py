@@ -234,7 +234,7 @@ class SyntaxHighlighter( QtGui.QSyntaxHighlighter ):
 
 		self.symbolFormat = QtGui.QTextCharFormat()
 		self.symbolFormat.setForeground(QtGui.QColor("#808030"))
-		self.highlightRules.append(SyntaxHighlighter.HighlightRule(re.compile(r"[\[\]\+\=\-\*/\(\)\{\}\;\,\.\<\>\?\&\^\%\!\~\|]"), self.symbolFormat))
+		self.highlightRules.append(SyntaxHighlighter.HighlightRule(re.compile(r"[\[\]\+\=\-\*\/\(\)\{\}\;\,\.\<\>\?\&\^\%\!\~\|]"), self.symbolFormat))
 
 		self.commentFormat.setForeground(QtGui.QColor("#696969"))
 
@@ -877,7 +877,6 @@ class EditorWindow( QMainWindow ):
 
 		self.highlighter = SyntaxHighlighter(self.editor.document())
 
-		self.editor.textChanged.connect(self.rehighlight)
 		self.editor.setLineWrapMode(QtGui.QPlainTextEdit.NoWrap)
 
 		self.statusBar = QtGui.QStatusBar()
@@ -956,13 +955,6 @@ class EditorWindow( QMainWindow ):
 				column = int(column)
 				cursor.movePosition( QtGui.QTextCursor.NextCharacter, QtGui.QTextCursor.MoveAnchor, column - 1 )
 			self.editor.setTextCursor(cursor)
-
-	def rehighlight(self):
-		if self.highlighting:
-			return
-		self.highlighting = True
-		self.highlighter.rehighlight()
-		self.highlighting = False
 
 	def MakeWriteable(self):
 		stats = os.stat(self.sourceFile)

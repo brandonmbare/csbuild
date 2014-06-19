@@ -510,6 +510,8 @@ class projectSettings( object ):
 		self.ccpcOverrideCmds = {}
 		self.cxxpcOverrideCmds = {}
 
+		self.supportedArchitectures = set()
+
 		#GUI support
 		self.state = _shared_globals.ProjectState.PENDING
 		self.startTime = 0
@@ -876,6 +878,7 @@ class projectSettings( object ):
 			"chunkExcludes" : set(self.chunkExcludes),
 			"times" : self.times,
 			"summedTimes" : self.summedTimes,
+			"supportedArchitectures" : set(self.supportedArchitectures),
 		}
 
 		for name in self.targets:

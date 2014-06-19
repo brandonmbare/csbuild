@@ -833,7 +833,7 @@ def DoNotChunkTogether(pattern, *additionalPatterns):
 			if file1 == file2:
 				continue
 			if file1 not in projectSettings.currentProject.chunkMutexes:
-				projectSettings.currentProject.chunkMutexes[file1] = set( [file2] )
+				projectSettings.currentProject.chunkMutexes[file1] = { file2 }
 			else:
 				projectSettings.currentProject.chunkMutexes[file1].add(file2)
 
@@ -850,6 +850,15 @@ def DoNotChunk(*files):
 	for pattern in list(files):
 		for filename in glob.glob(pattern):
 			projectSettings.currentProject.chunkExcludes.add(os.path.abspath(filename))
+
+
+def SupportedArchitectures(*architectures):
+	"""
+	Specifies the architectures that this project supports. This can be used to limit
+	--all-architectures from building everything supported by the toolchain, if the project
+	is not set up to support all of the toolchain's architectures.
+	"""
+	projectSettings.currentProject.supportedArchitectures = set(architectures)
 
 
 def RegisterToolchain( name, compiler, linker ):
@@ -1810,6 +1819,7 @@ def install_headers( ):
 	log.LOG_INSTALL("Installing headers...")
 
 	for project in _shared_globals.sortedProjects:
+		os.chdir( project.workingDirectory )
 		#install headers
 		subdir = project.header_subdir
 		if not subdir:
@@ -1845,6 +1855,10 @@ def install_output( ):
 					os.makedirs( outputDir )
 				log.LOG_INSTALL( "Installing {0} to {1}...".format( output, outputDir ) )
 				shutil.copy( output, outputDir )
+				pdb = output.rsplit(".", 1)[0] + ".pdb"
+				if os.path.exists( pdb ):
+					log.LOG_INSTALL( "Installing {0} to {1}...".format( pdb, outputDir ) )
+					shutil.copy( pdb, outputDir )
 				install_something = True
 			else:
 				log.LOG_ERROR( "Output file {0} does not exist! You must build without --install first.".format( output ) )
@@ -2450,7 +2464,11 @@ def _run( ):
 
 		for project in _shared_globals.tempprojects.values( ):
 			project.activeToolchain = project.toolchains[project.activeToolchainName]
-			archList = project.activeToolchain.GetValidArchitectures()
+			archList = set(project.activeToolchain.GetValidArchitectures())
+			if project.supportedArchitectures:
+				archList &= project.supportedArchitectures
+			if not archList:
+				log.LOG_ERROR("Project {} does not support any architectures supported by toolchain {}".format(project.name, project.activeToolchainName))
 			if args.architecture:
 				for arch in args.architecture:
 					if arch not in archList:
