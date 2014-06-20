@@ -6,6 +6,8 @@ csbuild.SetActiveToolchain("android")
 def AndroidTest_Basic():
 	csbuild.Toolchain("android").CCompiler("clang")
 	csbuild.Toolchain("android").CppCompiler("clang++")
+	csbuild.Toolchain("android").PackageName("csbuild.UnitTest.AndroidBasic")
+	csbuild.Toolchain("android").ActivityName("CSBUnitTestAndroidBasic")
 	csbuild.NoPrecompile()
 	csbuild.Output("AndroidTest_Basic", csbuild.ProjectType.Application)
 	csbuild.Libraries("android", "m", "log", "dl", "c")

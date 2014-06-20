@@ -57,11 +57,31 @@ else:
 
 class AndroidBase( object ):
 	def __init__(self):
+		#TODO: Command line arguments for these
+		#TODO: Figure out a way to share some of this data between compiler and linker
 		self._ndkHome = os.getenv("NDK_HOME")
 		self._sdkHome = os.getenv("ANDROID_HOME")
 		self._antHome = os.getenv("ANT_HOME")
-		self._adkVersion = 19
+		#self._maxSdkVersion = 19
+		#TODO: Determine this from highest number in the filesystem.
+		self._targetSdkVersion = 19
+		self._minSdkVersion = 1
+		self._packageName = "csbuild.autopackage"
+		self._activityName = None
+		self._usedFeatures = []
 		self._binDir = ""
+		
+	def CopyTo(self, other):
+		other._ndkHome = self._ndkHome
+		other._sdkHome = self._sdkHome
+		other._antHome = self._antHome
+		#other._maxSdkVersion = self._maxSdkVersion
+		other._targetSdkVersion = self._targetSdkVersion
+		other._minSdkVersion = self._minSdkVersion
+		other._packageName = self._packageName
+		other._activityName = self._activityName
+		other._usedFeatures = list(self._usedFeatures)
+		other._binDir = self._binDir
 
 	def NdkHome(self, pathToNdk):
 		self._ndkHome = pathToNdk
@@ -72,8 +92,23 @@ class AndroidBase( object ):
 	def AntHome(self, pathToAnt):
 		self._antHome = pathToAnt
 
-	def AdkVersion(self, adkVersion):
-		self._adkVersion = adkVersion
+	def MinSdkVersion(self, version):
+		self._minSdkVersion = version
+
+	#def MaxSdkVersion(self, version):
+	#	self._maxSdkVersion = version
+
+	def TargetSdkVersion(self, version):
+		self._targetSdkVersion = version
+
+	def PackageName(self, name):
+		self._packageName = name
+		
+	def ActivityName(self, name):
+		self._activityName = name
+
+	def UsedFeatures(self, *args):
+		self._usedFeatures += list(args)
 
 	def GetValidArchitectures(self):
 		return ['x86', 'arm', 'mips']
@@ -172,6 +207,13 @@ class AndroidCompiler(AndroidBase, toolchain_gcc.compiler_gcc):
 		self._toolchainPath = ""
 		self._setupCompleted = False
 
+	def copy(self):
+		ret = toolchain_gcc.compiler_gcc.copy(self)
+		AndroidBase.CopyTo(self, ret)
+		ret._toolchainPath = self._toolchainPath
+		ret._setupCompleted = self._setupCompleted
+		return ret
+
 	def postPrepareBuildStep(self, project):
 		appGlueDir = os.path.join( self._ndkHome, "sources", "android", "native_app_glue" )
 		project.include_dirs.append(appGlueDir)
@@ -228,7 +270,7 @@ class AndroidCompiler(AndroidBase, toolchain_gcc.compiler_gcc):
 			"-isystem \"{}\"".format(os.path.join( self._ndkHome, "sources", "cxx-stl", "stlport", "stlport")) if isCpp else "",
 			self._binDir,
 			self._getTargetTriple(project),
-			os.path.join( self._ndkHome, "platforms", "android-{}".format(self._adkVersion), "arch-{}".format(self._getSimplifiedArch(project)), "usr", "include")
+			os.path.join( self._ndkHome, "platforms", "android-{}".format(self._targetSdkVersion), "arch-{}".format(self._getSimplifiedArch(project)), "usr", "include")
 		)
 
 
@@ -238,6 +280,12 @@ class AndroidLinker(AndroidBase, toolchain_gcc.linker_gcc):
 		toolchain_gcc.linker_gcc.__init__(self)
 		self._setupCompleted = False
 
+	def copy(self):
+		ret = toolchain_gcc.linker_gcc.copy(self)
+		AndroidBase.CopyTo(self, ret)
+		ret._setupCompleted = self._setupCompleted
+		return ret
+		
 	def _SetupLinker(self, project):
 		#TODO: Let user choose which compiler version to use; for now, using the highest numbered version.
 		self._ld, self._ar = self._getCommands(project, "ld", "ar")
@@ -262,7 +310,7 @@ class AndroidLinker(AndroidBase, toolchain_gcc.linker_gcc):
 			else:
 				cmd = project.activeToolchain.Compiler().settingsOverrides["cc"]
 
-			libDir = os.path.join( self._ndkHome, "platforms", "android-{}".format(self._adkVersion), "arch-{}".format(self._getSimplifiedArch(project)), "usr", "lib")
+			libDir = os.path.join( self._ndkHome, "platforms", "android-{}".format(self._targetSdkVersion), "arch-{}".format(self._getSimplifiedArch(project)), "usr", "lib")
 
 			if self.isClang:
 				crtbegin = os.path.join(project.obj_dir, "crtbegin_so.o")
@@ -296,7 +344,7 @@ class AndroidLinker(AndroidBase, toolchain_gcc.linker_gcc):
 					"armeabi-v7a" if project.outputArchitecture == "arm" else project.outputArchitecture)
 				) if project.hasCppFiles else "",
 				self._binDir,
-				#os.path.join( self._ndkHome, "platforms", "android-{}".format(self._adkVersion), "arch-{}".format(self._getSimplifiedArch(project))),
+				#os.path.join( self._ndkHome, "platforms", "android-{}".format(self._targetSdkVersion), "arch-{}".format(self._getSimplifiedArch(project))),
 				self._getTargetTriple(project),
 				libDir
 			)
@@ -309,7 +357,7 @@ class AndroidLinker(AndroidBase, toolchain_gcc.linker_gcc):
 		try:
 			cmd = [self._ld, "-o", nullOut, "--verbose",
 				   "-static" if force_static else "-shared" if force_shared else "", "-l{}".format( library ),
-				   "-L", os.path.join( self._ndkHome, "platforms", "android-{}".format(self._adkVersion), "arch-{}".format(self._getSimplifiedArch(project)), "usr", "lib")]
+				   "-L", os.path.join( self._ndkHome, "platforms", "android-{}".format(self._targetSdkVersion), "arch-{}".format(self._getSimplifiedArch(project)), "usr", "lib")]
 			cmd += shlex.split( self.get_library_dirs( library_dirs, False ) )
 
 			if _shared_globals.show_commands:
@@ -356,10 +404,10 @@ class AndroidLinker(AndroidBase, toolchain_gcc.linker_gcc):
 			[
 				androidTool, "create", "project",
 				"--path", appDir,
-				"--target", "android-{}".format(self._adkVersion),
+				"--target", "android-{}".format(self._targetSdkVersion),
 				"--name", project.name,
-				"--package", "com.csbuild.autopackage.{}".format(project.name),
-				"--activity", "CSBNativeAppActivity"
+				"--package", "com.{}.{}".format(self._packageName, project.name),
+				"--activity", project.name if self._activityName is None else self._activityName
 			],
 			stderr=subprocess.STDOUT,
 			stdout=subprocess.PIPE
@@ -400,8 +448,10 @@ class AndroidLinker(AndroidBase, toolchain_gcc.linker_gcc):
 			f.write("  package=\"com.csbuild.autopackage.{}\"\n".format(project.name))
 			f.write("  android:versionCode=\"1\"\n")
 			f.write("  android:versionName=\"1.0\">\n")
-			f.write("  <uses-sdk android:minSdkVersion=\"{}\" android:targetSdkVersion=\"{}\"/>\n".format(self._adkVersion, self._adkVersion))
-			#TODO: f.write("  <uses-feature android:glEsVersion=\"0x00020000\"></uses-feature>")
+			f.write("  <uses-sdk android:minSdkVersion=\"{}\" android:targetSdkVersion=\"{}\"/>\n".format(self._minSdkVersion, self._targetSdkVersion))
+			for feature in self._usedFeatures:
+				#example: android:glEsVersion=\"0x00020000\"
+				f.write("  <uses-feature {}></uses-feature>".format(feature))
 			f.write("  <application android:label=\"{}\" android:hasCode=\"false\">\n".format(project.name))
 			f.write("    <activity android:name=\"android.app.NativeActivity\"\n")
 			f.write("      android:label=\"{}\">\n".format(project.name))
