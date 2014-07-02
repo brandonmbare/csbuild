@@ -251,6 +251,7 @@ alltargets = set( )
 allarchitectures = set( )
 alltoolchains = { }
 allgenerators = { }
+allToolchainArchStrings = { }
 
 rebuild = False
 

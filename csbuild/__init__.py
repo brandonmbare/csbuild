@@ -877,7 +877,24 @@ def RegisterToolchain( name, compiler, linker ):
 			toolchain.toolchain.__init__(self)
 			self.tools["compiler"] = compiler()
 			self.tools["linker"] = linker()
+
+	# Format the name so that it can be used as part of its architecture command line option.
+	# This generally means replacing all whitespace with dashes.
+	toolchainArchString = name
+	toolchainArchString = toolchainArchString.replace(" ", "-")
+	toolchainArchString = toolchainArchString.replace(",", "-")
+	toolchainArchString = toolchainArchString.replace("\t", "-")
+	toolchainArchString = toolchainArchString.replace("\r", "") # Intentionally remove '\r'.
+	toolchainArchString = toolchainArchString.replace("\n", "-")
+
+	# Don't know how often it will occur, but if any quotes happen to be in the string, remove them.
+	toolchainArchString = toolchainArchString.replace('"', "")
+	toolchainArchString = toolchainArchString.replace("'", "")
+
+	toolchainArchString = toolchainArchString.strip("-") # Remove any dashes at the start and end of the string.
+
 	_shared_globals.alltoolchains[name] = registeredToolchain
+	_shared_globals.allToolchainArchStrings[name] = (toolchainArchString + "-architecture", toolchainArchString + "-arch")
 	projectSettings.currentProject.toolchains[name] = registeredToolchain()
 
 
@@ -2262,7 +2279,13 @@ def _run( ):
 		choices = _shared_globals.alltoolchains, action = "store" )
 
 	group = parser.add_mutually_exclusive_group( )
-	group.add_argument( '--architecture', '--arch', help = "Architecture to compile for.", action = "append" )
+
+	for toolchainName, toolchainArchStrings in _shared_globals.allToolchainArchStrings.items():
+		archStringLong = "--" + toolchainArchStrings[0]
+		archStringShort = "--" + toolchainArchStrings[1]
+		group.add_argument(archStringLong, archStringShort, help = "Architecture to compile for the {} toolchain.".format(toolchainName), action = "append")
+
+	group.add_argument("--architecture", "--arch", help = 'Architecture to compile for each toolchain.', action = "append")
 	group.add_argument( "--all-architectures", "--all-arch", action = "store_true", help = "Build all architectures supported by this toolchain" )
 
 	parser.add_argument(
@@ -2411,7 +2434,7 @@ def _run( ):
 		if target is not None:
 			_shared_globals.target = target.lower( )
 
-		def BuildWithArchitedcture( project, architecture ):
+		def BuildWithArchitecture( project, architecture ):
 			_shared_globals.allarchitectures.add(architecture)
 			os.chdir( project.scriptPath )
 
@@ -2464,24 +2487,31 @@ def _run( ):
 
 		for project in _shared_globals.tempprojects.values( ):
 			project.activeToolchain = project.toolchains[project.activeToolchainName]
-			archList = set(project.activeToolchain.GetValidArchitectures())
+			validArchList = set(project.activeToolchain.GetValidArchitectures())
+			cmdLineGlobalArchList = args.architecture
+			cmdLineToolchainArchList = args.__dict__[_shared_globals.allToolchainArchStrings[project.activeToolchainName][0].replace("-", "_")]
+			cmdLineArchList = set()
+			if cmdLineGlobalArchList:
+				cmdLineArchList.update(cmdLineGlobalArchList)
+			if cmdLineToolchainArchList:
+				cmdLineArchList.update(cmdLineToolchainArchList)
 			if project.supportedArchitectures:
-				archList &= project.supportedArchitectures
-			if not archList:
+				validArchList &= project.supportedArchitectures
+			if not validArchList:
 				log.LOG_ERROR("Project {} does not support any architectures supported by toolchain {}".format(project.name, project.activeToolchainName))
-			if args.architecture:
-				for arch in args.architecture:
-					if arch not in archList:
+			if cmdLineArchList:
+				for arch in cmdLineArchList:
+					if arch not in validArchList:
 						log.LOG_ERROR("Toolchain {} does not support architecture {}".format(project.activeToolchainName, arch))
 						Exit(1)
-					BuildWithArchitedcture(project, arch)
+					BuildWithArchitecture(project, arch)
 			elif args.all_architectures:
-				for arch in archList:
-					BuildWithArchitedcture(project, arch)
+				for arch in validArchList:
+					BuildWithArchitecture(project, arch)
 			elif platform.machine().endswith('64'):
-				BuildWithArchitedcture(project, "x64")
+				BuildWithArchitecture(project, "x64")
 			else:
-				BuildWithArchitedcture(project, "x86")
+				BuildWithArchitecture(project, "x86")
 
 
 	if args.all_targets:
