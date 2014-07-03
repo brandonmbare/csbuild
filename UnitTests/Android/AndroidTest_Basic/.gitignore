@@ -1,3 +1,5 @@
 /Release/
 /Debug/
 /android-arm-debug/
+/android-arm-release/
+/android-x64-release/

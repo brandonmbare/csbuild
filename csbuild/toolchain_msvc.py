@@ -376,13 +376,14 @@ class compiler_msvc( MsvcBase, toolchain.compilerBase ):
 		else:
 			pch = ""
 
-		return '{} /Fo"{}" /Fd"{}" /Gm- /errorReport:none "{}" {} {} {}'.format(
+		return '{} /Fo"{}" /Fd"{}" /Gm- /errorReport:none "{}" {} {} {} {}'.format(
 			base_cmd,
 			output_obj,
 			os.path.join(self._project_settings.output_dir, "{}.pdb".format(self._project_settings.output_name.rsplit('.', 1)[0])),
 			input_file,
 			'/FI"{}"'.format( force_include_file ) if force_include_file else "",
 			'/Yu"{}"'.format( force_include_file ) if force_include_file else "",
+			"/FS" if self.msvc_version >= 120 else "",
 			pch )
 
 	def preLinkStep(self, project):
