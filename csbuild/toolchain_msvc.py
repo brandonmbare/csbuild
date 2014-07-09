@@ -78,7 +78,7 @@ class MsvcBase( object ):
 		self._include_path = []
 		self._lib_path = []
 		self._platform_arch = ""
-		self._build_64_bit = Falsedebug_runtime_set = False
+		self._build_64_bit = False
 
 	def copyTo(self, other):
 		other._project_settings = self._project_settings
@@ -524,8 +524,9 @@ class linker_msvc( MsvcBase, toolchain.linkerBase ):
 
 
 	def _get_linker_args( self, output_file, obj_list ):
-		return "/ERRORREPORT:NONE {}{}{}{}{}{}{}{}{}".format(
+		return "/ERRORREPORT:NONE {}{}{}{}{}{}{}{}{}{}".format(
 			self._get_default_linker_args( ),
+			self._get_import_library_arg(output_file),
 			self._get_non_static_library_linker_args( ),
 			self._get_subsystem_arg( ),
 			self._get_architecture_arg( ),
@@ -545,6 +546,13 @@ class linker_msvc( MsvcBase, toolchain.linkerBase ):
 		return '/DEFAULTLIB:{}{}.lib '.format(
 			"libcmt" if self._project_settings.static_runtime else "msvcrt",
 			"d" if self.debug_runtime else "" )
+
+
+	def _get_import_library_arg(self, output_file):
+		if self._project_settings.type == csbuild.ProjectType.SharedLibrary:
+			return '/IMPLIB:"{}" '.format(os.path.splitext(output_file)[0] + ".lib")
+		else:
+			return ''
 
 
 	def _get_subsystem_arg( self ):
@@ -572,12 +580,11 @@ class linker_msvc( MsvcBase, toolchain.linkerBase ):
 
 
 	def _get_library_args( self ):
-		#Visual Studio links these to everything, but I don't think that's necessary.
-		#Only applications really care. Why would we spend the time linking them in the lib if they're going to be linked in the app anyway?
-		if self._project_settings.type == csbuild.ProjectType.Application:
-			args = "kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib "
+		# Static libraries don't require any libraries to be linked.
+		if self._project_settings.type == csbuild.ProjectType.StaticLibrary:
+			args = ''
 		else:
-			args = ""
+			args = '"kernel32.lib" "user32.lib" "gdi32.lib" "winspool.lib" "comdlg32.lib" "advapi32.lib" "shell32.lib" "ole32.lib" "oleaut32.lib" "uuid.lib" "odbc32.lib" "odbccp32.lib" '
 
 		for lib in (
 			self._project_settings.libraries +
@@ -591,7 +598,7 @@ class linker_msvc( MsvcBase, toolchain.linkerBase ):
 					_shared_globals.projects[depend].output_name.startswith( "lib{}.".format( lib ) )
 				):
 					found = True
-					args += '"{}" '.format( _shared_globals.projects[depend].output_name )
+					args += '"{}" '.format( os.path.splitext(_shared_globals.projects[depend].output_name)[0] + ".lib" )
 			if not found:
 				args += '"{}" '.format( self._actual_library_names[lib] )
 
