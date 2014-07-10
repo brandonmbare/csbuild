@@ -510,7 +510,7 @@ class linker_msvc( MsvcBase, toolchain.linkerBase ):
 	def _get_default_linker_args( self ):
 		default_args = "/NOLOGO "
 		for lib_path in self._lib_path:
-			default_args += '/LIBPATH:"{}" '.format( lib_path )
+			default_args += '/LIBPATH:"{}" '.format( lib_path.strip("\\") )
 		return default_args
 
 
