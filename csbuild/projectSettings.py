@@ -511,6 +511,7 @@ class projectSettings( object ):
 		self.cxxpcOverrideCmds = {}
 
 		self.supportedArchitectures = set()
+		self.supportedToolchains = set()
 
 		#GUI support
 		self.state = _shared_globals.ProjectState.PENDING
@@ -597,7 +598,7 @@ class projectSettings( object ):
 
 		self.activeToolchain.prePrepareBuildStep(self)
 		if self.prePrepareBuildStep:
-			log.LOG_BUILD( "Running pre-PrepareBuild step for {} ({} {})".format( self.output_name, self.targetName, self.outputArchitecture ) )
+			log.LOG_BUILD( "Running pre-PrepareBuild step for {} ({} {}/{})".format( self.output_name, self.targetName, self.outputArchitecture, self.activeToolchainName ) )
 			self.prePrepareBuildStep(self)
 
 		self.activeToolchain.SetActiveTool("linker")
@@ -607,7 +608,7 @@ class projectSettings( object ):
 		self.output_name += self.ext
 		self.activeToolchain.SetActiveTool("compiler")
 
-		log.LOG_BUILD( "Preparing tasks for {} ({} {})...".format( self.output_name, self.targetName, self.outputArchitecture ) )
+		log.LOG_BUILD( "Preparing tasks for {} ({} {}/{})...".format( self.output_name, self.targetName, self.outputArchitecture, self.activeToolchainName ) )
 
 		if not os.path.exists( self.csbuild_dir ):
 			os.makedirs( self.csbuild_dir )
@@ -641,14 +642,17 @@ class projectSettings( object ):
 		if self.name not in self.parentGroup.projects:
 			self.parentGroup.projects[self.name] = {}
 
-		if self.targetName not in self.parentGroup.projects[self.name]:
-			self.parentGroup.projects[self.name][self.targetName] = {}
+		if self.activeToolchainName not in self.parentGroup.projects[self.name]:
+			self.parentGroup.projects[self.name][self.activeToolchainName] = {}
 
-		self.parentGroup.projects[self.name][self.targetName][self.outputArchitecture] = self
+		if self.targetName not in self.parentGroup.projects[self.name][self.activeToolchainName]:
+			self.parentGroup.projects[self.name][self.activeToolchainName][self.targetName] = {}
+
+		self.parentGroup.projects[self.name][self.activeToolchainName][self.targetName][self.outputArchitecture] = self
 
 		self.activeToolchain.postPrepareBuildStep(self)
 		if self.postPrepareBuildStep:
-			log.LOG_BUILD( "Running post-PrepareBuild step for {} ({} {})".format( self.output_name, self.targetName, self.outputArchitecture ) )
+			log.LOG_BUILD( "Running post-PrepareBuild step for {} ({} {}/{})".format( self.output_name, self.targetName, self.outputArchitecture, self.activeToolchainName ) )
 			self.postPrepareBuildStep(self)
 
 		os.chdir( wd )
@@ -879,6 +883,7 @@ class projectSettings( object ):
 			"times" : self.times,
 			"summedTimes" : self.summedTimes,
 			"supportedArchitectures" : set(self.supportedArchitectures),
+			"supportedToolchains" : set(self.supportedToolchains),
 		}
 
 		for name in self.targets:

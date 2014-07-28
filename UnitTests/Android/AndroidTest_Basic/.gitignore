@@ -3,3 +3,11 @@
 /android-arm-debug/
 /android-arm-release/
 /android-x64-release/
+/msvc-x86-release/
+/msvc-x86-debug/
+/msvc-x64-release/
+/msvc-x64-debug/
+/android-x86-release/
+/android-x86-debug/
+/android-mips-release/
+/android-mips-debug/

@@ -220,6 +220,9 @@ class AndroidCompiler(AndroidBase, toolchain_gcc.compiler_gcc):
 		project.extraDirs.append(appGlueDir)
 		project.RediscoverFiles()
 
+	def GetDefaultArchitecture(self):
+		return "arm"
+
 	def _SetupCompiler(self, project):
 		#TODO: Let user choose which compiler version to use; for now, using the highest numbered version.
 
@@ -391,7 +394,7 @@ class AndroidLinker(AndroidBase, toolchain_gcc.linker_gcc):
 			project.output_name = "lib{}".format(project.output_name)
 
 	def postBuildStep(self, project):
-		log.LOG_BUILD("Generating APK for {} ({} {})".format(project.output_name, project.targetName, project.outputArchitecture))
+		log.LOG_BUILD("Generating APK for {} ({} {}/{})".format(project.output_name, project.targetName, project.outputArchitecture, project.activeToolchainName))
 		if project.metaType != csbuild.ProjectType.Application:
 			return
 
@@ -485,10 +488,20 @@ class AndroidLinker(AndroidBase, toolchain_gcc.linker_gcc):
 			log.LOG_ERROR("Ant build failed!\n{}".format(output))
 			return
 
+	#def postMakeStepGlobal(self):
+	#	projectMap = { "debug" : {}, "release" : {} }
+	#	for project in _shared_globals.sortedProjects:
+	#		if project.debug_level != csbuild.DebugLevel.Disabled:
+	#			antBuildType = "debug"
+	#		else:
+	#			antBuildType = "release"
+
+	#	appDir = os.path.join(project.csbuild_dir, "apk", project.name)
+
 		appName = "{}-{}.apk".format(project.output_name[3:-3], antBuildType)
 		appEndLoc = os.path.join(project.output_dir, appName)
 		if os.path.exists(appEndLoc):
 			os.remove(appEndLoc)
 
 		shutil.move(os.path.join(appDir, "bin", appName), project.output_dir)
-		log.LOG_BUILD("Finished generating APK for {} ({} {})".format(project.output_name, project.targetName, project.outputArchitecture))
+		log.LOG_BUILD("Finished generating APK for {} ({} {}/{})".format(project.output_name, project.targetName, project.outputArchitecture, project.activeToolchainName))

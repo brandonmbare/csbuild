@@ -861,6 +861,15 @@ def SupportedArchitectures(*architectures):
 	projectSettings.currentProject.supportedArchitectures = set(architectures)
 
 
+def SupportedToolchains(*toolchains):
+	"""
+	Specifies the toolchains that this project supports. This can be used to limit
+	--all-toolchains from building everything supported by csbuild, if the project
+	is not set up to support all of the toolchains.
+	"""
+	projectSettings.currentProject.supportedToolchains = set(toolchains)
+
+
 def RegisterToolchain( name, compiler, linker ):
 	"""
 	Register a new toolchain for use in the project.
@@ -1268,11 +1277,11 @@ def build( ):
 	for project in pending_builds:
 		project.activeToolchain.preMakeStep(project)
 		if project.preMakeStep:
-			log.LOG_BUILD( "Running pre-make step for {} ({} {})".format( project.output_name, project.targetName, project.outputArchitecture ) )
+			log.LOG_BUILD( "Running pre-make step for {} ({} {}/{})".format( project.output_name, project.targetName, project.outputArchitecture, project.activeToolchainName ) )
 			project.preMakeStep(project)
 
 	for project in _shared_globals.sortedProjects:
-		log.LOG_BUILD( "Verifying libraries for {} ({} {})".format( project.output_name, project.targetName, project.outputArchitecture ) )
+		log.LOG_BUILD( "Verifying libraries for {} ({} {}/{})".format( project.output_name, project.targetName, project.outputArchitecture, project.activeToolchainName ) )
 		if not project.check_libraries( ):
 			Exit( 1 )
 			#if _utils.needs_link(project):
@@ -1301,8 +1310,8 @@ def build( ):
 					otherProj.buildEnd = time.time()
 					projects_in_flight.remove( otherProj )
 					if otherProj.compile_failed:
-						log.LOG_ERROR( "Build of {} ({} {}) failed! Finishing up non-dependent build tasks...".format(
-							otherProj.output_name, otherProj.targetName, otherProj.outputArchitecture ) )
+						log.LOG_ERROR( "Build of {} ({} {/{}}) failed! Finishing up non-dependent build tasks...".format(
+							otherProj.output_name, otherProj.targetName, otherProj.outputArchitecture, otherProj.activeToolchainName ) )
 						otherProj.state = _shared_globals.ProjectState.FAILED
 						otherProj.linkQueueStart = time.time()
 						otherProj.linkStart = otherProj.linkQueueStart
@@ -1321,8 +1330,8 @@ def build( ):
 						projects_done.add( otherProj.key )
 					else:
 						log.LOG_LINKER(
-							"Linking for {} ({} {}) deferred until all dependencies have finished building...".format(
-								otherProj.output_name, otherProj.targetName, otherProj.outputArchitecture ) )
+							"Linking for {} ({} {} {}) deferred until all dependencies have finished building...".format(
+								otherProj.output_name, otherProj.targetName, otherProj.outputArchitecture, otherProj.activeToolchainName ) )
 						otherProj.state = _shared_globals.ProjectState.WAITING_FOR_LINK
 						pending_links.append( otherProj )
 
@@ -1354,10 +1363,10 @@ def build( ):
 
 			project.activeToolchain.preBuildStep(project)
 			if project.preBuildStep:
-				log.LOG_BUILD( "Running pre-build step for {} ({} {})".format( project.output_name, project.targetName, project.outputArchitecture ) )
+				log.LOG_BUILD( "Running pre-build step for {} ({} {}/{})".format( project.output_name, project.targetName, project.outputArchitecture, project.activeToolchainName ) )
 				project.preBuildStep( project )
 
-			log.LOG_BUILD( "Building {} ({} {})".format( project.output_name, project.targetName, project.outputArchitecture ) )
+			log.LOG_BUILD( "Building {} ({} {}/{})".format( project.output_name, project.targetName, project.outputArchitecture, project.activeToolchainName ) )
 			project.state = _shared_globals.ProjectState.BUILDING
 			project.startTime = time.time()
 
@@ -1421,8 +1430,8 @@ def build( ):
 					_shared_globals.current_compile += 1
 			else:
 				projects_in_flight.remove( project )
-				log.LOG_ERROR( "Build of {} ({} {}) failed! Finishing up non-dependent build tasks...".format(
-					project.output_name, project.targetName, project.outputArchitecture ) )
+				log.LOG_ERROR( "Build of {} ({} {}/{}) failed! Finishing up non-dependent build tasks...".format(
+					project.output_name, project.targetName, project.outputArchitecture, project.activeToolchainName  ) )
 
 				with project.mutex:
 					for chunk in project.final_chunk_set:
@@ -1512,7 +1521,7 @@ def build( ):
 		for project in _shared_globals.sortedProjects:
 			project.activeToolchain.postMakeStep(project)
 			if project.postMakeStep:
-				log.LOG_BUILD( "Running post-make step for {} ({} {})".format( project.output_name, project.targetName, project.outputArchitecture ) )
+				log.LOG_BUILD( "Running post-make step for {} ({} {}/{})".format( project.output_name, project.targetName, project.outputArchitecture, project.activeToolchainName ) )
 				project.postMakeStep(project)
 
 	compiletime = time.time( ) - _shared_globals.starttime
@@ -1550,7 +1559,7 @@ def performLink(project, objs):
 
 	project.activeToolchain.preLinkStep(project)
 	if project.preLinkStep:
-		log.LOG_BUILD( "Running pre-link step for {} ({} {})".format( project.output_name, project.targetName, project.outputArchitecture ) )
+		log.LOG_BUILD( "Running pre-link step for {} ({} {}/{})".format( project.output_name, project.targetName, project.outputArchitecture, project.activeToolchainName  ) )
 		project.preLinkStep(project)
 
 	project.activeToolchain.SetActiveTool("linker")
@@ -1730,7 +1739,7 @@ class LinkThread(threading.Thread):
 				traceback.print_exc()
 
 			if project.postBuildStep:
-				log.LOG_BUILD( "Running post-build step for {} ({} {})".format( project.output_name, project.targetName, project.outputArchitecture ) )
+				log.LOG_BUILD( "Running post-build step for {} ({} {}/{})".format( project.output_name, project.targetName, project.outputArchitecture, project.activeToolchainName ) )
 				try:
 					project.postBuildStep( project )
 				except Exception:
@@ -1739,7 +1748,7 @@ class LinkThread(threading.Thread):
 		elif ret == LinkStatus.UpToDate:
 			project.state = _shared_globals.ProjectState.UP_TO_DATE
 		project.endTime = time.time()
-		log.LOG_BUILD( "Finished {} ({} {})".format( project.output_name, project.targetName, project.outputArchitecture ) )
+		log.LOG_BUILD( "Finished {} ({} {}/{})".format( project.output_name, project.targetName, project.outputArchitecture, project.activeToolchainName ) )
 		_shared_globals.link_semaphore.release()
 
 
@@ -1774,7 +1783,7 @@ def clean( silent = False ):
 	for project in _shared_globals.sortedProjects:
 
 		if not silent:
-			log.LOG_BUILD( "Cleaning {} ({} {})...".format( project.output_name, project.targetName, project.outputArchitecture ) )
+			log.LOG_BUILD( "Cleaning {} ({} {}/{})...".format( project.output_name, project.targetName, project.outputArchitecture, project.activeToolchainName ) )
 
 		# Delete any chunks in the current project.
 		for chunk in project.chunks:
@@ -2229,7 +2238,7 @@ def _run( ):
 
 	group = parser.add_mutually_exclusive_group( )
 	group.add_argument( '-t', '--target', action='append', help = 'Target(s) for build', default=[])
-	group.add_argument( '-a', "--all-targets", action = "store_true", help = "Build all targets" )
+	group.add_argument( '--at', "--all-targets", action = "store_true", help = "Build all targets" )
 
 	parser.add_argument(
 		"-p",
@@ -2275,18 +2284,21 @@ def _run( ):
 	parser.add_argument( '--prefix', help = "install prefix (default /usr/local)", action = "store" )
 	parser.add_argument( '--libdir', help = "install location for libraries (default {prefix}/lib)", action = "store" )
 	parser.add_argument( '--incdir', help = "install prefix (default {prefix}/include)", action = "store" )
-	parser.add_argument( '-o', '--toolchain', help = "Toolchain to use for compiling.",
-		choices = _shared_globals.alltoolchains, action = "store" )
+
+	group = parser.add_mutually_exclusive_group( )
+	group.add_argument( '-o', '--toolchain', help = "Toolchain to use for compiling.",
+		choices = _shared_globals.alltoolchains, default=[], action = "append" )
+	group.add_argument( "--ao", '--all-toolchains', help="Build with all toolchains", action = "store_true" )
 
 	group = parser.add_mutually_exclusive_group( )
 
 	for toolchainName, toolchainArchStrings in _shared_globals.allToolchainArchStrings.items():
 		archStringLong = "--" + toolchainArchStrings[0]
 		archStringShort = "--" + toolchainArchStrings[1]
-		group.add_argument(archStringLong, archStringShort, help = "Architecture to compile for the {} toolchain.".format(toolchainName), action = "append")
+		parser.add_argument(archStringLong, archStringShort, help = "Architecture to compile for the {} toolchain.".format(toolchainName), action = "append")
 
-	group.add_argument("--architecture", "--arch", help = 'Architecture to compile for each toolchain.', action = "append")
-	group.add_argument( "--all-architectures", "--all-arch", action = "store_true", help = "Build all architectures supported by this toolchain" )
+	group.add_argument("-a", "--architecture", "--arch", help = 'Architecture to compile for each toolchain.', action = "append")
+	group.add_argument("--aa", "--all-architectures", "--all-arch", action = "store_true", help = "Build all architectures supported by this toolchain" )
 
 	parser.add_argument(
 		"--stop-on-error",
@@ -2395,9 +2407,6 @@ def _run( ):
 	_shared_globals.install_libdir = os.path.abspath(_shared_globals.install_libdir.format(prefix=_shared_globals.install_prefix))
 	_shared_globals.install_incdir = os.path.abspath(_shared_globals.install_incdir.format(prefix=_shared_globals.install_prefix))
 
-	if args.toolchain:
-		SetActiveToolchain( args.toolchain )
-
 	if args.jobs:
 		_shared_globals.max_threads = args.jobs
 		_shared_globals.semaphore = threading.BoundedSemaphore( value = _shared_globals.max_threads )
@@ -2417,10 +2426,11 @@ def _run( ):
 	_shared_globals.stopOnError = args.stop_on_error
 
 	if args.generate_solution is not None:
-		args.all_targets = True
-		args.all_architectures = True
+		args.at = True
+		args.aa = True
+		args.ao = True
 
-	if args.all_targets:
+	if args.at:
 		_shared_globals.target_list = list(_shared_globals.alltargets)
 	elif args.target:
 		_shared_globals.target_list = args.target
@@ -2430,102 +2440,151 @@ def _run( ):
 
 	parser.parse_args(args.remainder)
 
-	def BuildWithTarget( target ):
-		if target is not None:
-			_shared_globals.target = target.lower( )
+	def BuildWithToolchain( chain ):
 
-		def BuildWithArchitecture( project, architecture ):
-			_shared_globals.allarchitectures.add(architecture)
-			os.chdir( project.scriptPath )
+		def BuildWithTarget( target ):
+			if target is not None:
+				_shared_globals.target = target.lower( )
 
-			newproject = project.copy()
+			def BuildWithArchitecture( project, architecture ):
 
-			if _shared_globals.target:
-				newproject.targetName = _shared_globals.target
-			else:
-				newproject.targetName = projectSettings.currentProject.default_target
+				_shared_globals.allarchitectures.add(architecture)
+				os.chdir( project.scriptPath )
 
-			if newproject.targetName not in newproject.targets:
-				log.LOG_INFO( "Project {} has no rules specified for target {}. Skipping.".format( newproject.name,
-					newproject.targetName ) )
+				newproject = project.copy()
+
+				if _shared_globals.target:
+					newproject.targetName = _shared_globals.target
+				else:
+					newproject.targetName = projectSettings.currentProject.default_target
+
+				if newproject.targetName not in newproject.targets:
+					log.LOG_INFO( "Project {} has no rules specified for target {}. Skipping.".format( newproject.name,
+						newproject.targetName ) )
+					return
+
+				projectSettings.currentProject = newproject
+
+				OutputArchitecture(architecture)
+
+				for targetFunc in newproject.targets[newproject.targetName]:
+					targetFunc( )
+
+				if newproject.outputArchitecture in newproject.archFuncs:
+					for archFunc in newproject.archFuncs[newproject.outputArchitecture]:
+						archFunc()
+
+				for file in newproject.fileOverrides:
+					projCopy = newproject.copy()
+					projectSettings.currentProject = projCopy
+
+					for func in newproject.fileOverrides[file]:
+						func()
+
+					newproject.fileOverrideSettings[file] = projCopy
+
+				if newproject.targetName not in newproject.targets:
+					log.LOG_INFO( "Project {} has no rules specified for target {}. Skipping.".format( newproject.name,
+						newproject.targetName ) )
+					return
+
+				projectSettings.currentProject = newproject
+
+				OutputArchitecture(architecture)
+
+				for targetFunc in newproject.targets[newproject.targetName]:
+					targetFunc( )
+
+				if newproject.outputArchitecture in newproject.archFuncs:
+					for archFunc in newproject.archFuncs[newproject.outputArchitecture]:
+						archFunc()
+
+				for file in newproject.fileOverrides:
+					projCopy = newproject.copy()
+					projectSettings.currentProject = projCopy
+
+					for func in newproject.fileOverrides[file]:
+						func()
+
+					newproject.fileOverrideSettings[file] = projCopy
+
+				projectSettings.currentProject = newproject
+
+				alteredLinkDepends = []
+				alteredSrcDepends = []
+				for depend in newproject.linkDepends:
+					alteredLinkDepends.append( "{}@{}#{}${}".format( depend, projectSettings.currentProject.targetName, projectSettings.currentProject.outputArchitecture, projectSettings.currentProject.activeToolchainName ) )
+				for depend in newproject.srcDepends:
+					alteredSrcDepends.append( "{}@{}#{}${}".format( depend, projectSettings.currentProject.targetName, projectSettings.currentProject.outputArchitecture, projectSettings.currentProject.activeToolchainName ) )
+
+				newproject.linkDepends = alteredLinkDepends
+				newproject.srcDepends = alteredSrcDepends
+
+				newproject.key = "{}@{}#{}${}".format( newproject.name, newproject.targetName, newproject.outputArchitecture, newproject.activeToolchainName )
+				_shared_globals.projects.update( { newproject.key: newproject } )
+
+			for project in _shared_globals.tempprojects.values( ):
+
+				if chain not in project.supportedToolchains:
+					continue
+
+				if chain is not None:
+					project.activeToolchainName = chain
+
+				project.activeToolchain = project.toolchains[project.activeToolchainName]
+
+				validArchList = set(project.activeToolchain.GetValidArchitectures())
+				cmdLineGlobalArchList = args.architecture
+				cmdLineToolchainArchList = args.__dict__[_shared_globals.allToolchainArchStrings[project.activeToolchainName][0].replace("-", "_")]
+				cmdLineArchList = set()
+				if cmdLineGlobalArchList:
+					cmdLineArchList.update(cmdLineGlobalArchList)
+				if cmdLineToolchainArchList:
+					cmdLineArchList.update(cmdLineToolchainArchList)
+				if project.supportedArchitectures:
+					validArchList &= project.supportedArchitectures
+				if not validArchList:
+					log.LOG_ERROR("Project {} does not support any architectures supported by toolchain {}".format(project.name, project.activeToolchainName))
+				if cmdLineArchList:
+					for arch in cmdLineArchList:
+						if arch not in validArchList:
+							log.LOG_ERROR("Toolchain {} does not support architecture {}".format(project.activeToolchainName, arch))
+							Exit(1)
+						BuildWithArchitecture(project, arch)
+				elif args.aa:
+					for arch in validArchList:
+						BuildWithArchitecture(project, arch)
+				else:
+					BuildWithArchitecture(project, project.activeToolchain.Compiler().GetDefaultArchitecture())
+
+		if args.at:
+			for target in _shared_globals.alltargets:
+				BuildWithTarget( target )
+		elif args.target:
+			for target in args.target:
+				BuildWithTarget( target )
+			for target in args.target:
+				if target.lower( ) not in _shared_globals.alltargets:
+					log.LOG_ERROR( "Unknown target: {}".format( target ) )
+					return False
+		else:
+			BuildWithTarget( None )
+
+		return True
+
+	if args.ao:
+		for chain in _shared_globals.alltoolchains:
+			if not BuildWithToolchain( chain ):
 				return
-
-			projectSettings.currentProject = newproject
-
-			OutputArchitecture(architecture)
-
-			for targetFunc in newproject.targets[newproject.targetName]:
-				targetFunc( )
-
-			if newproject.outputArchitecture in newproject.archFuncs:
-				for archFunc in newproject.archFuncs[newproject.outputArchitecture]:
-					archFunc()
-
-			for file in newproject.fileOverrides:
-				projCopy = newproject.copy()
-				projectSettings.currentProject = projCopy
-
-				for func in newproject.fileOverrides[file]:
-					func()
-
-				newproject.fileOverrideSettings[file] = projCopy
-
-			projectSettings.currentProject = newproject
-
-			alteredLinkDepends = []
-			alteredSrcDepends = []
-			for depend in newproject.linkDepends:
-				alteredLinkDepends.append( "{}@{}#{}".format( depend, projectSettings.currentProject.targetName, projectSettings.currentProject.outputArchitecture ) )
-			for depend in newproject.srcDepends:
-				alteredSrcDepends.append( "{}@{}#{}".format( depend, projectSettings.currentProject.targetName, projectSettings.currentProject.outputArchitecture ) )
-
-			newproject.linkDepends = alteredLinkDepends
-			newproject.srcDepends = alteredSrcDepends
-
-			newproject.key = "{}@{}#{}".format( newproject.name, newproject.targetName, newproject.outputArchitecture )
-			_shared_globals.projects.update( { newproject.key: newproject } )
-
-		for project in _shared_globals.tempprojects.values( ):
-			project.activeToolchain = project.toolchains[project.activeToolchainName]
-			validArchList = set(project.activeToolchain.GetValidArchitectures())
-			cmdLineGlobalArchList = args.architecture
-			cmdLineToolchainArchList = args.__dict__[_shared_globals.allToolchainArchStrings[project.activeToolchainName][0].replace("-", "_")]
-			cmdLineArchList = set()
-			if cmdLineGlobalArchList:
-				cmdLineArchList.update(cmdLineGlobalArchList)
-			if cmdLineToolchainArchList:
-				cmdLineArchList.update(cmdLineToolchainArchList)
-			if project.supportedArchitectures:
-				validArchList &= project.supportedArchitectures
-			if not validArchList:
-				log.LOG_ERROR("Project {} does not support any architectures supported by toolchain {}".format(project.name, project.activeToolchainName))
-			if cmdLineArchList:
-				for arch in cmdLineArchList:
-					if arch not in validArchList:
-						log.LOG_ERROR("Toolchain {} does not support architecture {}".format(project.activeToolchainName, arch))
-						Exit(1)
-					BuildWithArchitecture(project, arch)
-			elif args.all_architectures:
-				for arch in validArchList:
-					BuildWithArchitecture(project, arch)
-			elif platform.machine().endswith('64'):
-				BuildWithArchitecture(project, "x64")
-			else:
-				BuildWithArchitecture(project, "x86")
-
-
-	if args.all_targets:
-		for target in _shared_globals.alltargets:
-			BuildWithTarget( target )
-	elif args.target:
-		for target in args.target:
-			BuildWithTarget( target )
-		for target in args.target:
-			if target.lower( ) not in _shared_globals.alltargets:
-				log.LOG_ERROR( "Unknown target: {}".format( target ) )
+	elif args.toolchain:
+		for chain in args.toolchain:
+			if chain.lower() not in _shared_globals.alltoolchains:
+				log.LOG_ERROR( "Unknown toolchain: {}".format( chain ) )
+				return
+			if not BuildWithToolchain( chain ):
 				return
 	else:
-		BuildWithTarget( None )
+		BuildWithToolchain( None )
 
 	os.chdir( mainfileDir )
 
@@ -2589,7 +2648,6 @@ def _run( ):
 
 			insert_depends( projData, projList )
 		already_inserted.remove( proj.key )
-
 
 	if _shared_globals.project_build_list:
 		newProjList = { }

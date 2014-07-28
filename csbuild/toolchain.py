@@ -29,9 +29,10 @@ Defines the base class for creating custom toolchains
 from abc import abstractmethod, ABCMeta
 import glob
 import os
+import platform
 from csbuild import log
-import csbuild
 from csbuild import _shared_globals
+import csbuild
 
 
 class ClassCombiner( object ):
@@ -970,6 +971,13 @@ class compilerBase( SettingsOverrider ):
 
 	def parseOutput(self, outputStr):
 		return None
+
+	def GetDefaultArchitecture(self):
+		if platform.machine().endswith('64'):
+			return "x64"
+		else:
+			return "x86"
+
 
 	@abstractmethod
 	def copy(self):
