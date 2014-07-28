@@ -2525,7 +2525,7 @@ def _run( ):
 
 			for project in _shared_globals.tempprojects.values( ):
 
-				if chain not in project.supportedToolchains:
+				if project.supportedToolchains and chain not in project.supportedToolchains:
 					continue
 
 				if chain is not None:
