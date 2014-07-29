@@ -69,8 +69,8 @@ class AndroidBase( object ):
 		self._packageName = "csbuild.autopackage"
 		self._activityName = None
 		self._usedFeatures = []
-		self._binDir = ""
-		
+		self._sysRootDir = ""
+
 	def CopyTo(self, other):
 		other._ndkHome = self._ndkHome
 		other._sdkHome = self._sdkHome
@@ -81,16 +81,16 @@ class AndroidBase( object ):
 		other._packageName = self._packageName
 		other._activityName = self._activityName
 		other._usedFeatures = list(self._usedFeatures)
-		other._binDir = self._binDir
+		other._sysRootDir = self._sysRootDir
 
 	def NdkHome(self, pathToNdk):
-		self._ndkHome = pathToNdk
+		self._ndkHome = os.path.abspath(pathToNdk)
 
 	def SdkHome(self, pathToSdk):
-		self._sdkHome = pathToSdk
+		self._sdkHome = os.path.abspath(pathToSdk)
 
 	def AntHome(self, pathToAnt):
-		self._antHome = pathToAnt
+		self._antHome = os.path.abspath(pathToAnt)
 
 	def MinSdkVersion(self, version):
 		self._minSdkVersion = version
@@ -103,7 +103,7 @@ class AndroidBase( object ):
 
 	def PackageName(self, name):
 		self._packageName = name
-		
+
 	def ActivityName(self, name):
 		self._activityName = name
 
@@ -127,7 +127,7 @@ class AndroidBase( object ):
 	def _getSimplifiedArch(self, project):
 		return project.outputArchitecture
 
-	def _setBinDir(self, project):
+	def _setSysRootDir(self, project):
 		toolchainsDir = os.path.join(self._ndkHome, "toolchains")
 		arch = self._getSimplifiedArch(project)
 
@@ -148,11 +148,13 @@ class AndroidBase( object ):
 			csbuild.Exit(1)
 
 		if platform.system() == "Windows":
-			platformName = "windows-x86_64"
+			platformName = "windows"
 		else:
-			platformName = "linux-x86_64"
+			platformName = "linux"
 
-		self._binDir = os.path.join(toolchainsDir, bestCompilerVersion, "prebuilt", platformName)
+		sysRootDir = os.path.join(toolchainsDir, bestCompilerVersion, "prebuilt", platformName)
+		dirs = list(glob.glob("{}*".format(sysRootDir)))
+		self._sysRootDir = dirs[0]
 
 	def _getCommands(self, project, cmd1, cmd2, searchInLlvmPath = False):
 		toolchainsDir = os.path.join(self._ndkHome, "toolchains")
@@ -175,16 +177,18 @@ class AndroidBase( object ):
 			csbuild.Exit(1)
 
 		if platform.system() == "Windows":
-			platformName = "windows-x86_64"
+			platformName = "windows"
 			ext = ".exe"
 		else:
-			platformName = "linux-x86_64"
+			platformName = "linux"
 			ext = ""
 
 		cmd1Name = cmd1 + ext
 		cmd2Name = cmd2 + ext
 
-		binDir = os.path.join(toolchainsDir, bestCompilerVersion, "prebuilt", platformName, "bin")
+		binDir = os.path.join(toolchainsDir, bestCompilerVersion, "prebuilt", platformName)
+		dirs = list(glob.glob("{}*".format(binDir)))
+		binDir = os.path.join(dirs[0], "bin")
 		maybeCmd1 = os.path.join(binDir, cmd1Name)
 
 		if os.path.exists(maybeCmd1):
@@ -241,7 +245,7 @@ class AndroidCompiler(AndroidBase, toolchain_gcc.compiler_gcc):
 			if "clang" in project.cc or "clang" in project.cxx:
 				self.isClang = True
 			self._SetupCompiler(project)
-			self._setBinDir(project)
+			self._setSysRootDir(project)
 			self._setupCompleted = True
 
 	def prePrepareBuildStep(self, project):
@@ -271,7 +275,7 @@ class AndroidCompiler(AndroidBase, toolchain_gcc.compiler_gcc):
 			"--std={0}".format( standard ) if standard != "" else "",
 			" ".join( project.cpp_compiler_flags ) if isCpp else " ".join( project.c_compiler_flags ),
 			"-isystem \"{}\"".format(os.path.join( self._ndkHome, "sources", "cxx-stl", "stlport", "stlport")) if isCpp else "",
-			self._binDir,
+			self._sysRootDir,
 			self._getTargetTriple(project),
 			os.path.join( self._ndkHome, "platforms", "android-{}".format(self._targetSdkVersion), "arch-{}".format(self._getSimplifiedArch(project)), "usr", "include")
 		)
@@ -288,7 +292,7 @@ class AndroidLinker(AndroidBase, toolchain_gcc.linker_gcc):
 		AndroidBase.CopyTo(self, ret)
 		ret._setupCompleted = self._setupCompleted
 		return ret
-		
+
 	def _SetupLinker(self, project):
 		#TODO: Let user choose which compiler version to use; for now, using the highest numbered version.
 		self._ld, self._ar = self._getCommands(project, "ld", "ar")
@@ -299,7 +303,7 @@ class AndroidLinker(AndroidBase, toolchain_gcc.linker_gcc):
 			if "clang" in project.cc or "clang" in project.cxx:
 				self.isClang = True
 			self._SetupLinker(project)
-			self._setBinDir(project)
+			self._setSysRootDir(project)
 			self._setupCompleted = True
 
 
@@ -346,7 +350,7 @@ class AndroidLinker(AndroidBase, toolchain_gcc.linker_gcc):
 					"libs",
 					"armeabi-v7a" if project.outputArchitecture == "arm" else project.outputArchitecture)
 				) if project.hasCppFiles else "",
-				self._binDir,
+				self._sysRootDir,
 				#os.path.join( self._ndkHome, "platforms", "android-{}".format(self._targetSdkVersion), "arch-{}".format(self._getSimplifiedArch(project))),
 				self._getTargetTriple(project),
 				libDir

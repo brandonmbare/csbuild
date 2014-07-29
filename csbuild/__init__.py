@@ -2428,7 +2428,7 @@ def _run( ):
 	if args.generate_solution is not None:
 		args.at = True
 		args.aa = True
-		args.ao = True
+		#args.ao = True
 
 	if args.at:
 		_shared_globals.target_list = list(_shared_globals.alltargets)
@@ -2573,11 +2573,13 @@ def _run( ):
 		return True
 
 	if args.ao:
+		_shared_globals.selectedToolchains = _shared_globals.alltoolchains
 		for chain in _shared_globals.alltoolchains:
 			if not BuildWithToolchain( chain ):
 				return
 	elif args.toolchain:
 		for chain in args.toolchain:
+			_shared_globals.selectedToolchains.add(chain)
 			if chain.lower() not in _shared_globals.alltoolchains:
 				log.LOG_ERROR( "Unknown toolchain: {}".format( chain ) )
 				return

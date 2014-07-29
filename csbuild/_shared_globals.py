@@ -253,6 +253,8 @@ alltoolchains = { }
 allgenerators = { }
 allToolchainArchStrings = { }
 
+selectedToolchains = set( )
+
 rebuild = False
 
 sgmutex = threading.Lock( )

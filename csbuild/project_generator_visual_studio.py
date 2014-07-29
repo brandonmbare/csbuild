@@ -53,16 +53,25 @@ def GenerateNewUuid(uuidList, name):
 		++nameIndex
 
 
-def GetPlatformName(architecture):
+def GetPlatformName(toolchain, architecture):
 	# The mapped architectures have special names in Visual Studio.
 	platformNameMap = {
-		"x86": "Win32",
-		"arm": "ARM",
+		"msvc": {
+			"x86": "Win32",
+			"arm": "ARM",
+		},
+
+		# Android architectures will always build under the Tegra-Android platform.
+		"android": {
+			"x86": "Tegra-Android",
+			"arm": "Tegra-Android",
+			"mips": "Tegra-Android",
+		},
 	}
 
 	# If the given architecture is mapped to a name, use that name.
-	if architecture in platformNameMap:
-		return platformNameMap[architecture]
+	if toolchain in platformNameMap and architecture in platformNameMap[toolchain]:
+		return platformNameMap[toolchain][architecture]
 
 	# Otherwise, use the architecture itself as a fallback.
 	return architecture
@@ -151,6 +160,15 @@ class ProjectFileType:
 	VCXPROJ = "vcxproj"
 
 
+class VisualStudioVersion:
+	v2005 = 2005
+	v2008 = 2008
+	v2010 = 2010
+	v2012 = 2012
+	v2013 = 2013
+	All = [v2005, v2008, v2010, v2012, v2013]
+
+
 class project_generator_visual_studio(project_generator.project_generator):
 	"""
 	Generator used to create Visual Studio project files.
@@ -174,16 +192,19 @@ class project_generator_visual_studio(project_generator.project_generator):
 		self._projectUuidList = set()
 		self._orderedProjectList = []
 
+		# Compile a list of the targets and a reverse-lookup list.
 		for configName in _shared_globals.alltargets:
 			correctedConfigName = CorrectConfigName(configName)
 			self._configList.append(correctedConfigName)
 			self._reverseConfigMap[correctedConfigName] = configName
 
 		# Compile a list of the platforms for the solution.
-		for archName in _shared_globals.allarchitectures:
-			platformName = GetPlatformName(archName)
-			self._archMap[platformName] = archName
-			self._platformList.append(platformName)
+		for toolchainName in _shared_globals.selectedToolchains:
+			for archName in csbuild.Toolchain(toolchainName).GetValidArchitectures():
+				platformName = GetPlatformName(toolchainName, archName)
+				if not platformName in self._archMap:
+					self._archMap[platformName] = archName
+					self._platformList.append(platformName)
 
 		self._configList = sorted(self._configList)
 		self._platformList = sorted(self._platformList)
@@ -198,11 +219,14 @@ class project_generator_visual_studio(project_generator.project_generator):
 	@staticmethod
 	def additional_args(parser):
 		parser.add_argument("--visual-studio-version",
-			help = "Select the version of Visual Studio the generated solution will be compatible with (i.e, --visual-studio-version=2012).",
-			default = 2012)
+			help = "Select the version of Visual Studio the generated solution will be compatible with.",
+			choices = VisualStudioVersion.All,
+			default = VisualStudioVersion.v2012,
+			type = int)
 		#parser.add_argument("--create-native-project",
 		#	help = "Create a native solution that calls into MSBuild and NOT the makefiles.",
-		#	default = False)
+		#	default = False,
+		#	nargs = "?")
 
 
 	def write_solution(self):
@@ -224,14 +248,15 @@ class project_generator_visual_studio(project_generator.project_generator):
 				# Because the list of sources and headers can differ between configurations and architectures,
 				# we need to generate a complete list so the project can reference them all. Also, keep track
 				# of the project settings per configuration and supported architecture.
-				for configName, archMap in projectSettingsMap.items():
-					for archName, settings in archMap.items():
-						platformName = GetPlatformName(archName)
-						configName = CorrectConfigName(configName)
-						projectData.platformConfigList.append((configName, platformName, settings))
-						projectData.fullSourceFileList.update(set(settings.allsources))
-						projectData.fullHeaderFileList.update(set(settings.allheaders))
-						projectData.fullIncludePathList.update(set(settings.include_dirs))
+				for toolchainName, configMap in projectSettingsMap.items():
+					for configName, archMap in configMap.items():
+						for archName, settings in archMap.items():
+							platformName = GetPlatformName(toolchainName, archName)
+							configName = CorrectConfigName(configName)
+							projectData.platformConfigList.append((configName, platformName, toolchainName, settings))
+							projectData.fullSourceFileList.update(set(settings.allsources))
+							projectData.fullHeaderFileList.update(set(settings.allheaders))
+							projectData.fullIncludePathList.update(set(settings.include_dirs))
 
 				projectData.fullSourceFileList = sorted(projectData.fullSourceFileList)
 				projectData.fullHeaderFileList = sorted(projectData.fullHeaderFileList)
@@ -239,7 +264,9 @@ class project_generator_visual_studio(project_generator.project_generator):
 
 				# Grab the projectSettings for the first key in the config map and fill in a set of names for dependent projects.
 				# We only need the names for now. We can handle resolving them after we have all of the projects mapped.
-				archMap = list(projectSettingsMap.values())[0]
+
+				configMap = list(projectSettingsMap.values())[0]
+				archMap = list(configMap.values())[0]
 				settings = list(archMap.values())[0]
 				for dependentProjectKey in settings.linkDepends:
 					projectData.dependencyList.add(_shared_globals.projects[dependentProjectKey].name)
@@ -305,7 +332,7 @@ class project_generator_visual_studio(project_generator.project_generator):
 			# The Build All project doesn't have any project settings, but it still needs all of the platforms and configurations.
 			for platformName in self._platformList:
 				for configName in self._configList:
-					buildAllProjectData.platformConfigList.append((configName, platformName, None))
+					buildAllProjectData.platformConfigList.append((configName, platformName, "", None))
 
 			# Add the Build All project to the project map.
 			self._projectMap[buildAllProjectData.name] = buildAllProjectData
@@ -331,11 +358,11 @@ class project_generator_visual_studio(project_generator.project_generator):
 
 		self._fullIncludePathList = sorted(self._fullIncludePathList)
 
-		is2005 = (self._visualStudioVersion == 2005)
-		is2008 = (self._visualStudioVersion == 2008)
-		is2010 = (self._visualStudioVersion == 2010)
-		is2012 = (self._visualStudioVersion == 2012)
-		is2013 = (self._visualStudioVersion == 2013)
+		is2005 = (self._visualStudioVersion == VisualStudioVersion.v2005)
+		is2008 = (self._visualStudioVersion == VisualStudioVersion.v2008)
+		is2010 = (self._visualStudioVersion == VisualStudioVersion.v2010)
+		is2012 = (self._visualStudioVersion == VisualStudioVersion.v2012)
+		is2013 = (self._visualStudioVersion == VisualStudioVersion.v2013)
 
 		if is2005:
 			self._GenerateFilesForVs2005()
@@ -511,7 +538,7 @@ class project_generator_visual_studio(project_generator.project_generator):
 				itemGroupNode.set("Label", "ProjectConfigurations")
 
 				# Add the project configurations
-				for configName, platformName, _ in projectData.platformConfigList:
+				for configName, platformName, toolchainName, _ in projectData.platformConfigList:
 					projectConfigNode = AddNode(itemGroupNode, "ProjectConfiguration")
 					configNode = AddNode(projectConfigNode, "Configuration")
 					platformNode = AddNode(projectConfigNode, "Platform")
@@ -528,7 +555,7 @@ class project_generator_visual_studio(project_generator.project_generator):
 						sourceFileNode.set("Include", os.path.relpath(sourceFilePath, projectData.outputPath))
 
 						# Handle any configuration or platform excludes for the current file.
-						for configName, platformName, settings in projectData.platformConfigList:
+						for configName, platformName, toolchainName, settings in projectData.platformConfigList:
 							if not sourceFilePath in settings.allsources:
 								excludeNode = AddNode(sourceFileNode, "ExcludedFromBuild")
 								excludeNode.text = "true"
@@ -542,7 +569,7 @@ class project_generator_visual_studio(project_generator.project_generator):
 						sourceFileNode.set("Include", os.path.relpath(sourceFilePath, projectData.outputPath))
 
 						# Handle any configuration or platform excludes for the current file.
-						for configName, platformName, settings in projectData.platformConfigList:
+						for configName, platformName, toolchainName, settings in projectData.platformConfigList:
 							if not sourceFilePath in settings.allheaders:
 								excludeNode = AddNode(sourceFileNode, "ExcludedFromBuild")
 								excludeNode.text = "true"
@@ -569,7 +596,7 @@ class project_generator_visual_studio(project_generator.project_generator):
 					keywordNode = AddNode(propertyGroupNode, "Keyword")
 					keywordNode.text = "MakeFileProj"
 
-				for configName, platformName, _ in projectData.platformConfigList:
+				for configName, platformName, toolchainName, _ in projectData.platformConfigList:
 					propertyGroupNode = AddNode(rootNode, "PropertyGroup")
 					propertyGroupNode.set("Label", "Configuration")
 					propertyGroupNode.set("Condition", "'$(Configuration)|$(Platform)'=='{}|{}'".format(configName, platformName))
@@ -588,7 +615,7 @@ class project_generator_visual_studio(project_generator.project_generator):
 				importNode = AddNode(rootNode, "Import")
 				importNode.set("Project", r"$(VCTargetsPath)\Microsoft.Cpp.props")
 
-				for configName, platformName, _ in projectData.platformConfigList:
+				for configName, platformName, toolchainName, _ in projectData.platformConfigList:
 					importGroupNode = AddNode(rootNode, "ImportGroup")
 					importGroupNode.set("Label", "PropertySheets")
 					importGroupNode.set("Condition", "'$(Configuration)|$(Platform)'=='{}|{}'".format(configName, platformName))
@@ -600,7 +627,7 @@ class project_generator_visual_studio(project_generator.project_generator):
 						importNode.set("Project", r"$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props")
 						importNode.set("Condition", "exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')")
 
-				for configName, platformName, settings in projectData.platformConfigList:
+				for configName, platformName, toolchainName, settings in projectData.platformConfigList:
 					propertyGroupNode = AddNode(rootNode, "PropertyGroup")
 					propertyGroupNode.set("Condition", "'$(Configuration)|$(Platform)'=='{}|{}'".format(configName, platformName))
 
@@ -705,7 +732,7 @@ class project_generator_visual_studio(project_generator.project_generator):
 				rootNode.set("xmlns", "http://schemas.microsoft.com/developer/msbuild/2003")
 
 				if not projectData.isBuildAllProject:
-					for configName, platformName, _ in projectData.platformConfigList:
+					for configName, platformName, toolchainName, _ in projectData.platformConfigList:
 						if IsMicrosoftPlatform(platformName):
 							propertyGroupNode = AddNode(rootNode, "PropertyGroup")
 							workingDirNode = AddNode(propertyGroupNode, "LocalDebuggerWorkingDirectory")
