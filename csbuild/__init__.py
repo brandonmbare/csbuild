@@ -950,6 +950,7 @@ def SetActiveToolchain( name ):
 	@type name: str
 	@param name: The toolchain to use to build the project
 	"""
+	_shared_globals.selectedToolchains.add(name)
 	projectSettings.currentProject.activeToolchainName = name
 
 
@@ -2529,6 +2530,7 @@ def _run( ):
 					continue
 
 				if chain is not None:
+					_shared_globals.selectedToolchains.add(chain)
 					project.activeToolchainName = chain
 
 				project.activeToolchain = project.toolchains[project.activeToolchainName]
@@ -2573,13 +2575,13 @@ def _run( ):
 		return True
 
 	if args.ao:
-		_shared_globals.selectedToolchains = _shared_globals.alltoolchains
+		_shared_globals.selectedToolchains = set( ) # Reset the selected toolchains.
 		for chain in _shared_globals.alltoolchains:
 			if not BuildWithToolchain( chain ):
 				return
 	elif args.toolchain:
+		_shared_globals.selectedToolchains = set( ) # Reset the selected toolchains.
 		for chain in args.toolchain:
-			_shared_globals.selectedToolchains.add(chain)
 			if chain.lower() not in _shared_globals.alltoolchains:
 				log.LOG_ERROR( "Unknown toolchain: {}".format( chain ) )
 				return
