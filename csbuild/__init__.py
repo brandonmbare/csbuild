@@ -1261,8 +1261,6 @@ def build( ):
 	for i in range( linker_threads_blocked ):
 		_shared_globals.link_semaphore.acquire(True)
 
-	linkThread.start()
-
 	for project in _shared_globals.sortedProjects:
 		_shared_globals.total_compiles += len( project.final_chunk_set )
 
@@ -1284,11 +1282,13 @@ def build( ):
 	for project in _shared_globals.sortedProjects:
 		log.LOG_BUILD( "Verifying libraries for {} ({} {}/{})".format( project.output_name, project.targetName, project.outputArchitecture, project.activeToolchainName ) )
 		if not project.check_libraries( ):
-			Exit( 1 )
+			return False
 			#if _utils.needs_link(project):
 			#    projects_needing_links.add(project.key)
 
 	_shared_globals.starttime = time.time( )
+
+	linkThread.start()
 
 	def ReconcilePostBuild():
 		LinkedSomething = True
