@@ -1859,8 +1859,11 @@ def install_headers( ):
 			cheaders = []
 			project.get_files( headers = headers, cheaders = cheaders )
 			for header in headers:
-				log.LOG_INSTALL( "Installing {0} to {1}...".format( header, install_dir ) )
-				shutil.copy( header, install_dir )
+				this_header_dir = os.path.dirname( os.path.join( install_dir, os.path.relpath( header, project.workingDirectory ) ) )
+				if not os.path.exists( this_header_dir ):
+					os.makedirs( this_header_dir )
+				log.LOG_INSTALL( "Installing {0} to {1}...".format( header, this_header_dir ) )
+				shutil.copy( header, this_header_dir )
 			for header in cheaders:
 				log.LOG_INSTALL( "Installing {0} to {1}...".format( header, install_dir ) )
 				shutil.copy( header, install_dir )
