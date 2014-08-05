@@ -1311,7 +1311,7 @@ def build( ):
 					otherProj.buildEnd = time.time()
 					projects_in_flight.remove( otherProj )
 					if otherProj.compile_failed:
-						log.LOG_ERROR( "Build of {} ({} {/{}}) failed! Finishing up non-dependent build tasks...".format(
+						log.LOG_ERROR( "Build of {} ({} {}/{}) failed! Finishing up non-dependent build tasks...".format(
 							otherProj.output_name, otherProj.targetName, otherProj.outputArchitecture, otherProj.activeToolchainName ) )
 						otherProj.state = _shared_globals.ProjectState.FAILED
 						otherProj.linkQueueStart = time.time()
@@ -1331,7 +1331,7 @@ def build( ):
 						projects_done.add( otherProj.key )
 					else:
 						log.LOG_LINKER(
-							"Linking for {} ({} {} {}) deferred until all dependencies have finished building...".format(
+							"Linking for {} ({} {}/{}) deferred until all dependencies have finished building...".format(
 								otherProj.output_name, otherProj.targetName, otherProj.outputArchitecture, otherProj.activeToolchainName ) )
 						otherProj.state = _shared_globals.ProjectState.WAITING_FOR_LINK
 						pending_links.append( otherProj )
