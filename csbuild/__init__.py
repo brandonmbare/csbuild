@@ -2313,6 +2313,7 @@ def _run( ):
 		action = "store_true" )
 	parser.add_argument( '--no-chunks', help = "Disable chunking globally, affects all projects",
 		action = "store_true" )
+	parser.add_argument( '--dg', '--dependency-graph', help="Generate dependency graph", action="store_true")
 
 	group = parser.add_argument_group( "Solution generation", "Commands to generate a solution" )
 	group.add_argument( '--generate-solution', help = "Generate a solution file for use with the given IDE.",
@@ -2678,13 +2679,49 @@ def _run( ):
 	_utils.prepare_precompiles( )
 	log.LOG_BUILD( "Task preparation took {0}:{1:02}".format( int( totalmin ), int( totalsec ) ) )
 
+
 	if args.gui:
 		_shared_globals.autoCloseGui = args.auto_close_gui
 		from csbuild import _gui
 		global _guiModule
 		_guiModule = _gui
 
-	if args.generate_solution is not None:
+	if args.dg:
+		builder = 'digraph G {\n\tlayout="neato";\n\toverlap="false";\n\tsplines="spline"\n'
+		colors = [
+			"#ff0000", "#cc5200", "#b2742d", "#858c23", "#20802d",
+			"#00ffcc", "#39c3e6", "#205380", "#003380", "#38008c",
+			"#ff40d9", "#e53967", "#f20000", "#7f4620", "#cca300",
+			"#66ff00", "#00cc6d", "#36d9ce", "#007a99", "#0061f2",
+			"#0000f2", "#cc00ff", "#d9368d", "#7f202d", "#991400",
+			"#f28100", "#dae639", "#69bf30", "#269973", "#208079",
+			"#00a2f2", "#397ee6", "#0000e6", "#8d29a6", "#990052"
+		]
+		idx = 0
+		for project in _shared_globals.sortedProjects:
+			color = colors[idx]
+			idx += 1
+			if idx == len(colors):
+				idx = 0
+			builder += '\t{} [shape="{}" color="{}"];\n'.format(project.name, "box3d" if project.type == ProjectType.Application else "oval", color);
+			for dep in project.linkDepends:
+				otherProj = _shared_globals.projects[dep]
+				builder += '\t{} -> {} [color="{}"];\n'.format(project.name, otherProj.name, color)
+		builder += "}\n"
+		with open("depends.gv", "w") as f:
+			f.write(builder)
+		log.LOG_BUILD("Wrote depends.gv")
+		try:
+			from graphviz import Digraph
+		except:
+			log.LOG_WARN("graphviz library not found. You can open depends.gv with graphviz or a similar dot viewer to view the graph, or install graphviz with pip install graphviz.")
+		else:
+			graph = Digraph(comment="CSBuild Dependency Graph", format="png", engine="dot", filename="depends")
+			Digraph.source=property(lambda self: builder)
+			graph.render("depends.gv", view=True)
+			log.LOG_BUILD("Wrote depends.png")
+
+	elif args.generate_solution is not None:
 		if not args.solution_path:
 			args.solution_path = os.path.join( ".", "Solutions", args.generate_solution )
 		if args.generate_solution not in _shared_globals.project_generators:

@@ -542,6 +542,7 @@ class projectSettings( object ):
 
 
 	def prepareBuild( self ):
+		log.LOG_BUILD( "Preparing tasks for {} ({} {}/{})...".format( self.output_name, self.targetName, self.outputArchitecture, self.activeToolchainName ) )
 		wd = os.getcwd( )
 		os.chdir( self.workingDirectory )
 
@@ -607,8 +608,6 @@ class projectSettings( object ):
 
 		self.output_name += self.ext
 		self.activeToolchain.SetActiveTool("compiler")
-
-		log.LOG_BUILD( "Preparing tasks for {} ({} {}/{})...".format( self.output_name, self.targetName, self.outputArchitecture, self.activeToolchainName ) )
 
 		if not os.path.exists( self.csbuild_dir ):
 			os.makedirs( self.csbuild_dir )
