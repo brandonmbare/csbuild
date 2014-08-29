@@ -140,88 +140,209 @@ class TreeWidgetWithBarGraph(QtGui.QTreeWidgetItem):
 			drawBar("#00C0C0", self.linkQueueStart, self.linkStart)
 			drawBar("#00E080", self.linkStart, self.endTime)
 
-	
+
 class SyntaxHighlighter( QtGui.QSyntaxHighlighter ):
-	
+
 	class HighlightRule( object ):
 		def __init__(self, pattern, argument):
 			self.pattern = pattern
 			self.format = argument
-	
+
 	def __init__(self, *args):
 		QtGui.QSyntaxHighlighter.__init__(self, *args)
 		self.highlightRules = []
-		
+
 		self.commentStart = re.compile("/\\*")
 		self.commentEnd = re.compile("\\*/")
-		
+
 		self.keywordFormat = QtGui.QTextCharFormat()
 		self.commentFormat = QtGui.QTextCharFormat()
 		self.stringFormat = QtGui.QTextCharFormat()
 		self.functionFormat = QtGui.QTextCharFormat()
-		
+
 		self.keywordFormat.setForeground(QtGui.QColor("#800000"))
 		self.keywordFormat.setFontWeight(QtGui.QFont.Bold)
-		
+
 		for pattern in [
+			"\\b__alignof\\b",
+			"\\b__asm\\b",
+			"\\b__assume\\b",
+			"\\b__based\\b",
+			"\\b__box\\b",
+			"\\b__cdecl\\b",
+			"\\b__declspec\\b",
+			"\\b__delegate\\b",
+			"\\b__event\\b",
+			"\\b__except\\b",
+			"\\b__fastcall\\b",
+			"\\b__finally\\b",
+			"\\b__forceinline\\b",
+			"\\b__gc\\b",
+			"\\b__hook\\b",
+			"\\b__identifier\\b",
+			"\\b__if_exists\\b",
+			"\\b__if_not_exists\\b",
+			"\\b__inline\\b",
+			"\\b__int16\\b",
+			"\\b__int32\\b",
+			"\\b__int64\\b",
+			"\\b__int8\\b",
+			"\\b__interface\\b",
+			"\\b__leave\\b",
+			"\\b__m128\\b",
+			"\\b__m128d\\b",
+			"\\b__m128i\\b",
+			"\\b__m64\\b",
+			"\\b__multiple_inheritance\\b",
+			"\\b__nogc\\b",
+			"\\b__noop\\b",
+			"\\b__pin\\b",
+			"\\b__property\\b",
+			"\\b__raise\\b",
+			"\\b__restrict\\b",
+			"\\b__single_inheritance\\b",
+			"\\b__stdcall\\b",
+			"\\b__super\\b",
+			"\\b__thiscall\\b",
+			"\\b__try\\b",
+			"\\b__try_cast\\b",
+			"\\b__unaligned\\b",
+			"\\b__uuidof\\b",
+			"\\b__value\\b",
+			"\\b__virtual_inheritance\\b",
+			"\\b__w64\\b",
+			"\\b__wchar_t\\b",
+			"\\babstract\\b",
+			"\\barray\\b",
+			"\\balignas\\b",
+			"\\balignof\\b",
+			"\\band\\b",
+			"\\band_eq\\b",
+			"\\basm\\b",
+			"\\bauto\\b",
+			"\\bbitand\\b",
+			"\\bbitor\\b",
+			"\\bbool\\b",
+			"\\bbreak\\b",
+			"\\bcase\\b",
+			"\\bcatch\\b",
 			"\\bchar\\b",
+			"\\bchar16_t\\b",
+			"\\bchar32_t\\b",
 			"\\bclass\\b",
+			"\\bcompl\\b",
 			"\\bconst\\b",
+			"\\bconst_cast\\b",
+			"\\bconstexpr\\b",
+			"\\bcontinue\\b",
+			"\\bdecltype\\b",
+			"\\bdefault\\b",
+			"\\bdelegate\\b",
+			"\\bdelete\\b",
+			"\\bdeprecated\\b",
+			"\\bdllexport\\b",
+			"\\bdllimport\\b",
+			"\\bdo\\b",
 			"\\bdouble\\b",
+			"\\bdynamic_cast\\b",
+			"\\belse\\b",
 			"\\benum\\b",
+			"\\bevent\\b",
 			"\\bexplicit\\b",
+			"\\bexport\\b",
+			"\\bextern\\b",
+			"\\bfalse\\b",
+			"\\bfinal\\b",
+			"\\bfinally\\b",
+			"\\bfloat\\b",
+			"\\bfor\\b",
+			"\\bfor each\\b",
 			"\\bfriend\\b",
+			"\\bfriend_as\\b",
+			"\\bgcnew\\b",
+			"\\bgeneric\\b",
+			"\\bgoto\\b",
+			"\\bif\\b",
+			"\\bin\\b",
+			"\\binitonly\\b",
 			"\\binline\\b",
 			"\\bint\\b",
-			"\\blong\\b",
-			"\\bnamespace\\b",
-			"\\boperator\\b",
-			"\\bprivate\\b",
-			"\\bprotected\\b",
-			"\\bpublic\\b",
-			"\\bshort\\b",
-			"\\bsignals\\b",
-			"\\bsigned\\b",
-			"\\bslots\\b",
-			"\\bstatic\\b",
-			"\\bstruct\\b",
-			"\\btemplate\\b",
-			"\\btypedef\\b",
-			"\\btypename\\b",
-			"\\bunion\\b",
-			"\\bunsigned\\b",
-			"\\bvirtual\\b",
-			"\\bvoid\\b",
-			"\\bvolatile\\b",
-			"\\bbool\\b",
-			"\\boverride\\b",
-			"\\bdefault\\b",
-			"\\bdconstexpr\\b",
-			"\\bauto\\b",
-			"\\bdecltype\\b",
-			"\\bfinal\\b",
-			"\\bnullptr\\b",
-			"\\bwchar_t\\b",
-			"\\bint8_t\\b",
 			"\\bint16_t\\b",
 			"\\bint32_t\\b",
 			"\\bint64_t\\b",
-			"\\buint8_t\\b",
+			"\\bint8_t\\b",
+			"\\binterface\\b",
+			"\\binterior_ptr\\b",
+			"\\bliteral\\b",
+			"\\blong\\b",
+			"\\bmutable\\b",
+			"\\bnaked\\b",
+			"\\bnamespace\\b",
+			"\\bnew\\b",
+			"\\bnoexcept\\b",
+			"\\bnoinline\\b",
+			"\\bnoreturn\\b",
+			"\\bnot\\b",
+			"\\bnot_eq\\b",
+			"\\bnothrow\\b",
+			"\\bnovtable\\b",
+			"\\bNULL\\b",
+			"\\bnullptr\\b",
+			"\\bnullptr_t\\b",
+			"\\boperator\\b",
+			"\\bor\\b",
+			"\\bor_eq\\b",
+			"\\boverride\\b",
+			"\\bproperty\\b",
+			"\\bprivate\\b",
+			"\\bprotected\\b",
+			"\\bpublic\\b",
+			"\\braise\\b",
+			"\\bref\\b",
+			"\\bregister\\b",
+			"\\breinterpret_cast\\b",
+			"\\brestrict\\b",
+			"\\breturn\\b",
+			"\\bsafecast\\b",
+			"\\bsealed\\b",
+			"\\bselectany\\b",
+			"\\bshort\\b",
+			"\\bsignals\\b",
+			"\\bsigned\\b",
+			"\\bsize_t\\b",
+			"\\bsizeof\\b",
+			"\\bslots\\b",
+			"\\bstatic\\b",
+			"\\bstatic_assert\\b",
+			"\\bstatic_cast\\b",
+			"\\bstruct\\b",
+			"\\bswitch\\b",
+			"\\btemplate\\b",
+			"\\btypedef\\b",
+			"\\btypename\\b",
+			"\\bthis\\b",
+			"\\bthread\\b",
+			"\\bthread_local\\b",
+			"\\bthrow\\b",
+			"\\btrue\\b",
+			"\\btry\\b",
+			"\\btypeid\\b",
 			"\\buint16_t\\b",
 			"\\buint32_t\\b",
 			"\\buint64_t\\b",
-			"\\bnullptr\\b",
-			"\\bNULL\\b",
-			"\\bnullptr_t\\b",
-			"\\bstatic_assert\\b",
-			"\\bstatic_cast\\b",
-			"\\bdynamic_cast\\b",
-			"\\breinterpret_cast\\b",
-			"\\btry\\b",
-			"\\bcatch\\b",
-			"\\braise\\b",
-			"\\bnoexcept\\b",
-			"\\bextern\\b",
+			"\\buint8_t\\b",
+			"\\bunion\\b",
+			"\\bunsigned\\b",
+			"\\busing\\b",
+			"\\buuid\\b",
+			"\\bvalue\\b",
+			"\\bvirtual\\b",
+			"\\bvoid\\b",
+			"\\bvolatile\\b",
+			"\\bwchar_t\\b",
+			"\\bwhile\\b",
+			"\\bxor\\b",
+			"\\bxor_eq\\b",
 		]:
 			self.highlightRules.append(SyntaxHighlighter.HighlightRule(re.compile(pattern), self.keywordFormat))
 
@@ -247,7 +368,7 @@ class SyntaxHighlighter( QtGui.QSyntaxHighlighter ):
 		self.stringFormat.setForeground(QtCore.Qt.darkCyan)
 		self.highlightRules.append(SyntaxHighlighter.HighlightRule(re.compile("\".*?\""), self.stringFormat))
 
-	
+
 	def highlightBlock(self, line):
 		for rule in self.highlightRules:
 			match = rule.pattern.search(line)
@@ -984,16 +1105,16 @@ class MainWindow( QMainWindow ):
 		self.exitRequested = False
 
 		QMainWindow.__init__(self, *args, **kwargs)
-		
+
 		self.setObjectName("MainWindow")
-		
+
 		self.resize(1275, 600)
-		
+
 		self.centralWidget = QtGui.QWidget(self)
 		self.centralWidget.setObjectName("centralWidget")
 
 		self.outerLayout = QtGui.QVBoxLayout(self.centralWidget)
-		
+
 		self.mainLayout = QtGui.QHBoxLayout()
 
 		self.m_splitter = QtGui.QSplitter(self.centralWidget)
@@ -1001,10 +1122,10 @@ class MainWindow( QMainWindow ):
 
 		self.innerWidget = QtGui.QWidget(self.centralWidget)
 		self.innerLayout = QtGui.QVBoxLayout(self.innerWidget)
-		
+
 		self.verticalLayout = QtGui.QVBoxLayout()
 		self.verticalLayout.setObjectName("verticalLayout")
-	
+
 		self.m_buildSummaryLabel = QtGui.QLabel(self.innerWidget)
 		self.m_buildSummaryLabel.setObjectName("m_buildSummaryLabel")
 		font = QtGui.QFont()
@@ -1060,10 +1181,10 @@ class MainWindow( QMainWindow ):
 		self.m_buildTree = QtGui.QTreeWidget(self.buildWidget)
 		self.m_buildTree.setColumnCount(12)
 		self.m_buildTree.setUniformRowHeights(True)
-		
+
 		self.m_treeHeader = TreeWidgetItem()
 		self.m_buildTree.setHeaderItem(self.m_treeHeader)
-		
+
 		self.m_buildTree.setObjectName("m_buildTree")
 		self.m_buildTree.setAlternatingRowColors(True)
 		self.m_buildTree.setUniformRowHeights(True)
@@ -1111,7 +1232,7 @@ class MainWindow( QMainWindow ):
 		self.topPane.addTab(self.timelinePage, "Build Timeline")
 
 		self.verticalLayout.addWidget(self.topPane)
-		
+
 		self.innerLayout.addLayout(self.verticalLayout)
 
 		self.m_pushButton =  QtGui.QPushButton(self.buildWidget)
