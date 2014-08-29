@@ -232,6 +232,7 @@ install_incdir = "{prefix}/include"
 makefile_dict = { }
 
 allheaders = { }
+headerPaths = {}
 
 current_compile = 1
 

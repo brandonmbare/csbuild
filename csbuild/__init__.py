@@ -1372,7 +1372,7 @@ def build( ):
 			project.startTime = time.time()
 
 			if project.precompile_headers( ):
-				if not os.path.exists( projectSettings.currentProject.obj_dir ):
+				if not os.access(projectSettings.currentProject.obj_dir , os.F_OK):
 					os.makedirs( projectSettings.currentProject.obj_dir )
 
 				for chunk in projectSettings.currentProject.final_chunk_set:
@@ -1585,14 +1585,14 @@ def performLink(project, objs):
 					project.targetName,
 					project.activeToolchain.Compiler().get_obj_ext()
 				))
-			if project.use_chunks and not _shared_globals.disable_chunks and os.path.exists( obj ):
+			if project.use_chunks and not _shared_globals.disable_chunks and os.access(obj , os.F_OK):
 				objs.append( obj )
 			else:
 				if type( chunk ) == list:
 					for source in chunk:
 						obj = os.path.join(project.obj_dir, "{}_{}{}".format( os.path.basename( source ).split( '.' )[0],
 							project.targetName, project.activeToolchain.Compiler().get_obj_ext() ) )
-						if os.path.exists( obj ):
+						if os.access(obj , os.F_OK):
 							objs.append( obj )
 						else:
 							log.LOG_ERROR( "Could not find {} for linking. Something went wrong here.".format(obj) )
@@ -1600,7 +1600,7 @@ def performLink(project, objs):
 				else:
 					obj = os.path.join(project.obj_dir, "{}_{}{}".format( os.path.basename( chunk ).split( '.' )[0],
 						project.targetName, project.activeToolchain.Compiler().get_obj_ext() ) )
-					if os.path.exists( obj ):
+					if os.access(obj , os.F_OK):
 						objs.append( obj )
 					else:
 						log.LOG_ERROR( "Could not find {} for linking. Something went wrong here.".format(obj) )
@@ -1610,13 +1610,13 @@ def performLink(project, objs):
 		return LinkStatus.UpToDate
 
 	for obj in project.extraObjs:
-		if not os.path.exists(obj):
+		if not os.access(obj, os.F_OK):
 			log.LOG_ERROR("Could not find extra object {}".format(obj))
 
 	objs += project.extraObjs
 
 	if not project.built_something:
-		if os.path.exists( output ):
+		if os.access(output , os.F_OK):
 			mtime = os.path.getmtime( output )
 			for obj in objs:
 				if os.path.getmtime( obj ) > mtime:
@@ -1651,12 +1651,12 @@ def performLink(project, objs):
 					log.LOG_LINKER( "Nothing to link." )
 				return LinkStatus.UpToDate
 
-	if not os.path.exists( project.output_dir ):
+	if not os.access(project.output_dir , os.F_OK):
 		os.makedirs( project.output_dir )
 
 	#Remove the output file so we're not just clobbering it
 	#If it gets clobbered while running it could cause BAD THINGS (tm)
-	if os.path.exists( output ):
+	if os.access(output , os.F_OK):
 		os.remove( output )
 
 	cmd = project.activeToolchain.Linker().get_link_command( project, output, objs )
@@ -1800,7 +1800,7 @@ def clean( silent = False ):
 					project.targetName,
 					project.activeToolchain.Compiler().get_obj_ext()
 				))
-			if os.path.exists( obj ):
+			if os.access(obj , os.F_OK):
 				if not silent:
 					log.LOG_INFO( "Deleting {0}".format( obj ) )
 				os.remove( obj )
@@ -1809,7 +1809,7 @@ def clean( silent = False ):
 		for source in project.sources:
 			obj = os.path.join( project.obj_dir, "{}_{}{}".format(  os.path.basename( source ).split( '.' )[0],
 				project.targetName, project.activeToolchain.Compiler().get_obj_ext() ) )
-			if os.path.exists( obj ):
+			if os.access(obj , os.F_OK):
 				if not silent:
 					log.LOG_INFO( "Deleting {0}".format( obj ) )
 				os.remove( obj )
@@ -1819,7 +1819,7 @@ def clean( silent = False ):
 			project.output_name.split( '.' )[0],
 			project.targetName ) )
 		obj = project.activeToolchain.Compiler().get_pch_file( headerfile )
-		if os.path.exists( obj ):
+		if os.access(obj , os.F_OK):
 			if not silent:
 				log.LOG_INFO( "Deleting {0}".format( obj ) )
 			os.remove( obj )
@@ -1829,14 +1829,14 @@ def clean( silent = False ):
 			project.output_name.split( '.' )[0],
 			project.targetName ))
 		obj = project.activeToolchain.Compiler().get_pch_file( headerfile )
-		if os.path.exists( obj ):
+		if os.access(obj , os.F_OK):
 			if not silent:
 				log.LOG_INFO( "Deleting {0}".format( obj ) )
 			os.remove( obj )
 
 		# Delete the project's output directory.
 		outpath = os.path.join( project.output_dir, project.output_name )
-		if os.path.exists( outpath ):
+		if os.access(outpath , os.F_OK):
 			if not silent:
 				log.LOG_INFO( "Deleting {}".format( outpath ) )
 			os.remove( outpath )
@@ -1853,14 +1853,14 @@ def install_headers( ):
 			subdir = _utils.get_base_name( project.output_name )
 		if project.install_headers:
 			install_dir = os.path.join( _shared_globals.install_incdir, subdir )
-			if not os.path.exists( install_dir ):
+			if not os.access(install_dir , os.F_OK):
 				os.makedirs( install_dir )
 			headers = []
 			cheaders = []
 			project.get_files( headers = headers, cheaders = cheaders )
 			for header in headers:
 				this_header_dir = os.path.dirname( os.path.join( install_dir, os.path.relpath( header, project.workingDirectory ) ) )
-				if not os.path.exists( this_header_dir ):
+				if not os.access(this_header_dir , os.F_OK):
 					os.makedirs( this_header_dir )
 				log.LOG_INSTALL( "Installing {0} to {1}...".format( header, this_header_dir ) )
 				shutil.copy( header, this_header_dir )
@@ -1879,14 +1879,14 @@ def install_output( ):
 
 		if project.install_output:
 			#install output file
-			if os.path.exists( output ):
+			if os.access(output , os.F_OK):
 				outputDir = _shared_globals.install_libdir
-				if not os.path.exists( outputDir ):
+				if not os.access(outputDir , os.F_OK):
 					os.makedirs( outputDir )
 				log.LOG_INSTALL( "Installing {0} to {1}...".format( output, outputDir ) )
 				shutil.copy( output, outputDir )
 				pdb = output.rsplit(".", 1)[0] + ".pdb"
-				if os.path.exists( pdb ):
+				if os.access(pdb , os.F_OK):
 					log.LOG_INSTALL( "Installing {0} to {1}...".format( pdb, outputDir ) )
 					shutil.copy( pdb, outputDir )
 				install_something = True

@@ -519,13 +519,13 @@ class CodeProfileDisplay(CodeEditor):
 
 				#First try: Absolute path relative to base file directory.
 				absPath = os.path.abspath(os.path.join(self.directory, includeFile))
-				if not os.path.exists(absPath):
+				if not os.access(absPath, os.F_OK):
 					#Second try: Look in the project's include directories.
 					for directory in project.include_dirs:
 						absPath = os.path.abspath(os.path.join(directory, includeFile))
-						if os.path.exists(absPath):
+						if os.access(absPath, os.F_OK):
 							break
-				if not os.path.exists(absPath):
+				if not os.access(absPath, os.F_OK):
 					#Third try, brute force it against the filemap our parent has for us.
 					base = os.path.basename(includeFile)
 					if base in self.parentEditor.filemap:
@@ -1331,7 +1331,7 @@ class MainWindow( QMainWindow ):
 		line = item.text(3)
 		col = item.text(4)
 
-		if not file or not os.path.exists(file):
+		if not file or not os.access(file, os.F_OK):
 			return
 
 		if file in self.openWindows:

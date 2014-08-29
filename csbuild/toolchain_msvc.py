@@ -175,17 +175,17 @@ class MsvcBase( object ):
 		includeUm = os.path.join( sdkInclude, "um" )
 		includeWinRT = os.path.join( sdkInclude, "WinRT" )
 
-		if os.path.exists(includeShared):
+		if os.access(includeShared, os.F_OK):
 			self._include_path.append(includeShared)
-		if os.path.exists(includeUm):
+		if os.access(includeUm, os.F_OK):
 			self._include_path.append(includeUm)
-		if os.path.exists(includeWinRT):
+		if os.access(includeWinRT, os.F_OK):
 			self._include_path.append(includeWinRT)
 
 		libPath = os.path.join( WINDOWS_SDK_DIR, "lib", "x64" if self._build_64_bit else "" )
 		sdk8path = os.path.join( WINDOWS_SDK_DIR, "lib", "win8", "um", "x64" if self._build_64_bit else "x86" )
 
-		if os.path.exists(sdk8path):
+		if os.access(sdk8path, os.F_OK):
 			self._lib_path.append( sdk8path )
 		else:
 			self._lib_path.append( libPath )
@@ -371,7 +371,7 @@ class compiler_msvc( MsvcBase, toolchain.compilerBase ):
 
 	def getExtendedCompilerArgs( self, base_cmd, force_include_file, output_obj, input_file ):
 		pch = self.get_pch_file( force_include_file )
-		if os.path.exists( pch ):
+		if os.access(pch , os.F_OK):
 			pch = '/Fp"{0}"'.format( pch )
 		else:
 			pch = ""
@@ -652,7 +652,7 @@ class linker_msvc( MsvcBase, toolchain.linkerBase ):
 			log.LOG_INFO("Looking for library {} in directory {}...".format(libfile, lib_dir))
 			lib_file_path = os.path.join( lib_dir, libfile )
 			# Do a simple check to see if the file exists.
-			if os.path.exists( lib_file_path ):
+			if os.access(lib_file_path , os.F_OK):
 				self._actual_library_names.update( { library : libfile } )
 				return lib_file_path
 
@@ -660,7 +660,7 @@ class linker_msvc( MsvcBase, toolchain.linkerBase ):
 			log.LOG_INFO("Looking for library {} in directory {}...".format(libfile, lib_dir))
 			lib_file_path = os.path.join( lib_dir, libfile )
 			# Do a simple check to see if the file exists.
-			if os.path.exists( lib_file_path ):
+			if os.access(lib_file_path , os.F_OK):
 				self._actual_library_names.update( { library : libfile } )
 				return lib_file_path
 
@@ -669,7 +669,7 @@ class linker_msvc( MsvcBase, toolchain.linkerBase ):
 			libfileCompat = "lib{}".format( libfile )
 			log.LOG_INFO("Looking for library {} in directory {}...".format(libfileCompat, lib_dir))
 			lib_file_path = os.path.join( lib_dir, libfileCompat )
-			if os.path.exists( lib_file_path ):
+			if os.access(lib_file_path , os.F_OK):
 				self._actual_library_names.update( { library : libfileCompat } )
 				return lib_file_path
 

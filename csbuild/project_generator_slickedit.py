@@ -66,7 +66,7 @@ class project_generator_slickedit(project_generator.project_generator):
 		log.LOG_BUILD("Writing SlickEdit workspace {}...".format(self.solutionname))
 
 		# Create the workspace root path if it doesn't exist.
-		if not os.path.exists(self.rootpath):
+		if not os.access(self.rootpath, os.F_OK):
 			os.makedirs(self.rootpath)
 
 		projectFiles = set()
@@ -116,7 +116,7 @@ class project_generator_slickedit(project_generator.project_generator):
 			groupPath = os.path.join(projectOutputPath, subGroupName)
 
 			# Create the group path if it doesn't exist.
-			if not os.path.exists(groupPath):
+			if not os.access(groupPath, os.F_OK):
 				os.makedirs(groupPath)
 
 			self._WriteSubGroup(groupPath, subGroup, projectFiles)

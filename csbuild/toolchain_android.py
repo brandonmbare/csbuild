@@ -137,7 +137,7 @@ class AndroidBase( object ):
 
 		for dirname in dirs:
 			prebuilt = os.path.join(toolchainsDir, dirname, "prebuilt")
-			if not os.path.exists(prebuilt):
+			if not os.access(prebuilt, os.F_OK):
 				continue
 
 			if dirname > bestCompilerVersion:
@@ -166,7 +166,7 @@ class AndroidBase( object ):
 
 		for dirname in dirs:
 			prebuilt = os.path.join(toolchainsDir, dirname, "prebuilt")
-			if not os.path.exists(prebuilt):
+			if not os.access(prebuilt, os.F_OK):
 				continue
 
 			if dirname > bestCompilerVersion:
@@ -191,7 +191,7 @@ class AndroidBase( object ):
 		binDir = os.path.join(dirs[0], "bin")
 		maybeCmd1 = os.path.join(binDir, cmd1Name)
 
-		if os.path.exists(maybeCmd1):
+		if os.access(maybeCmd1, os.F_OK):
 			cmd1Result = maybeCmd1
 			cmd2Result = os.path.join(binDir, cmd2Name)
 		else:
@@ -321,10 +321,10 @@ class AndroidLinker(AndroidBase, toolchain_gcc.linker_gcc):
 
 			if self.isClang:
 				crtbegin = os.path.join(project.obj_dir, "crtbegin_so.o")
-				if not os.path.exists(crtbegin):
+				if not os.access(crtbegin, os.F_OK):
 					symlink(os.path.join(libDir, "crtbegin_so.o"), crtbegin)
 				crtend = os.path.join(project.obj_dir, "crtend_so.o")
-				if not os.path.exists(crtend):
+				if not os.access(crtend, os.F_OK):
 					symlink(os.path.join(libDir, "crtend_so.o"), crtend)
 
 			return "\"{}\" {}-o{} {} {} {}{}{} {} {}-g{} -O{} {} {} {} --sysroot \"{}\" {} -L\"{}\"".format(
@@ -375,7 +375,7 @@ class AndroidLinker(AndroidBase, toolchain_gcc.linker_gcc):
 			out = e.output
 			success = False
 		finally:
-			if os.path.exists(nullOut):
+			if os.access(nullOut, os.F_OK):
 				os.remove(nullOut)
 			if sys.version_info >= (3, 0):
 				RMatch = re.search( "attempt to open (.*) succeeded".encode( 'utf-8' ), out, re.I )
@@ -403,7 +403,7 @@ class AndroidLinker(AndroidBase, toolchain_gcc.linker_gcc):
 			return
 
 		appDir = os.path.join(project.csbuild_dir, "apk", project.name)
-		if os.path.exists(appDir):
+		if os.access(appDir, os.F_OK):
 			shutil.rmtree(appDir)
 
 		androidTool = os.path.join(self._sdkHome, "tools", "android.bat" if platform.system() == "Windows" else "android.sh")
@@ -434,7 +434,7 @@ class AndroidLinker(AndroidBase, toolchain_gcc.linker_gcc):
 
 		libDir = os.path.join(appDir, "libs", libDir)
 
-		if not os.path.exists(libDir):
+		if not os.access(libDir, os.F_OK):
 			os.makedirs(libDir)
 
 		for library in project.library_locs:
@@ -504,7 +504,7 @@ class AndroidLinker(AndroidBase, toolchain_gcc.linker_gcc):
 
 		appName = "{}-{}.apk".format(project.output_name[3:-3], antBuildType)
 		appEndLoc = os.path.join(project.output_dir, appName)
-		if os.path.exists(appEndLoc):
+		if os.access(appEndLoc, os.F_OK):
 			os.remove(appEndLoc)
 
 		shutil.move(os.path.join(appDir, "bin", appName), project.output_dir)

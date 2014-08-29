@@ -158,7 +158,7 @@ class threaded_build( threading.Thread ):
 
 			if _shared_globals.profile:
 				profileIn = os.path.join( self.project.csbuild_dir, "profileIn")
-				if not os.path.exists(profileIn):
+				if not os.access(profileIn, os.F_OK):
 					os.makedirs(profileIn)
 				self.file = os.path.join( profileIn, "{}.{}".format(hashlib.md5(self.file).hexdigest(), self.file.rsplit(".", 1)[1]) )
 
@@ -236,7 +236,7 @@ class threaded_build( threading.Thread ):
 
 			if _shared_globals.show_commands:
 				print(cmd)
-			if os.path.exists( self.obj ):
+			if os.access(self.obj , os.F_OK):
 				os.remove( self.obj )
 
 			class StringRef(object):
@@ -470,7 +470,7 @@ def check_version( ):
 	if "-Dev-" in csbuild.__version__:
 		return
 
-	if not os.path.exists( os.path.expanduser( "~/.csbuild/check" ) ):
+	if not os.access(os.path.expanduser( "~/.csbuild/check" ) , os.F_OK):
 		csbuild_date = ""
 	else:
 		with open( os.path.expanduser( "~/.csbuild/check" ), "r" ) as f:
@@ -481,7 +481,7 @@ def check_version( ):
 	if date == csbuild_date:
 		return
 
-	if not os.path.exists( os.path.expanduser( "~/.csbuild" ) ):
+	if not os.access(os.path.expanduser( "~/.csbuild" ) , os.F_OK):
 		os.makedirs( os.path.expanduser( "~/.csbuild" ) )
 
 	with open( os.path.expanduser( "~/.csbuild/check" ), "w" ) as f:
@@ -578,7 +578,7 @@ def prepare_precompiles( ):
 			obj = project.activeToolchain.Compiler().get_pch_file( headerfile )
 
 			precompile = False
-			if not os.path.exists( headerfile ) or project.should_recompile( headerfile, obj, True ):
+			if not os.access(headerfile, os.F_OK ) or project.should_recompile( headerfile, obj, True ):
 				precompile = True
 			else:
 				for header in allheaders:
@@ -691,7 +691,7 @@ def chunked_build( ):
 
 		obj = os.path.join(owningProject.obj_dir, "{}_{}{}".format( chunkname,
 			owningProject.targetName, owningProject.activeToolchain.Compiler().get_obj_ext() ))
-		if os.path.exists( obj ):
+		if os.access(obj , os.F_OK):
 			os.remove(obj)
 			log.LOG_WARN_NOPUSH(
 				"Breaking chunk ({0}) into individual files to improve future iteration turnaround.".format(
@@ -747,7 +747,7 @@ def chunked_build( ):
 								sources_in_this_chunk ) > project.chunk_tolerance) or (
 								project.chunk_filesize > 0 and chunksize > project
 						.chunk_size_tolerance) or (
-							dont_split and (project.unity or os.path.exists( outFile )) and len(
+							dont_split and (project.unity or os.access(outFile, os.F_OK)) and len(
 							sources_in_this_chunk ) > 0)):
 				log.LOG_INFO( "Going to build chunk {0} as {1}".format( chunk, outFile ) )
 				with open( outFile, "w" ) as f:
@@ -759,7 +759,7 @@ def chunked_build( ):
 						obj = os.path.join( project.obj_dir, "{}_{}{}".format(
 							os.path.basename( source ).split( '.' )[0],
 							project.targetName, project.activeToolchain.Compiler().get_obj_ext() ))
-						if os.path.exists( obj ):
+						if os.access(obj , os.F_OK):
 							os.remove( obj )
 					f.write( "//Total size: {0} bytes".format( chunksize ) )
 
@@ -770,7 +770,7 @@ def chunked_build( ):
 
 				obj = os.path.join( project.obj_dir, "{}_{}{}".format( chunkname,
 					project.targetName, project.activeToolchain.Compiler().get_obj_ext() ) )
-				if os.path.exists( obj ):
+				if os.access(obj , os.F_OK):
 					#If the chunk object exists, the last build of these files was the full chunk.
 					#We're now splitting the chunk to speed things up for future incremental builds,
 					# which means the chunk

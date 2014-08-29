@@ -138,7 +138,7 @@ class CachedFileData:
 
 	def SaveFile(self):
 		canWriteOutputFile = True
-		if os.path.exists(self._outputFilePath):
+		if os.access(self._outputFilePath, os.F_OK):
 			with open(self._outputFilePath, "rb") as fileHandle:
 				fileData = fileHandle.read()
 				fileDataHash = hashlib.md5()
@@ -294,7 +294,7 @@ class project_generator_visual_studio(project_generator.project_generator):
 				projectMap_out["{}.Filter".format(filterData.name)] = filterData
 
 				# Create the group path if it doesn't exist.
-				if not os.path.exists(groupPathFinal):
+				if not os.access(groupPathFinal, os.F_OK):
 					os.makedirs(groupPathFinal)
 
 				recurseGroups(projectMap_out, filterData, groupPath, subGroup)
@@ -316,7 +316,7 @@ class project_generator_visual_studio(project_generator.project_generator):
 
 
 		# Create the base output directory if necessary.
-		if not os.path.exists(self.rootpath):
+		if not os.access(self.rootpath, os.F_OK):
 			os.makedirs(self.rootpath)
 
 		# When not creating a native project, a custom project must be injected in order to achieve full solution builds
@@ -430,7 +430,7 @@ class project_generator_visual_studio(project_generator.project_generator):
 		tempSolutionPath = "{}.sln".format(tempRootPath, self.solutionname)
 
 		# Create the temporary root path.
-		if not os.path.exists(tempRootPath):
+		if not os.access(tempRootPath, os.F_OK):
 			os.makedirs(tempRootPath)
 
 		# Visual Studio solution files need to be UTF-8 with the byte order marker because Visual Studio is VERY picky about these files.
@@ -513,7 +513,7 @@ class project_generator_visual_studio(project_generator.project_generator):
 			cachedFile = CachedFileData(finalSolutionPath, fileData)
 			cachedFile.SaveFile()
 
-		if os.path.exists(tempSolutionPath):
+		if os.access(tempSolutionPath, os.F_OK):
 			os.remove(tempSolutionPath)
 			try:
 				# Attempt to remove the temp directory.  This will only fail if the directory already existed with files in it.

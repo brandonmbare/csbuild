@@ -76,7 +76,7 @@ class project_generator_qtcreator( project_generator.project_generator ):
 		project = toolchainDict[list(toolchainDict.keys())[0]]
 
 		projectpath = os.path.join( self.rootpath, parentPath, project.name )
-		if not os.path.exists( projectpath ):
+		if not os.access(projectpath , os.F_OK):
 			os.makedirs( projectpath )
 
 		log.LOG_INFO( "Creating project {}.pro".format( projectpath ) )
@@ -189,7 +189,7 @@ class project_generator_qtcreator( project_generator.project_generator ):
 			solutionname = self.solutionname
 
 		grouppath = os.path.join( self.rootpath, parentPath, projectGroup.name )
-		if not os.path.exists( grouppath ):
+		if not os.access(grouppath , os.F_OK):
 			os.makedirs( grouppath )
 
 		allsubprojects = set( )

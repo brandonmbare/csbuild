@@ -550,7 +550,7 @@ class projectSettings( object ):
 
 		self.activeToolchain.SetActiveTool("linker")
 		self.output_dir = os.path.abspath( self.output_dir ).format(project=self)
-		if not os.path.exists(self.output_dir):
+		if not os.access(self.output_dir, os.F_OK):
 			os.makedirs(self.output_dir)
 
 		self.activeToolchain.SetActiveTool("compiler")
@@ -560,7 +560,7 @@ class projectSettings( object ):
 		alteredIncludeDirs = []
 		for directory in self.include_dirs:
 			directory = directory.format(project=self)
-			if not os.path.exists(directory):
+			if not os.access(directory, os.F_OK):
 				log.LOG_WARN("Include path {} does not exist!".format(directory))
 			alteredIncludeDirs.append(directory)
 		self.include_dirs = alteredIncludeDirs
@@ -568,7 +568,7 @@ class projectSettings( object ):
 		alteredLibraryDirs = []
 		for directory in self.library_dirs:
 			directory = directory.format(project=self)
-			if not os.path.exists(directory):
+			if not os.access(directory, os.F_OK):
 				log.LOG_WARN("Library path {} does not exist!".format(directory))
 			alteredLibraryDirs.append(directory)
 		self.library_dirs = alteredLibraryDirs
@@ -609,7 +609,7 @@ class projectSettings( object ):
 		self.output_name += self.ext
 		self.activeToolchain.SetActiveTool("compiler")
 
-		if not os.path.exists( self.csbuild_dir ):
+		if not os.access(self.csbuild_dir , os.F_OK):
 			os.makedirs( self.csbuild_dir )
 
 		for item in self.fileOverrideSettings.items():
@@ -626,7 +626,7 @@ class projectSettings( object ):
 
 		cmdfile = os.path.join( self.csbuild_dir, "{}.csbuild".format( self.targetName ) )
 		cmd = ""
-		if os.path.exists( cmdfile ):
+		if os.access(cmdfile , os.F_OK):
 			with open( cmdfile, "r" ) as f:
 				cmd = f.read( )
 
@@ -986,22 +986,28 @@ class projectSettings( object ):
 
 
 	def get_full_path( self, headerFile, relativeDir ):
-		if os.path.exists( headerFile ):
-			path = headerFile
+		if relativeDir is not None:
+			if headerFile in _shared_globals.headerPaths:
+				return _shared_globals.headerPaths[headerFile]
+		if os.access(headerFile, os.F_OK):
+			_shared_globals.headerPaths[headerFile] = headerFile
+			return headerFile
 		else:
-			path = os.path.join( relativeDir, headerFile )
-			if not os.path.exists( path ):
-				for incDir in self.include_dirs:
-					path = os.path.join( incDir, headerFile )
-					if os.path.exists( path ):
-						break
-						#A lot of standard C and C++ headers will be in a compiler-specific directory that we won't
-						# check.
-						#Just ignore them to speed things up.
-			if not os.path.exists( path ):
-				return ""
+			if relativeDir is not None:
+				path = os.path.join( relativeDir, headerFile )
+				if os.access(path, os.F_OK):
+					return path
+			for incDir in self.include_dirs:
+				path = os.path.join( incDir, headerFile )
+				if os.access(path, os.F_OK):
+					_shared_globals.headerPaths[headerFile] = path
+					return path
+					#A lot of standard C and C++ headers will be in a compiler-specific directory that we won't
+					# check.
+					#Just ignore them to speed things up.
 
-		return path
+			_shared_globals.headerPaths[headerFile] = ""
+			return ""
 
 
 	def get_included_files( self, headerFile ):
@@ -1146,10 +1152,10 @@ class projectSettings( object ):
 				self.targetName, self.activeToolchain.Compiler().get_obj_ext() ) )
 
 			#First check: If the object file doesn't exist, we obviously have to create it.
-			if not os.path.exists( ofile ):
+			if not os.access(ofile , os.F_OK):
 				ofile = chunkfile
 
-		if not os.path.exists( ofile ):
+		if not os.access(ofile , os.F_OK):
 			log.LOG_INFO(
 				"Going to recompile {0} because the associated object file does not exist.".format( srcFile ) )
 			return True
@@ -1189,7 +1195,7 @@ class projectSettings( object ):
 
 			md5file = "{}.md5".format( os.path.join( self.csbuild_dir, "md5s", hashlib.md5( src ).hexdigest(), baseName ) )
 
-			if os.path.exists( md5file ):
+			if os.access(md5file , os.F_OK):
 				try:
 					oldmd5 = _shared_globals.oldmd5s[md5file]
 				except KeyError:
@@ -1213,7 +1219,7 @@ class projectSettings( object ):
 		updatedheaders = []
 
 		for header in headers:
-			if os.path.exists( header ):
+			if os.access(header , os.F_OK):
 				path = header
 			else:
 				continue
@@ -1240,7 +1246,7 @@ class projectSettings( object ):
 
 				md5file = "{}.md5".format( os.path.join( self.csbuild_dir, "md5s", hashlib.md5( header ).hexdigest(), baseName ) )
 
-				if os.path.exists( md5file ):
+				if os.access(md5file , os.F_OK):
 					try:
 						newmd5 = _shared_globals.newmd5s[path]
 					except KeyError:
@@ -1251,7 +1257,7 @@ class projectSettings( object ):
 						with f:
 							newmd5 = _utils.get_md5( f )
 						_shared_globals.newmd5s.update( { path: newmd5 } )
-					if os.path.exists( md5file ):
+					if os.access(md5file , os.F_OK):
 						try:
 							oldmd5 = _shared_globals.oldmd5s[md5file]
 						except KeyError:
@@ -1445,7 +1451,7 @@ class projectSettings( object ):
 		md5file = "{}.md5".format( os.path.join( self.csbuild_dir, "md5s", hashlib.md5( inFile ).hexdigest(), baseName ) )
 
 		md5dir = os.path.dirname( md5file )
-		if not os.path.exists( md5dir ):
+		if not os.access(md5dir , os.F_OK):
 			os.makedirs( md5dir )
 		newmd5 = ""
 		try:
@@ -1482,7 +1488,7 @@ class projectSettings( object ):
 
 		self.built_something = True
 
-		if not os.path.exists( self.obj_dir ):
+		if not os.access(self.obj_dir , os.F_OK):
 			os.makedirs( self.obj_dir )
 
 		thread = None
