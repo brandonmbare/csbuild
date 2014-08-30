@@ -88,7 +88,7 @@ class TermInfo( object ):
 		Reset the color of the terminal to its default value
 		"""
 		if platform.system( ) == "Windows":
-			ctypes.windll.kernel32.SetConsoleTextAttribute( TermInfo._handle, TermInfo._reset )
+			ctypes.windll.kernel32.SetConsoleTextAttribute( ctypes.windll.kernel32.GetStdHandle( -11 ), TermInfo._reset )
 		else:
 			sys.stdout.write( "\033[0m" )
 
@@ -102,7 +102,7 @@ class TermInfo( object ):
 		@type color: TermColor value
 		"""
 		if platform.system( ) == "Windows":
-			ctypes.windll.kernel32.SetConsoleTextAttribute( TermInfo._handle, color )
+			ctypes.windll.kernel32.SetConsoleTextAttribute( ctypes.windll.kernel32.GetStdHandle( -11 ), color )
 		else:
 			sys.stdout.write( "\033[{}m".format( color ) )
 
@@ -117,7 +117,7 @@ class TermInfo( object ):
 		"""
 		if platform.system( ) == "Windows":
 			csbi = ctypes.create_string_buffer( 22 )
-			res = ctypes.windll.kernel32.GetConsoleScreenBufferInfo( TermInfo._handle, csbi )
+			res = ctypes.windll.kernel32.GetConsoleScreenBufferInfo( ctypes.windll.kernel32.GetStdHandle( -11 ), csbi )
 			assert res
 
 			(bufx, bufy, curx, cury, wattr,
@@ -161,7 +161,7 @@ class TermInfo( object ):
 			import struct
 
 			csbi = ctypes.create_string_buffer( 22 )
-			res = ctypes.windll.kernel32.GetConsoleScreenBufferInfo( TermInfo._handle, csbi )
+			res = ctypes.windll.kernel32.GetConsoleScreenBufferInfo( ctypes.windll.kernel32.GetStdHandle( -11 ), csbi )
 			assert res
 
 			(bufx, bufy, curx, cury, wattr,
@@ -174,7 +174,7 @@ class TermInfo( object ):
 if platform.system( ) == "Windows":
 	# -11 = STD_OUTPUT_HANDLE
 	try:
-		TermInfo._handle = ctypes.windll.kernel32.GetStdHandle( -11 )
+		#TermInfo._handle = ctypes.windll.kernel32.GetStdHandle( -11 )
 		TermInfo._reset = TermInfo.GetDefaultColor( )
 	except:
 		TermInfo._color_supported = False

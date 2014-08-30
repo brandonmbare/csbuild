@@ -221,7 +221,7 @@ def Libraries( *args ):
 	@type args: an arbitrary number of strings
 	@param args: The list of libraries to link in.
 	"""
-	projectSettings.currentProject.libraries += list( args )
+	projectSettings.currentProject.libraries |= set( args )
 
 
 def StaticLibraries( *args ):
@@ -231,7 +231,7 @@ def StaticLibraries( *args ):
 	@type args: an arbitrary number of strings
 	@param args: The list of libraries to link in.
 	"""
-	projectSettings.currentProject.static_libraries += list( args )
+	projectSettings.currentProject.static_libraries |= set( args )
 
 
 def SharedLibraries( *args ):
@@ -241,7 +241,7 @@ def SharedLibraries( *args ):
 	@type args: an arbitrary number of strings
 	@param args: The list of libraries to link in.
 	"""
-	projectSettings.currentProject.shared_libraries += list( args )
+	projectSettings.currentProject.shared_libraries |= set( args )
 
 
 def IncludeDirs( *args ):
@@ -278,17 +278,17 @@ def LibDirs( *args ):
 
 def ClearLibraries( ):
 	"""Clears the list of libraries"""
-	projectSettings.currentProject.libraries = []
+	projectSettings.currentProject.libraries = set()
 
 
 def ClearStaticLibraries( ):
 	"""Clears the list of statically-linked libraries"""
-	projectSettings.currentProject.static_libraries = []
+	projectSettings.currentProject.static_libraries = set()
 
 
 def ClearSharedibraries( ):
 	"""Clears the list of dynamically-linked libraries"""
-	projectSettings.currentProject.shared_libraries = []
+	projectSettings.currentProject.shared_libraries = set()
 
 
 def ClearIncludeDirs( ):

@@ -386,9 +386,44 @@ class AndroidLinker(AndroidBase, toolchain_gcc.linker_gcc):
 			#Set the mtime to 0 and return success as long as ld didn't return an error code.
 			if RMatch is not None:
 				lib = RMatch.group( 1 )
+				if sys.version_info >= (3, 0):
+					self._actual_library_names[library] = os.path.basename(lib).decode('utf-8')
+				else:
+					self._actual_library_names[library] = os.path.basename(lib)
 				return lib
 			elif not success:
-				return None
+				try:
+					cmd = [self._ld, "-o", nullOut, "--verbose",
+						   "-static" if force_static else "-shared" if force_shared else "", "-l:{}".format( library ),
+						   "-L", os.path.join( self._ndkHome, "platforms", "android-{}".format(self._targetSdkVersion), "arch-{}".format(self._getSimplifiedArch(project)), "usr", "lib")]
+					cmd += shlex.split( self.get_library_dirs( library_dirs, False ) )
+
+					if _shared_globals.show_commands:
+						print(" ".join(cmd))
+
+					out = subprocess.check_output( cmd, stderr = subprocess.STDOUT )
+				except subprocess.CalledProcessError as e:
+					out = e.output
+					success = False
+				finally:
+					if os.access(nullOut, os.F_OK):
+						os.remove(nullOut)
+					if sys.version_info >= (3, 0):
+						RMatch = re.search( "attempt to open (.*) succeeded".encode( 'utf-8' ), out, re.I )
+					else:
+						RMatch = re.search( "attempt to open (.*) succeeded", out, re.I )
+						#Some libraries (such as -liberty) will return successful but don't have a file (internal to ld maybe?)
+					#In those cases we can probably assume they haven't been modified.
+					#Set the mtime to 0 and return success as long as ld didn't return an error code.
+					if RMatch is not None:
+						lib = RMatch.group( 1 )
+						if sys.version_info >= (3, 0):
+							self._actual_library_names[library] = os.path.basename(lib).decode('utf-8')
+						else:
+							self._actual_library_names[library] = os.path.basename(lib)
+						return lib
+					elif not success:
+						return None
 
 	def prePrepareBuildStep(self, project):
 		#Everything on Android has to build as a shared library

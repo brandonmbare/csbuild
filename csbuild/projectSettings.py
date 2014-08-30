@@ -363,9 +363,9 @@ class projectSettings( object ):
 		self.srcDepends = []
 		self.func = None
 
-		self.libraries = []
-		self.static_libraries = []
-		self.shared_libraries = []
+		self.libraries = set()
+		self.static_libraries = set()
+		self.shared_libraries = set()
 		self.include_dirs = []
 		self.library_dirs = []
 
@@ -553,6 +553,14 @@ class projectSettings( object ):
 		if not os.access(self.output_dir, os.F_OK):
 			os.makedirs(self.output_dir)
 
+		alteredLibraryDirs = []
+		for directory in self.library_dirs:
+			directory = directory.format(project=self)
+			if not os.access(directory, os.F_OK):
+				log.LOG_WARN("Library path {} does not exist!".format(directory))
+			alteredLibraryDirs.append(directory)
+		self.library_dirs = alteredLibraryDirs
+
 		self.activeToolchain.SetActiveTool("compiler")
 		self.obj_dir = os.path.abspath( self.obj_dir ).format(project=self)
 		self.csbuild_dir = os.path.join( self.obj_dir, ".csbuild" )
@@ -564,14 +572,6 @@ class projectSettings( object ):
 				log.LOG_WARN("Include path {} does not exist!".format(directory))
 			alteredIncludeDirs.append(directory)
 		self.include_dirs = alteredIncludeDirs
-
-		alteredLibraryDirs = []
-		for directory in self.library_dirs:
-			directory = directory.format(project=self)
-			if not os.access(directory, os.F_OK):
-				log.LOG_WARN("Library path {} does not exist!".format(directory))
-			alteredLibraryDirs.append(directory)
-		self.library_dirs = alteredLibraryDirs
 
 		def apply_macro(l):
 			alteredList = []
@@ -703,6 +703,8 @@ class projectSettings( object ):
 						return ret2
 					elif isinstance( ret, list ):
 						return ret + object.__getattribute__( self, name )
+					elif isinstance( ret, set ):
+						return ret | object.__getattribute__( self, name )
 
 				return ret
 			elif name in activeToolchain.settingsOverrides:
@@ -715,6 +717,8 @@ class projectSettings( object ):
 						return ret2
 					elif isinstance( ret, list ):
 						return ret + object.__getattribute__( self, name )
+					elif isinstance( ret, set ):
+						return ret | object.__getattribute__( self, name )
 
 				return ret
 		return object.__getattribute__( self, name )
@@ -729,11 +733,9 @@ class projectSettings( object ):
 			activeToolchain = object.__getattribute__( self, "activeToolchain" )
 			if activeToolchain:
 				if activeToolchain.activeTool and name in activeToolchain.activeTool.settingsOverrides:
-					activeToolchain.activeTool.settingsOverrides[name] = value
-					return
-				elif name in activeToolchain.settingsOverrides:
-					activeToolchain.settingsOverrides[name] = value
-					return
+					del activeToolchain.activeTool.settingsOverrides[name]
+				if name in activeToolchain.settingsOverrides:
+					del activeToolchain.settingsOverrides[name]
 		object.__setattr__( self, name, value )
 
 
@@ -751,9 +753,9 @@ class projectSettings( object ):
 			"linkDepends": list( self.linkDepends ),
 			"srcDepends": list( self.srcDepends ),
 			"func": self.func,
-			"libraries": list( self.libraries ),
-			"static_libraries": list( self.static_libraries ),
-			"shared_libraries": list( self.shared_libraries ),
+			"libraries": set( self.libraries ),
+			"static_libraries": set( self.static_libraries ),
+			"shared_libraries": set( self.shared_libraries ),
 			"include_dirs": list( self.include_dirs ),
 			"library_dirs": list( self.library_dirs ),
 			"opt_level": self.opt_level,

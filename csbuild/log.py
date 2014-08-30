@@ -40,12 +40,13 @@ def LOG_MSG( color, level, msg ):
 		if _shared_globals.color_supported:
 			terminfo.TermInfo.SetColor( color )
 			sys.stdout.write( "{}: ".format( level ) )
+			sys.stdout.flush()
 			terminfo.TermInfo.ResetColor( )
 			sys.stdout.write( msg )
 			sys.stdout.write( "\n" )
 		else:
 			print(" {0}: {1}".format( level, msg ))
-		sys.stdout.flush( )
+		sys.stdout.flush()
 
 
 def LOG_ERROR( msg ):

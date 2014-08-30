@@ -388,11 +388,15 @@ class linker_gcc( gccBase, toolchain.linkerBase ):
 		self._ld = "ld"
 		self._ar = "ar"
 
+		self._actual_library_names = { }
+		self._setup = False
+
 
 	def copy(self):
 		ret = toolchain.linkerBase.copy(self)
 		gccBase.copyTo(self, ret)
 		ret.strictOrdering = self.strictOrdering
+		ret._actual_library_names = dict(self._actual_library_names)
 		return ret
 
 
@@ -408,12 +412,17 @@ class linker_gcc( gccBase, toolchain.linkerBase ):
 		if project.outputArchitecture == "x64":
 			self._include_lib64 = True
 
+	def get_library_arg(self, lib):
+		if lib in self._actual_library_names:
+			return "-l:{} ".format( self._actual_library_names[lib] )
+		else:
+			return "-l{} ".format(lib)
 
 	def get_libraries( self, libraries ):
 		"""Returns a string containing all of the passed libraries, formatted to be passed to gcc/g++."""
 		ret = ""
 		for lib in libraries:
-			ret += "-l{} ".format( lib )
+			ret += self.get_library_arg(lib)
 		return ret
 
 
@@ -421,7 +430,7 @@ class linker_gcc( gccBase, toolchain.linkerBase ):
 		"""Returns a string containing all of the passed libraries, formatted to be passed to gcc/g++."""
 		ret = ""
 		for lib in libraries:
-			ret += "-static -l{} ".format( lib )
+			ret += "-static {}".format( self.get_library_arg(lib) )
 		return ret
 
 
@@ -429,7 +438,7 @@ class linker_gcc( gccBase, toolchain.linkerBase ):
 		"""Returns a string containing all of the passed libraries, formatted to be passed to gcc/g++."""
 		ret = ""
 		for lib in libraries:
-			ret += "-shared -l{} ".format( lib )
+			ret += "-shared {}".format( self.get_library_arg(lib) )
 		return ret
 
 
@@ -516,9 +525,43 @@ class linker_gcc( gccBase, toolchain.linkerBase ):
 			#Set the mtime to 0 and return success as long as ld didn't return an error code.
 			if RMatch is not None:
 				lib = RMatch.group( 1 )
+				if sys.version_info >= (3, 0):
+					self._actual_library_names[library] = os.path.basename(lib).decode('utf-8')
+				else:
+					self._actual_library_names[library] = os.path.basename(lib)
 				return lib
 			elif not success:
-				return None
+				try:
+					if _shared_globals.show_commands:
+						print("{} -o /dev/null --verbose {} {} -l:{}".format(
+							self._ld,
+							self.get_library_dirs( library_dirs, False ),
+							"-static" if force_static else "-shared" if force_shared else "",
+							library ))
+					cmd = [self._ld, "-o", "/dev/null", "--verbose",
+						   "-static" if force_static else "-shared" if force_shared else "", "-l{}".format( library )]
+					cmd += shlex.split( self.get_library_dirs( library_dirs, False ) )
+					out = subprocess.check_output( cmd, stderr = subprocess.STDOUT )
+				except subprocess.CalledProcessError as e:
+					out = e.output
+					success = False
+				finally:
+					if sys.version_info >= (3, 0):
+						RMatch = re.search( "attempt to open (.*) succeeded".encode( 'utf-8' ), out, re.I )
+					else:
+						RMatch = re.search( "attempt to open (.*) succeeded", out, re.I )
+						#Some libraries (such as -liberty) will return successful but don't have a file (internal to ld maybe?)
+					#In those cases we can probably assume they haven't been modified.
+					#Set the mtime to 0 and return success as long as ld didn't return an error code.
+					if RMatch is not None:
+						lib = RMatch.group( 1 )
+						if sys.version_info >= (3, 0):
+							self._actual_library_names[library] = os.path.basename(lib).decode('utf-8')
+						else:
+							self._actual_library_names[library] = os.path.basename(lib)
+						return lib
+					elif not success:
+						return None
 
 
 	def get_default_extension( self, projectType ):

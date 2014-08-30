@@ -77,6 +77,8 @@ class SettingsOverrider( object ):
 				ret.settingsOverrides[kvp[0]] = list( kvp[1] )
 			elif isinstance( kvp[1], dict ):
 				ret.settingsOverrides[kvp[0]] = dict( kvp[1] )
+			elif isinstance( kvp[1], set ):
+				ret.settingsOverrides[kvp[0]] = set( kvp[1] )
 			else:
 				ret.settingsOverrides[kvp[0]] = kvp[1]
 
@@ -173,9 +175,9 @@ class SettingsOverrider( object ):
 		@param args: The list of libraries to link in.
 		"""
 		if "libraries" not in self.settingsOverrides:
-			self.settingsOverrides["libraries"] = []
+			self.settingsOverrides["libraries"] = set()
 
-		self.settingsOverrides["libraries"] += list( args )
+		self.settingsOverrides["libraries"] |= set( args )
 
 
 	def StaticLibraries( self, *args ):
@@ -186,9 +188,9 @@ class SettingsOverrider( object ):
 		@param args: The list of libraries to link in.
 		"""
 		if "static_libraries" not in self.settingsOverrides:
-			self.settingsOverrides["static_libraries"] = []
+			self.settingsOverrides["static_libraries"] = set()
 
-		self.settingsOverrides["static_libraries"] += list( args )
+		self.settingsOverrides["static_libraries"] |= set( args )
 
 
 	def SharedLibraries( self, *args ):
@@ -199,9 +201,9 @@ class SettingsOverrider( object ):
 		@param args: The list of libraries to link in.
 		"""
 		if "shared_libraries" not in self.settingsOverrides:
-			self.settingsOverrides["shared_libraries"] = []
+			self.settingsOverrides["shared_libraries"] = set()
 
-		self.settingsOverrides["shared_libraries"] += list( args )
+		self.settingsOverrides["shared_libraries"] |= set( args )
 
 
 	def IncludeDirs( self, *args ):
@@ -244,17 +246,17 @@ class SettingsOverrider( object ):
 
 	def ClearLibraries( self ):
 		"""Clears the list of libraries"""
-		self.settingsOverrides["libraries"] = []
+		self.settingsOverrides["libraries"] = set()
 
 
 	def ClearStaticLibraries( self ):
 		"""Clears the list of libraries"""
-		self.settingsOverrides["static_libraries"] = []
+		self.settingsOverrides["static_libraries"] = set()
 
 
 	def ClearSharedLibraries( self ):
 		"""Clears the list of libraries"""
-		self.settingsOverrides["shared_libraries"] = []
+		self.settingsOverrides["shared_libraries"] = set()
 
 
 	def ClearIncludeDirs( self ):
