@@ -360,7 +360,12 @@ class projectSettings( object ):
 		self.key = ""
 		self.workingDirectory = "./"
 		self.linkDepends = []
+		self.linkDependsIntermediate = []
+		self.linkDependsFinal = []
+		self.reconciledLinkDepends = []
 		self.srcDepends = []
+		self.srcDependsIntermediate = []
+		self.srcDependsFinal = []
 		self.func = None
 
 		self.libraries = set()
@@ -561,6 +566,15 @@ class projectSettings( object ):
 			alteredLibraryDirs.append(directory)
 		self.library_dirs = alteredLibraryDirs
 
+		#Kind of hacky. The libraries returned here are a temporary object that's been created by combining
+		#base, toolchain, and architecture information. We need to bind it to something more permanent so we
+		#can actually modify it. Assigning it to itself makes that temporary list permanent.
+		self.libraries = self.libraries
+
+		for dep in self.reconciledLinkDepends:
+			proj = _shared_globals.projects[dep]
+			self.libraries.add(proj.output_name.split(".")[0])
+
 		self.activeToolchain.SetActiveTool("compiler")
 		self.obj_dir = os.path.abspath( self.obj_dir ).format(project=self)
 		self.csbuild_dir = os.path.join( self.obj_dir, ".csbuild" )
@@ -751,7 +765,12 @@ class projectSettings( object ):
 			"key": self.key,
 			"workingDirectory": self.workingDirectory,
 			"linkDepends": list( self.linkDepends ),
+			"linkDependsIntermediate": list( self.linkDependsIntermediate ),
+			"linkDependsFinal": list( self.linkDependsFinal ),
+			"reconciledLinkDepends" : list( self.reconciledLinkDepends ),
 			"srcDepends": list( self.srcDepends ),
+			"srcDependsIntermediate": list( self.srcDependsIntermediate ),
+			"srcDependsFinal": list( self.srcDependsFinal ),
 			"func": self.func,
 			"libraries": set( self.libraries ),
 			"static_libraries": set( self.static_libraries ),
@@ -1301,7 +1320,7 @@ class projectSettings( object ):
 			libraries_ok = True
 			for library in libraries:
 				bFound = False
-				for depend in self.linkDepends:
+				for depend in self.reconciledLinkDepends:
 					if _shared_globals.projects[depend].output_name.startswith(library) or \
 							_shared_globals.projects[depend].output_name.startswith(
 									"lib{}.".format( library ) ):

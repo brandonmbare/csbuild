@@ -92,6 +92,13 @@ class OptimizationLevel( object ):
 	Speed = 2
 	Max = 3
 
+class ScopeDef( object ):
+	Self = 1
+	Intermediate = 2
+	Final = 4
+
+	DependentsOnly = Intermediate | Final
+	All = Self | Intermediate | Final
 
 from csbuild import _utils
 from csbuild import toolchain
@@ -960,7 +967,17 @@ def SetActiveToolchain( name ):
 
 scriptfiles = []
 
-def project( name, workingDirectory, linkDepends = None, srcDepends = None, priority = -1 ):
+class Link(object):
+	def __init__(self, libName, scope = ScopeDef.Final):
+		self.libName = libName
+		self.scope = scope
+
+class Src(object):
+	def __init__(self, libName, scope = ScopeDef.Final):
+		self.libName = libName
+		self.scope = scope
+
+def project( name, workingDirectory, depends = None, priority = -1 ):
 	"""
 	Decorator used to declare a project. linkDepends and srcDepends here will be used to determine project build order.
 
@@ -969,22 +986,18 @@ def project( name, workingDirectory, linkDepends = None, srcDepends = None, prio
 	@type workingDirectory: str
 	@param workingDirectory: The directory in which to perform build operations. This directory
 	(or a subdirectory) should contain the project's source files.
-	@type linkDepends: list[str]
+	@type depends: list
 	@param linkDepends: A list of other projects. This project will not be linked until the dependent projects
-	have completed their build process.
-	@type srcDepends: list[str]
-	@param srcDepends: A list of other projects. Compilation will not begin on this project until the depndent
-	projects have completed their build process.
-	"""
-	if not linkDepends:
-		linkDepends = []
-	if not srcDepends:
-		srcDepends = []
-	if isinstance( linkDepends, str ):
-		linkDepends = [linkDepends]
-	if isinstance( srcDepends, str ):
-		srcDepends = [srcDepends]
+	have completed their build process. These can be specified as either projName, Link(projName, scope), or Src(projName, scope).
 
+	projName will be converted to Link(projName, ScopeDef.Final)
+	Link will cause the project it applies to to link this dependency.
+	Src will cause the project it applies to to wait until this project finishes before it starts its build at all.
+	"""
+	if not depends:
+		depends = []
+	if isinstance( depends, str ):
+		linkDepends = [depends]
 
 	def wrap( projectFunction ):
 		if name in _shared_globals.tempprojects:
@@ -1001,8 +1014,33 @@ def project( name, workingDirectory, linkDepends = None, srcDepends = None, prio
 		newProject.scriptPath = os.getcwd( )
 		newProject.scriptFile = scriptfiles[-1]
 
-		newProject.linkDepends = linkDepends
-		newProject.srcDepends = srcDepends
+		newProject.libDepends = []
+		newProject.libDependsIntermediate = []
+		newProject.libDependsFinal = []
+
+		newProject.srcDepends = []
+		newProject.srcDependsIntermediate = []
+		newProject.srcDependsFinal = []
+
+		for depend in depends:
+			if isinstance(depend, str):
+				depend = Link(depend)
+
+			if isinstance(depend, Link):
+				if depend.scope & ScopeDef.Self:
+					newProject.linkDepends.append(depend.libName)
+				if depend.scope & ScopeDef.Intermediate:
+					newProject.linkDependsIntermediate.append(depend.libName)
+				if depend.scope & ScopeDef.Final:
+					newProject.linkDependsFinal.append(depend.libName)
+			elif isinstance(depend, Src):
+				if depend.scope & ScopeDef.Self:
+					newProject.srcDepends.append(depend.libName)
+				if depend.scope & ScopeDef.Intermediate:
+					newProject.srcDependsIntermediate.append(depend.libName)
+				if depend.scope & ScopeDef.Final:
+					newProject.srcDependsFinal.append(depend.libName)
+
 		newProject.func = projectFunction
 
 		newProject.priority = priority
@@ -2493,6 +2531,10 @@ def _run( ):
 						newproject.targetName ) )
 					return
 
+				if newproject.type == ProjectType.Application:
+					newproject.linkDepends += newproject.linkDependsFinal
+					newproject.linkDependsFinal = []
+
 				projectSettings.currentProject = newproject
 
 				OutputArchitecture(architecture)
@@ -2516,14 +2558,32 @@ def _run( ):
 				projectSettings.currentProject = newproject
 
 				alteredLinkDepends = []
+				alteredLinkDependsIntermediate = []
+				alteredLinkDependsFinal = []
 				alteredSrcDepends = []
+				alteredSrcDependsIntermediate = []
+				alteredSrcDependsFinal = []
+
 				for depend in newproject.linkDepends:
 					alteredLinkDepends.append( "{}@{}#{}${}".format( depend, projectSettings.currentProject.targetName, projectSettings.currentProject.outputArchitecture, projectSettings.currentProject.activeToolchainName ) )
+				for depend in newproject.linkDependsIntermediate:
+					alteredLinkDependsIntermediate.append( "{}@{}#{}${}".format( depend, projectSettings.currentProject.targetName, projectSettings.currentProject.outputArchitecture, projectSettings.currentProject.activeToolchainName ) )
+				for depend in newproject.linkDependsFinal:
+					alteredLinkDependsFinal.append( "{}@{}#{}${}".format( depend, projectSettings.currentProject.targetName, projectSettings.currentProject.outputArchitecture, projectSettings.currentProject.activeToolchainName ) )
+
 				for depend in newproject.srcDepends:
 					alteredSrcDepends.append( "{}@{}#{}${}".format( depend, projectSettings.currentProject.targetName, projectSettings.currentProject.outputArchitecture, projectSettings.currentProject.activeToolchainName ) )
+				for depend in newproject.srcDependsIntermediate:
+					alteredSrcDependsIntermediate.append( "{}@{}#{}${}".format( depend, projectSettings.currentProject.targetName, projectSettings.currentProject.outputArchitecture, projectSettings.currentProject.activeToolchainName ) )
+				for depend in newproject.srcDependsFinal:
+					alteredSrcDependsFinal.append( "{}@{}#{}${}".format( depend, projectSettings.currentProject.targetName, projectSettings.currentProject.outputArchitecture, projectSettings.currentProject.activeToolchainName ) )
 
 				newproject.linkDepends = alteredLinkDepends
+				newproject.linkDependsIntermediate = alteredLinkDependsIntermediate
+				newproject.linkDependsFinal = alteredLinkDependsFinal
 				newproject.srcDepends = alteredSrcDepends
+				newproject.srcDependsIntermediate = alteredSrcDependsIntermediate
+				newproject.srcDependsFinal = alteredSrcDependsFinal
 
 				newproject.key = "{}@{}#{}${}".format( newproject.name, newproject.targetName, newproject.outputArchitecture, newproject.activeToolchainName )
 				_shared_globals.projects.update( { newproject.key: newproject } )
@@ -2601,31 +2661,69 @@ def _run( ):
 			if proj.rsplit( "@", 1 )[0] in project_build_list:
 				_shared_globals.project_build_list.add( proj )
 
+	for projName in _shared_globals.project_build_list:
+		project = _shared_globals.projects[projName]
+
+		intermediates_added = {projName}
+		finals_added = {projName}
+
+		def add_intermediates(deps):
+			for dep in deps:
+				if dep in intermediates_added:
+					continue
+				intermediates_added.add(dep)
+				project.reconciledLinkDepends.append(dep)
+				proj = _shared_globals.projects[dep]
+				add_finals(proj.linkDependsIntermediate)
+
+		def add_finals(deps):
+			for dep in deps:
+				if dep in finals_added:
+					continue
+				finals_added.add(dep)
+				project.reconciledLinkDepends.append(dep)
+				proj = _shared_globals.projects[dep]
+				add_finals(proj.linkDependsFinal)
+
+		depends = project.linkDepends
+		if args.dg:
+			depends = project.linkDepends + project.linkDependsIntermediate + project.linkDependsFinal
+
+		for dep in depends:
+			proj = _shared_globals.projects[dep]
+			project.reconciledLinkDepends.append(dep)
+			if args.dg:
+				add_finals(proj.linkDependsFinal)
+				add_intermediates(proj.linkDependsIntermediate)
+			elif project.type == ProjectType.Application:
+				add_finals(proj.linkDependsFinal)
+			else:
+				add_intermediates(proj.linkDependsIntermediate)
+
 	already_errored_link = { }
 	already_errored_source = { }
 
-
 	def insert_depends( proj, projList, already_inserted = set( ) ):
 		already_inserted.add( proj.key )
-		if project not in already_errored_link:
-			already_errored_link[project] = set( )
-			already_errored_source[project] = set( )
-		for index in range( len( proj.linkDepends ) ):
-			depend = proj.linkDepends[index]
+		if proj not in already_errored_link:
+			already_errored_link[proj] = set( )
+			already_errored_source[proj] = set( )
+		for index in range( len( proj.reconciledLinkDepends ) ):
+			depend = proj.reconciledLinkDepends[index]
 
 			if depend in already_inserted:
-				log.LOG_ERROR(
+				log.LOG_WARN(
 					"Circular dependencies detected: {0} and {1} in linkDepends".format( depend.rsplit( "@", 1 )[0],
 						proj.name ) )
-				Exit( 1 )
+				continue
 
 			if depend not in _shared_globals.projects:
-				if depend not in already_errored_link[project]:
+				if depend not in already_errored_link[proj]:
 					log.LOG_ERROR(
 						"Project {} references non-existent link dependency {}".format( proj.name,
 							depend.rsplit( "@", 1 )[0] ) )
-					already_errored_link[project].add( depend )
-					del proj.linkDepends[index]
+					already_errored_link[proj].add( depend )
+					del proj.reconciledLinkDepends[index]
 				continue
 
 			projData = _shared_globals.projects[depend]
@@ -2637,18 +2735,18 @@ def _run( ):
 			depend = proj.srcDepends[index]
 
 			if depend in already_inserted:
-				log.LOG_ERROR(
-					"Circular dependencies detected: {0} and {1} in linkDepends".format( depend.rsplit( "@", 1 )[0],
+				log.LOG_WARN(
+					"Circular dependencies detected: {0} and {1} in srcDepends".format( depend.rsplit( "@", 1 )[0],
 						proj.name ) )
-				Exit( 1 )
+				continue
 
 			if depend not in _shared_globals.projects:
-				if depend not in already_errored_link[project]:
+				if depend not in already_errored_link[proj]:
 					log.LOG_ERROR(
 						"Project {} references non-existent link dependency {}".format( proj.name,
 							depend.rsplit( "@", 1 )[0] ) )
-					already_errored_link[project].add( depend )
-					del proj.linkDepends[index]
+					already_errored_link[proj].add( depend )
+					del proj.srcDepends[index]
 				continue
 
 			projData = _shared_globals.projects[depend]
@@ -2666,25 +2764,6 @@ def _run( ):
 		_shared_globals.projects = newProjList
 
 	_shared_globals.sortedProjects = _utils.sortProjects( _shared_globals.projects )
-
-	for proj in _shared_globals.sortedProjects:
-		proj.prepareBuild( )
-
-	_utils.check_version( )
-
-	totaltime = time.time( ) - _shared_globals.starttime
-	totalmin = math.floor( totaltime / 60 )
-	totalsec = math.floor( totaltime % 60 )
-	_utils.chunked_build( )
-	_utils.prepare_precompiles( )
-	log.LOG_BUILD( "Task preparation took {0}:{1:02}".format( int( totalmin ), int( totalsec ) ) )
-
-
-	if args.gui:
-		_shared_globals.autoCloseGui = args.auto_close_gui
-		from csbuild import _gui
-		global _guiModule
-		_guiModule = _gui
 
 	if args.dg:
 		builder = 'digraph G {\n\tlayout="neato";\n\toverlap="false";\n\tsplines="spline"\n'
@@ -2707,6 +2786,12 @@ def _run( ):
 			for dep in project.linkDepends:
 				otherProj = _shared_globals.projects[dep]
 				builder += '\t{} -> {} [color="{}"];\n'.format(project.name, otherProj.name, color)
+			for dep in project.linkDependsIntermediate:
+				otherProj = _shared_globals.projects[dep]
+				builder += '\t{} -> {} [color="{}B0" style="dashed" arrowhead="onormal"];\n'.format(project.name, otherProj.name, color)
+			for dep in project.linkDependsFinal:
+				otherProj = _shared_globals.projects[dep]
+				builder += '\t{} -> {} [color="{}B0" style="dashed" arrowhead="onormal"];\n'.format(project.name, otherProj.name, color)
 		builder += "}\n"
 		with open("depends.gv", "w") as f:
 			f.write(builder)
@@ -2720,8 +2805,28 @@ def _run( ):
 			Digraph.source=property(lambda self: builder)
 			graph.render("depends.gv", view=True)
 			log.LOG_BUILD("Wrote depends.png")
+		return
 
-	elif args.generate_solution is not None:
+	for proj in _shared_globals.sortedProjects:
+		proj.prepareBuild( )
+
+	_utils.check_version( )
+
+	totaltime = time.time( ) - _shared_globals.starttime
+	totalmin = math.floor( totaltime / 60 )
+	totalsec = math.floor( totaltime % 60 )
+	_utils.chunked_build( )
+	_utils.prepare_precompiles( )
+	log.LOG_BUILD( "Task preparation took {0}:{1:02}".format( int( totalmin ), int( totalsec ) ) )
+
+
+	if args.gui:
+		_shared_globals.autoCloseGui = args.auto_close_gui
+		from csbuild import _gui
+		global _guiModule
+		_guiModule = _gui
+
+	if args.generate_solution is not None:
 		if not args.solution_path:
 			args.solution_path = os.path.join( ".", "Solutions", args.generate_solution )
 		if args.generate_solution not in _shared_globals.project_generators:

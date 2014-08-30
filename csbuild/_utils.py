@@ -519,29 +519,29 @@ def sortProjects( projects_to_sort ):
 			already_errored_link[project] = set( )
 			already_errored_source[project] = set( )
 
-		for index in range( len( project.linkDepends ) ):
-			depend = project.linkDepends[index]
+		for index in range( len( project.reconciledLinkDepends ) ):
+			depend = project.reconciledLinkDepends[index]
 			if depend in already_inserted:
-				log.LOG_ERROR(
+				log.LOG_WARN(
 					"Circular dependencies detected: {0} and {1} in linkDepends".format( depend.rsplit( "@", 1 )[0],
 						project.name ) )
-				csbuild.Exit( 1 )
+				continue
 			if depend not in projects_to_sort:
 				if depend not in already_errored_link[project]:
 					log.LOG_ERROR( "Project {} references non-existent link dependency {}".format(
 						project.name, depend.rsplit( "@", 1 )[0] ) )
 					already_errored_link[project].add( depend )
-					del project.linkDepends[index]
+					del project.reconciledLinkDepends[index]
 				continue
 			insert_depends( projects_to_sort[depend], already_inserted )
 
 		for index in range( len( project.srcDepends ) ):
 			depend = project.srcDepends[index]
 			if depend in already_inserted:
-				log.LOG_ERROR(
+				log.LOG_WARN(
 					"Circular dependencies detected: {0} and {1} in srcDepends".format( depend.rsplit( "@", 1 )[0],
 						project.name ) )
-				csbuild.Exit( 1 )
+				continue
 			if depend not in projects_to_sort:
 				if depend not in already_errored_source[project]:
 					log.LOG_ERROR( "Project {} references non-existent source dependency {}".format(
