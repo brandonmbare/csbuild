@@ -1,12 +1,16 @@
 # coding=utf-8
 import functools
-import hashlib
 import re
 import stat
-import io
 import sys
+if sys.version_info >= (3,0):
+	import io
+	StringIO = io.StringIO
+else:
+	import cStringIO
+	StringIO = cStringIO.StringIO
 import csbuild
-from csbuild import log
+from . import log
 
 # try:
 # 	from PyQt5 import QtCore, QtGui, QtWidgets
@@ -42,7 +46,7 @@ import time
 import math
 import signal
 
-from csbuild import _shared_globals
+from . import _shared_globals
 
 class TreeWidgetItem(QtGui.QTreeWidgetItem):
 	def __init__(self, *args, **kwargs):
@@ -661,7 +665,7 @@ class CodeProfileDisplay(CodeEditor):
 
 				with open(absPath, "r") as f:
 					data = f.read().split("\n")
-				io = io.StringIO.StringIO()
+				io = StringIO()
 
 				absPath = os.path.normcase(absPath)
 				baseFile = self.parentEditor.sourceFile
@@ -1259,6 +1263,14 @@ class MainWindow( QMainWindow ):
 		self.m_textEdit.setFontFamily("monospace")
 		self.innerLayout2.addWidget(self.m_textEdit)
 
+		self.commandPage = QtGui.QWidget(self.innerWidget2)
+		self.innerLayout2 = QtGui.QVBoxLayout(self.commandPage)
+		self.m_commandEdit = QtGui.QTextEdit(self.commandPage)
+		self.m_commandEdit.setObjectName("commandEdit")
+		self.m_commandEdit.setReadOnly(True)
+		self.m_commandEdit.setFontFamily("monospace")
+		self.innerLayout2.addWidget(self.m_commandEdit)
+
 		self.errorsPage = QtGui.QWidget(self.innerWidget2)
 
 		self.innerLayout3 = QtGui.QVBoxLayout(self.errorsPage)
@@ -1280,6 +1292,7 @@ class MainWindow( QMainWindow ):
 
 		self.innerWidget2.addTab(self.errorsPage, "Errors/Warnings")
 		self.innerWidget2.addTab(self.textPage, "Text Output")
+		self.innerWidget2.addTab(self.commandPage, "Command Line")
 
 		self.m_splitter.addWidget(self.innerWidget2)
 
@@ -1386,7 +1399,7 @@ class MainWindow( QMainWindow ):
 
 		with open(filename, "r") as f:
 			data = f.read().split("\n")
-		io = io.StringIO.StringIO()
+		io = StringIO()
 
 		lineNo = 1
 		for line in data:
@@ -1575,6 +1588,7 @@ class MainWindow( QMainWindow ):
 								self.m_textEdit.setText(outStr)
 					elif widget.isExpanded():
 						def HandleChild( idx, file ):
+							file = os.path.normcase(file)
 							childWidget = widget.child(idx)
 
 							if childWidget == current:
@@ -1607,8 +1621,93 @@ class MainWindow( QMainWindow ):
 							HandleChild( idx, project.cheaderfile )
 							idx += 1
 
-						for file in project.final_chunk_set:
-							HandleChild( idx, file )
+						used_chunks = set()
+						for source in project.allsources:
+							inThisBuild = False
+							if source not in project.final_chunk_set:
+								chunk = project.get_chunk( source )
+								if not chunk:
+									continue
+
+								extension = "." + source.rsplit(".", 1)[1]
+								if extension in project.cExtensions:
+									extension = ".c"
+								else:
+									extension = ".cpp"
+
+								chunk = os.path.join( project.csbuild_dir, "{}{}".format( chunk, extension ) )
+
+								if chunk in used_chunks:
+									continue
+								if chunk in project.final_chunk_set:
+									inThisBuild = True
+									source = chunk
+									used_chunks.add(chunk)
+							else:
+								inThisBuild = True
+
+							if inThisBuild:
+								HandleChild( idx, source )
+
+							idx += 1
+		elif self.m_commandEdit.isVisible():
+			if current is not None:
+				for project in _shared_globals.sortedProjects:
+					widget = self.projectToItem[project]
+					if not widget:
+						continue
+
+					if widget == current:
+						self.m_commandEdit.setText(project.linkCommand)
+					elif widget.isExpanded():
+						def HandleChild( idx, file ):
+							file = os.path.normcase(file)
+							childWidget = widget.child(idx)
+
+							if childWidget == current:
+								if file in project.compileCommands:
+									self.m_commandEdit.setText(project.compileCommands[file])
+								else:
+									self.m_commandEdit.setText("")
+
+
+						idx = 0
+						if project.needs_cpp_precompile:
+							HandleChild( idx, project.cppheaderfile )
+							idx += 1
+
+						if project.needs_c_precompile:
+							HandleChild( idx, project.cheaderfile )
+							idx += 1
+
+						used_chunks = set()
+						for source in project.allsources:
+							inThisBuild = False
+							if source not in project.final_chunk_set:
+								chunk = project.get_chunk( source )
+								if not chunk:
+									continue
+
+								extension = "." + source.rsplit(".", 1)[1]
+								if extension in project.cExtensions:
+									extension = ".c"
+								else:
+									extension = ".cpp"
+
+								chunk = os.path.join( project.csbuild_dir, "{}{}".format( chunk, extension ) )
+
+								if chunk in used_chunks:
+									continue
+								if chunk in project.final_chunk_set:
+									inThisBuild = True
+									source = chunk
+									used_chunks.add(chunk)
+							else:
+								inThisBuild = True
+
+							if inThisBuild:
+								HandleChild( idx, source )
+
 							idx += 1
 		else:
 			if current != previous:
@@ -1734,6 +1833,7 @@ class MainWindow( QMainWindow ):
 							HandleError(project.parsedLinkErrors)
 					elif widget.isExpanded():
 						def HandleChild( idx, file ):
+							file = os.path.normcase(file)
 							childWidget = widget.child(idx)
 
 							if childWidget == current:
@@ -2317,7 +2417,7 @@ class MainWindow( QMainWindow ):
 							else:
 								summedTimes[filename] = project.summedTimes[filename]
 
-					builder = io.StringIO.StringIO()
+					builder = StringIO()
 
 					for item in sorted(summedTimes.items(), key=lambda tup: tup[1], reverse=True):
 						builder.write("{:f}\t::{}\n".format(item[1], item[0]))
@@ -2722,7 +2822,11 @@ class GuiThread( threading.Thread ):
 					childItem.setText(1, "100")
 					#"Up-to-date!" text gets set by window.SetProgressBarUpToDate
 
-				childItem.setText(3, os.path.basename(source))
+				name = os.path.basename(source)
+				if source in project.splitChunks:
+					name = "[Split Chunk] {}".format(name)
+
+				childItem.setText(3, name)
 				childItem.setToolTip(3, source)
 				childItem.setText(4, project.targetName)
 				childItem.setToolTip(4, project.targetName)

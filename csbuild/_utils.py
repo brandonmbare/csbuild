@@ -30,11 +30,16 @@ import datetime
 import glob
 import traceback
 import platform
-import io
+if sys.version_info >= (3,0):
+	import io
+	StringIO = io.StringIO
+else:
+	import cStringIO
+	StringIO = cStringIO.StringIO
 
 import csbuild
-from csbuild import log
-from csbuild import _shared_globals
+from . import log
+from . import _shared_globals
 
 
 def remove_comments( text ):
@@ -170,13 +175,17 @@ class threaded_build( threading.Thread ):
 					preprocessCmd = shlex.split(preprocessCmd)
 				fd = subprocess.Popen(preprocessCmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
 
-				data = io.StringIO.StringIO()
+				data = StringIO()
 				lastLine = 0
 				lastFile = 0
 
 				highIndex = 0
 
 				op, er = fd.communicate()
+				if sys.version_info >= (3, 0):
+					op = op.decode("utf-8")
+					er = er.decode("utf-8")
+
 				if fd.returncode == 0:
 					text = op.split("\n")
 
@@ -212,7 +221,7 @@ class threaded_build( threading.Thread ):
 							lastLine += 1
 					if platform.system() == "Windows":
 						file_mode = 438 # Octal 0666
-						fd = os.open(self.file, os.O_WRONLY | os.O_CREAT | os.O_NOINHERIT, file_mode)
+						fd = os.open(self.file, os.O_WRONLY | os.O_CREAT | os.O_NOINHERIT | os.O_TRUNC, file_mode)
 						os.write(fd, data.getvalue())
 						os.fsync(fd)
 						os.close(fd)
@@ -234,6 +243,7 @@ class threaded_build( threading.Thread ):
 			if _shared_globals.profile:
 				cmd += self.project.activeToolchain.Compiler().get_extra_post_preprocess_flags()
 
+			self.project.compileCommands[self.originalIn] = cmd
 			if _shared_globals.show_commands:
 				print(cmd)
 			if os.access(self.obj , os.F_OK):
@@ -350,9 +360,9 @@ class threaded_build( threading.Thread ):
 						self.project.summedTimes[file] = summedTimes[file]
 
 			ret = fd.returncode
-			with _shared_globals.printmutex:
-				sys.stdout.write( output.str )
-				sys.stderr.write( errors.str )
+
+			sys.stdout.write( output.str )
+			sys.stderr.write( errors.str )
 
 			with self.project.mutex:
 				stripped_errors = re.sub(ansi_escape, '', errors.str)
@@ -514,13 +524,14 @@ def sortProjects( projects_to_sort ):
 
 
 	def insert_depends( project, already_inserted = set( ) ):
+		if project.ignoreDependencyOrdering:
+			return
 		already_inserted.add( project.key )
 		if project not in already_errored_link:
 			already_errored_link[project] = set( )
 			already_errored_source[project] = set( )
 
-		for index in range( len( project.reconciledLinkDepends ) ):
-			depend = project.reconciledLinkDepends[index]
+		for depend in project.reconciledLinkDepends:
 			if depend in already_inserted:
 				log.LOG_WARN(
 					"Circular dependencies detected: {0} and {1} in linkDepends".format( depend.rsplit( "@", 1 )[0],
@@ -531,7 +542,7 @@ def sortProjects( projects_to_sort ):
 					log.LOG_ERROR( "Project {} references non-existent link dependency {}".format(
 						project.name, depend.rsplit( "@", 1 )[0] ) )
 					already_errored_link[project].add( depend )
-					del project.reconciledLinkDepends[index]
+					project.reconciledLinkDepends.remove(depend)
 				continue
 			insert_depends( projects_to_sort[depend], already_inserted )
 
@@ -555,10 +566,14 @@ def sortProjects( projects_to_sort ):
 		already_inserted.remove( project.key )
 
 
+	dependencyFreeProjects = []
 	for project in sorted(projects_to_sort.values( ), key=lambda proj: proj.priority, reverse=True):
-		insert_depends( project )
+		if project.ignoreDependencyOrdering:
+			dependencyFreeProjects.append(project)
+		else:
+			insert_depends( project )
 
-	return ret
+	return sorted(dependencyFreeProjects, key=lambda proj: proj.priority, reverse=True) + ret
 
 
 def prepare_precompiles( ):
@@ -626,6 +641,7 @@ def prepare_precompiles( ):
 				cheaders = project.cheaders
 			else:
 				if not project.hasCppFiles:
+					cppheaders = []
 					cheaders = project.precompile + project.precompileAsC
 				else:
 					cppheaders = project.precompile
@@ -666,54 +682,49 @@ def chunked_build( ):
 	that are to be compiled.
 	"""
 
-	chunks_to_build = []
-	totalChunksWithMultipleFiles = 0
+	chunks_to_build = set()
+	totalBuildThreads = 0
 	owningProject = None
 
 	for project in _shared_globals.projects.values( ):
 		for source in project.sources:
 			chunk = project.get_chunk( source )
-			if chunk not in chunks_to_build:
-				chunks_to_build.append( chunk )
+			if chunk:
+				if chunk not in chunks_to_build:
+					chunks_to_build.add( chunk )
+					totalBuildThreads += 1
+					owningProject = project
+			else:
+				totalBuildThreads += 1
 
-			totalChunksWithMultipleFiles += len( chunks_to_build )
-
-			#if we never get a second chunk, we'll want to know about the project that made the first one
-			if totalChunksWithMultipleFiles == 1:
-				owningProject = project
-
-	#Not enough chunks being built, build as plain files.
-	if totalChunksWithMultipleFiles == 0:
+	if not chunks_to_build:
 		return
 
-	if totalChunksWithMultipleFiles == 1 and not owningProject.unity:
-		chunkname = chunks_to_build[0]
+	if len(chunks_to_build) == 1 and not owningProject.unity:
+		chunkname = list(chunks_to_build)[0]
 
 		obj = os.path.join(owningProject.obj_dir, "{}_{}{}".format( chunkname,
 			owningProject.targetName, owningProject.activeToolchain.Compiler().get_obj_ext() ))
-		if os.access(obj , os.F_OK):
-			os.remove(obj)
-			log.LOG_WARN_NOPUSH(
-				"Breaking chunk ({0}) into individual files to improve future iteration turnaround.".format(
-					owningProject.chunks[0] ) )
-			owningProject.final_chunk_set = owningProject.allsources
-		else:
-			owningProject.final_chunk_set = owningProject.sources
+		for chunk in owningProject.chunks:
+			if get_chunk_name(owningProject.output_name, chunk ) == chunkname:
+				if os.access(obj , os.F_OK):
+					os.remove(obj)
+					log.LOG_WARN_NOPUSH(
+						"Breaking chunk ({0}) into individual files to improve future iteration turnaround.".format(
+							chunk
+						)
+					)
+					for filename in chunk:
+						owningProject.splitChunks[filename] = chunkname
+					owningProject.final_chunk_set = chunk
+					return
+				else:
+					owningProject.final_chunk_set = owningProject.sources
+					return
 		return
 
-	dont_split_any = False
-	#If we have to build more than four chunks, or more than a quarter of the total number if that's less than four,
-	#then we're not dealing with a "small build" that we can piggyback on to split the chunks back up.
-	#Just build them as chunks for now; we'll split them up in another, smaller build.
-	if len( chunks_to_build ) > min( totalChunksWithMultipleFiles / 4, 4 ):
-		log.LOG_INFO( "Not splitting any existing chunks because we would have to build too many." )
-		dont_split_any = True
 
 	for project in _shared_globals.projects.values( ):
-		dont_split = dont_split_any
-		if project.unity:
-			dont_split = True
-
 		for chunk in project.chunks:
 			sources_in_this_chunk = []
 			for source in project.sources:
@@ -740,15 +751,32 @@ def chunked_build( ):
 					extension
 				))
 
-			#If only one or two sources in this chunk need to be built, we get no benefit from building it as a unit.
-			# Split unless we're told not to.
-			if project.use_chunks and not _shared_globals.disable_chunks and len( chunk ) > 1 and (
-						(project.chunk_size > 0 and len(
-								sources_in_this_chunk ) > project.chunk_tolerance) or (
-								project.chunk_filesize > 0 and chunksize > project
-						.chunk_size_tolerance) or (
-							dont_split and (project.unity or os.access(outFile, os.F_OK)) and len(
-							sources_in_this_chunk ) > 0)):
+			# We want to try and achieve ideal parallelism.
+			# ALWAYS SPLIT if we're building fewer total translation units than the number of threads available to us.
+			# Otherwise, follow the rules set by the project for chunk size, chunk filesize, etc.
+			if(
+				project.use_chunks
+				and not _shared_globals.disable_chunks
+				and len( chunk ) > 1
+				and (
+					totalBuildThreads >= _shared_globals.max_threads
+					and not project.unity #Unity means never split.
+				)
+				and (
+					(
+						project.chunk_size > 0
+						and len( sources_in_this_chunk ) > project.chunk_tolerance
+					) or (
+						project.chunk_filesize > 0
+						and chunksize > project.chunk_size_tolerance
+					) or (
+						(
+							project.unity
+							or os.access(outFile, os.F_OK)
+						) and len(sources_in_this_chunk ) > 0
+					)
+				)
+			):
 				log.LOG_INFO( "Going to build chunk {0} as {1}".format( chunk, outFile ) )
 				with open( outFile, "w" ) as f:
 					f.write( "//Automatically generated file, do not edit.\n" )
@@ -784,6 +812,9 @@ def chunked_build( ):
 						log.LOG_WARN_NOPUSH(
 							"Breaking chunk ({0}) into individual files to improve future iteration turnaround.".format(
 								chunk ) )
+
+						for filename in chunk:
+							owningProject.splitChunks[filename] = chunkname
 				else:
 					add_chunk = sources_in_this_chunk
 					if project.use_chunks and not _shared_globals.disable_chunks:
@@ -800,6 +831,7 @@ def chunked_build( ):
 				else:
 					log.LOG_INFO( "Going to build chunk {0} as individual files.".format( add_chunk ) )
 				project.final_chunk_set += add_chunk
+				totalBuildThreads += len(add_chunk) - 1 #Subtract one because we're removing the chunk and adding its contents
 
 def get_chunk_name( projectName, chunk ):
 	chunk_names = "__".join( base_names( chunk ) )

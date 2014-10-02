@@ -30,8 +30,8 @@ from abc import abstractmethod, ABCMeta
 import glob
 import os
 import platform
-from csbuild import log
-from csbuild import _shared_globals
+from . import log
+from . import _shared_globals
 import csbuild
 
 
@@ -821,6 +821,24 @@ class SettingsOverrider( object ):
 		is not set up to support all of the toolchain's architectures.
 		"""
 		self.settingsOverrides["supportedArchitectures"] = set(architectures)
+
+
+	def SetStaticLinkMode(self, mode):
+		"""
+		Determines how static links are handled. With the msvc toolchain, iterative link times of a project with many libraries
+		can be significantly improved by setting this to L{StaticLinkMode.LinkIntermediateObjects}. This will cause the linker to link
+		the .obj files used to make a library directly into the dependent project. Link times for full builds may be slightly slower,
+		but this will allow incremental linking to function when libraries are being changed. (Usually, changing a .lib results
+		in a full link.)
+
+		On most toolchains, this defaults to L{StaticLinkMode.LinkLibs}. In debug mode only for the msvc toolchain, this defaults
+		to L{StaticLinkMode.LinkIntermediateObjects}.
+
+		@type mode: L{StaticLinkMode}
+		@param mode: The link mode to set
+		"""
+		self.settingsOverrides["linkMode"] = mode
+		self.settingsOverrides["linkModeSet"] = True
 
 @_shared_globals.MetaClass(ABCMeta)
 class linkerBase( SettingsOverrider ):

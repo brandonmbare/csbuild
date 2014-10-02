@@ -47,7 +47,6 @@ once that thread tries to use it. Long story short: Don't import modules within 
 @undocumented: install
 @undocumented: make
 @undocumented: _options
-@undocumented: _barWriter
 @undocumented: __credits__
 @undocumented: __maintainer__
 @undocumented: __email__
@@ -71,6 +70,10 @@ import imp
 import re
 import traceback
 
+if sys.version_info < (3,0):
+	import cPickle as pickle
+else:
+	import pickle
 
 class ProjectType( object ):
 	"""
@@ -100,18 +103,22 @@ class ScopeDef( object ):
 	DependentsOnly = Intermediate | Final
 	All = Self | Intermediate | Final
 
-from csbuild import _utils
-from csbuild import toolchain
-from csbuild import toolchain_msvc
-from csbuild import toolchain_gcc
-from csbuild import toolchain_android
-from csbuild import log
-from csbuild import _shared_globals
-from csbuild import projectSettings
-from csbuild import project_generator_qtcreator
-from csbuild import project_generator_slickedit
-from csbuild import project_generator_visual_studio
-from csbuild import project_generator
+class StaticLinkMode( object ):
+	LinkLibs = 0
+	LinkIntermediateObjects = 1
+
+from . import _utils
+from . import toolchain
+from . import toolchain_msvc
+from . import toolchain_gcc
+from . import toolchain_android
+from . import log
+from . import _shared_globals
+from . import projectSettings
+from . import project_generator_qtcreator
+from . import project_generator_slickedit
+from . import project_generator_visual_studio
+from . import project_generator
 
 
 __author__ = "Jaedyn K. Draper, Brandon M. Bare"
@@ -859,6 +866,24 @@ def DoNotChunk(*files):
 			projectSettings.currentProject.chunkExcludes.add(os.path.abspath(filename))
 
 
+def SetStaticLinkMode(mode):
+	"""
+	Determines how static links are handled. With the msvc toolchain, iterative link times of a project with many libraries
+	can be significantly improved by setting this to L{StaticLinkMode.LinkIntermediateObjects}. This will cause the linker to link
+	the .obj files used to make a library directly into the dependent project. Link times for full builds may be slightly slower,
+	but this will allow incremental linking to function when libraries are being changed. (Usually, changing a .lib results
+	in a full link.)
+
+	On most toolchains, this defaults to L{StaticLinkMode.LinkLibs}. In debug mode only for the msvc toolchain, this defaults
+	to L{StaticLinkMode.LinkIntermediateObjects}.
+
+	@type mode: L{StaticLinkMode}
+	@param mode: The link mode to set
+	"""
+	projectSettings.currentProject.linkMode = mode
+	projectSettings.currentProject.linkModeSet = True
+
+
 def SupportedArchitectures(*architectures):
 	"""
 	Specifies the architectures that this project supports. This can be used to limit
@@ -977,7 +1002,7 @@ class Src(object):
 		self.libName = libName
 		self.scope = scope
 
-def project( name, workingDirectory, depends = None, priority = -1 ):
+def project( name, workingDirectory, depends = None, priority = -1, ignoreDependencyOrdering = False ):
 	"""
 	Decorator used to declare a project. linkDepends and srcDepends here will be used to determine project build order.
 
@@ -1044,6 +1069,7 @@ def project( name, workingDirectory, depends = None, priority = -1 ):
 		newProject.func = projectFunction
 
 		newProject.priority = priority
+		newProject.ignoreDependencyOrdering = ignoreDependencyOrdering
 
 		_shared_globals.tempprojects.update( { name: newProject } )
 		projectSettings.currentGroup.tempprojects.update( { name: newProject } )
@@ -1265,7 +1291,7 @@ def preLinkStep( func ):
 
 _shared_globals.starttime = time.time( )
 
-_barWriter = log.bar_writer( )
+sys.stdout = log.stdoutWriter(sys.stdout)
 
 building = False
 
@@ -1289,8 +1315,6 @@ def build( ):
 	if _guiModule:
 		_guiModule.run()
 
-	_barWriter.start()
-
 	built = False
 	global building
 	building = True
@@ -1306,8 +1330,8 @@ def build( ):
 	_shared_globals.current_compile = 1
 
 	projects_in_flight = []
-	projects_done = set( )
-	pending_links = []
+	projects_done = set()
+	pending_links = set()
 	pending_builds = _shared_globals.sortedProjects
 	#projects_needing_links = set()
 
@@ -1358,8 +1382,8 @@ def build( ):
 						continue
 
 					okToLink = True
-					if otherProj.linkDepends:
-						for depend in otherProj.linkDepends:
+					if otherProj.reconciledLinkDepends:
+						for depend in otherProj.reconciledLinkDepends:
 							if depend not in projects_done:
 								okToLink = False
 								break
@@ -1372,11 +1396,11 @@ def build( ):
 							"Linking for {} ({} {}/{}) deferred until all dependencies have finished building...".format(
 								otherProj.output_name, otherProj.targetName, otherProj.outputArchitecture, otherProj.activeToolchainName ) )
 						otherProj.state = _shared_globals.ProjectState.WAITING_FOR_LINK
-						pending_links.append( otherProj )
+						pending_links.add( otherProj )
 
 			for otherProj in list( pending_links ):
 				okToLink = True
-				for depend in otherProj.linkDepends:
+				for depend in otherProj.reconciledLinkDepends:
 					if depend not in projects_done:
 						okToLink = False
 						break
@@ -1420,6 +1444,12 @@ def build( ):
 					chunkFileStr = ""
 					if chunk in project.chunksByFile:
 						chunkFileStr = " {}".format( [ os.path.basename(piece) for piece in project.chunksByFile[chunk] ] )
+					elif chunk in project.splitChunks:
+						chunkFileStr = " [Split from {}_{}{}]".format(
+							project.splitChunks[chunk],
+							project.targetName,
+							project.activeToolchain.Compiler().get_obj_ext()
+						)
 
 					built = True
 					obj = os.path.join(projectSettings.currentProject.obj_dir, "{}_{}{}".format(
@@ -1568,11 +1598,16 @@ def build( ):
 	totalsec = math.floor( compiletime % 60 )
 	log.LOG_BUILD( "Compilation took {0}:{1:02}".format( int( totalmin ), int( totalsec ) ) )
 
+	_shared_globals.buildFinished = True
+
 	return _shared_globals.build_success
 
 linkMutex = threading.Lock()
 linkCond = threading.Condition(linkMutex)
 linkQueue = []
+currentLinkThreads = set()
+linkThreadMutex = threading.Lock()
+recheckDeferredLinkTasks = False
 
 def link( project, *objs ):
 	"""
@@ -1675,7 +1710,7 @@ def performLink(project, objs):
 						.format(
 							project.library_locs[i] ) )
 					project.built_something = True
-			for dep in project.linkDepends:
+			for dep in project.reconciledLinkDepends:
 				depProj = _shared_globals.projects[dep]
 				if depProj.state != _shared_globals.ProjectState.UP_TO_DATE:
 					log.LOG_LINKER(
@@ -1692,30 +1727,71 @@ def performLink(project, objs):
 	if not os.access(project.output_dir , os.F_OK):
 		os.makedirs( project.output_dir )
 
-	#Remove the output file so we're not just clobbering it
+	#On unix-based OSes, we need to remove the output file so we're not just clobbering it
 	#If it gets clobbered while running it could cause BAD THINGS (tm)
-	if os.access(output , os.F_OK):
-		os.remove( output )
+	#On windows, however, we want to leave it there so that incremental link can work.
+	if platform.system() != "Windows":
+		if os.access(output , os.F_OK):
+			os.remove( output )
+
+	for dep in project.reconciledLinkDepends:
+		proj = _shared_globals.projects[dep]
+		if proj.type == ProjectType.StaticLibrary and project.linkMode == StaticLinkMode.LinkIntermediateObjects:
+			for chunk in proj.chunks:
+				if not proj.unity:
+					obj = os.path.join(proj.obj_dir, "{}_{}{}".format(
+						_utils.get_chunk_name( proj.output_name, chunk ),
+						proj.targetName,
+						proj.activeToolchain.Compiler().get_obj_ext()
+					))
+				else:
+					obj = os.path.join(proj.obj_dir, "{}_unity_{}{}".format(
+						proj.output_name,
+						proj.targetName,
+						proj.activeToolchain.Compiler().get_obj_ext()
+					))
+				if proj.use_chunks and not _shared_globals.disable_chunks and os.access(obj , os.F_OK):
+					objs.append( obj )
+				else:
+					if type( chunk ) == list:
+						for source in chunk:
+							obj = os.path.join(proj.obj_dir, "{}_{}{}".format( os.path.basename( source ).split( '.' )[0],
+								proj.targetName, proj.activeToolchain.Compiler().get_obj_ext() ) )
+							if os.access(obj , os.F_OK):
+								objs.append( obj )
+							else:
+								log.LOG_ERROR( "Could not find {} for linking. Something went wrong here.".format(obj) )
+								return LinkStatus.Fail
+					else:
+						obj = os.path.join(proj.obj_dir, "{}_{}{}".format( os.path.basename( chunk ).split( '.' )[0],
+							proj.targetName, proj.activeToolchain.Compiler().get_obj_ext() ) )
+						if os.access(obj , os.F_OK):
+							objs.append( obj )
+						else:
+							log.LOG_ERROR( "Could not find {} for linking. Something went wrong here.".format(obj) )
+							return LinkStatus.Fail
+			objs += proj.extraObjs
 
 	cmd = project.activeToolchain.Linker().get_link_command( project, output, objs )
 	if _shared_globals.show_commands:
 		print(cmd)
-
+	project.linkCommand = cmd
 	if platform.system() != "Windows":
 		cmd = shlex.split(cmd)
 
 	fd = subprocess.Popen( cmd, stdout = subprocess.PIPE, stderr = subprocess.PIPE, cwd = project.obj_dir )
 
 	(output, errors) = fd.communicate( )
+
 	ret = fd.returncode
 	sys.stdout.flush( )
 	sys.stderr.flush( )
-	with _shared_globals.printmutex:
-		if sys.version_info >= (3, 0):
-			output = output.decode("utf-8")
-			errors = errors.decode("utf-8")
-		sys.stdout.write( output )
-		sys.stderr.write( errors )
+
+	if sys.version_info >= (3, 0):
+		output = output.decode("utf-8")
+		errors = errors.decode("utf-8")
+	sys.stdout.write( output )
+	sys.stderr.write( errors )
 
 	with project.mutex:
 		ansi_escape = re.compile(r'\x1b[^m]*m')
@@ -1763,53 +1839,103 @@ class LinkThread(threading.Thread):
 
 
 	def run( self ):
-		project = self._project
-		project.state = _shared_globals.ProjectState.LINKING
-		ret = performLink(project, self._objs)
+		global linkThreadMutex
+		global currentLinkThreads
+		global linkCond
+		global recheckDeferredLinkTasks
+		try:
+			project = self._project
+			project.state = _shared_globals.ProjectState.LINKING
+			ret = performLink(project, self._objs)
 
-		if ret == LinkStatus.Fail:
-			_shared_globals.build_success = False
-			project.state = _shared_globals.ProjectState.LINK_FAILED
-		elif ret == LinkStatus.Success:
+			if ret == LinkStatus.Fail:
+				_shared_globals.build_success = False
+				project.state = _shared_globals.ProjectState.LINK_FAILED
+			elif ret == LinkStatus.Success:
 
-			try:
-				project.activeToolchain.postBuildStep(project)
-			except Exception:
-				traceback.print_exc()
-
-			if project.postBuildStep:
-				log.LOG_BUILD( "Running post-build step for {} ({} {}/{})".format( project.output_name, project.targetName, project.outputArchitecture, project.activeToolchainName ) )
 				try:
-					project.postBuildStep( project )
+					project.activeToolchain.postBuildStep(project)
 				except Exception:
 					traceback.print_exc()
-			project.state = _shared_globals.ProjectState.FINISHED
-		elif ret == LinkStatus.UpToDate:
-			project.state = _shared_globals.ProjectState.UP_TO_DATE
-		project.endTime = time.time()
-		log.LOG_BUILD( "Finished {} ({} {}/{})".format( project.output_name, project.targetName, project.outputArchitecture, project.activeToolchainName ) )
-		_shared_globals.link_semaphore.release()
+
+				if project.postBuildStep:
+					log.LOG_BUILD( "Running post-build step for {} ({} {}/{})".format( project.output_name, project.targetName, project.outputArchitecture, project.activeToolchainName ) )
+					try:
+						project.postBuildStep( project )
+					except Exception:
+						traceback.print_exc()
+				project.state = _shared_globals.ProjectState.FINISHED
+			elif ret == LinkStatus.UpToDate:
+				project.state = _shared_globals.ProjectState.UP_TO_DATE
+			project.endTime = time.time()
+			log.LOG_BUILD( "Finished {} ({} {}/{})".format( project.output_name, project.targetName, project.outputArchitecture, project.activeToolchainName ) )
+
+			_shared_globals.link_semaphore.release()
+
+			with linkThreadMutex:
+				currentLinkThreads.remove(project.key)
+			with linkMutex:
+				recheckDeferredLinkTasks = True
+				linkCond.notify()
+		except Exception:
+			traceback.print_exc()
 
 
 def linkThreadLoop():
 	global linkQueue
 	global linkMutex
 	global linkCond
+	global currentLinkThreads
+	global linkThreadMutex
+	global recheckDeferredLinkTasks
 
-	global building
-	while True:
-		projectsToLink = []
-		with linkMutex:
-			if not linkQueue:
-				if not building:
-					return
-				linkCond.wait()
-			projectsToLink = linkQueue
-			linkQueue = []
+	try:
+		global building
+		deferredLinks = []
+		while True:
+			projectsToLink = []
+			with linkMutex:
+				if recheckDeferredLinkTasks:
+					if linkQueue:
+						linkQueue += deferredLinks
+					else:
+						linkQueue = deferredLinks
+					deferredLinks = []
+					recheckDeferredLinkTasks = False
+				if not linkQueue:
+					if not building and not deferredLinks and not currentLinkThreads:
+						return
+					linkQueue = deferredLinks
+					deferredLinks = []
+					linkCond.wait()
+				projectsToLink = linkQueue
+				linkQueue = []
 
-		for ( project, objs ) in projectsToLink:
-			_shared_globals.link_semaphore.acquire(True)
-			LinkThread(project, objs).start()
+
+			for ( project, objs ) in projectsToLink:
+				okToLink = True
+				with linkThreadMutex:
+					for depend in project.reconciledLinkDepends:
+						if depend in currentLinkThreads:
+							okToLink = False
+							break
+
+						for ( otherProj, otherObjs ) in projectsToLink:
+							if otherProj.key == depend:
+								okToLink = False
+								break
+						if not okToLink:
+							break
+				
+				if okToLink:
+					with linkThreadMutex:
+						currentLinkThreads.add(project.key)
+					_shared_globals.link_semaphore.acquire(True)
+					LinkThread(project, objs).start()
+				else:
+					deferredLinks.append( ( project, objs ) )
+	except Exception:
+		traceback.print_exc()
 
 linkThread = threading.Thread(target=linkThreadLoop)
 
@@ -1985,6 +2111,9 @@ def debug( ):
 	if not projectSettings.currentProject.debug_set:
 		Debug( DebugLevel.EmbeddedSymbols )
 		Toolchain("msvc").Debug( DebugLevel.ExternalSymbols )
+
+	if not projectSettings.currentProject.linkModeSet:
+		Toolchain("msvc").SetStaticLinkMode( StaticLinkMode.LinkIntermediateObjects )
 
 	Define("_DEBUG")
 
@@ -2204,6 +2333,36 @@ def _run( ):
 		log.LOG_ERROR( "CSB cannot be run from the interactive console." )
 		Exit( 1 )
 
+	csbDir = os.path.join(mainfileDir, ".csbuild")
+	if not os.path.exists(csbDir):
+		os.makedirs(csbDir)
+
+	_shared_globals.cacheDirectory = os.path.join(csbDir, "cache")
+	if not os.path.exists(_shared_globals.cacheDirectory):
+		os.makedirs(_shared_globals.cacheDirectory)
+
+	logDirectory = os.path.join(csbDir, "log")
+	if not os.path.exists(logDirectory):
+		os.makedirs(logDirectory)
+
+	logFile = os.path.join(logDirectory, "build.log")
+
+	logBackup = "{}.4".format(logFile)
+	if os.path.exists(logBackup):
+		os.remove(logBackup)
+
+	for i in range(3,0,-1):
+		logBackup = "{}.{}".format(logFile, i)
+		if os.path.exists(logBackup):
+			newBackup = "{}.{}".format(logFile, i+1)
+			os.rename(logBackup, newBackup)
+
+	if os.path.exists(logFile):
+		logBackup = "{}.1".format(logFile)
+		os.rename(logFile, logBackup)
+
+	_shared_globals.logFile = open(logFile, "w")
+
 	epilog = "    ------------------------------------------------------------    \n\nProjects available in this makefile (listed in build order):\n\n"
 
 	projtable = [[]]
@@ -2305,16 +2464,16 @@ def _run( ):
 		help = "Very quiet. Disables all csb-specific logging.", default = 1 )
 	parser.add_argument( "-j", "--jobs", action = "store", dest = "jobs", type = int, help = "Number of simultaneous build processes" )
 
-	#	parser.add_argument(
-	#		"-l",
-	#		"--linker-jobs",
-	#		action = "store",
-	#		dest = "linker_jobs",
-	#		type = int,
-	#		help = "Max number of simultaneous link processes. (If not specified, same value as -j.)"
-	#		"Note that this pool is shared with build threads, and linker will only get one thread from the pool until compile threads start becoming free."
-	#		"This value only specifies a maximum."
-	#	)
+	parser.add_argument(
+		"-l",
+		"--linker-jobs",
+		action = "store",
+		dest = "linker_jobs",
+		type = int,
+		help = "Max number of simultaneous link processes. (If not specified, same value as -j.)"
+		"Note that this pool is shared with build threads, and linker will only get one thread from the pool until compile threads start becoming free."
+		"This value only specifies a maximum."
+	)
 	parser.add_argument( "-g", "--gui", action = "store_true", dest = "gui", help = "Show GUI while building (experimental)")
 	parser.add_argument( "--auto-close-gui", action = "store_true", help = "Automatically close the gui on build success (will stay open on failure)")
 	parser.add_argument("--profile", action="store_true", help="Collect detailed line-by-line profiling information on compile time. --gui option required to see this information.")
@@ -2352,6 +2511,7 @@ def _run( ):
 	parser.add_argument( '--no-chunks', help = "Disable chunking globally, affects all projects",
 		action = "store_true" )
 	parser.add_argument( '--dg', '--dependency-graph', help="Generate dependency graph", action="store_true")
+	parser.add_argument( '--with-libs', help="Include linked libraries in dependency graph", action="store_true" )
 
 	group = parser.add_argument_group( "Solution generation", "Commands to generate a solution" )
 	group.add_argument( '--generate-solution', help = "Generate a solution file for use with the given IDE.",
@@ -2454,14 +2614,10 @@ def _run( ):
 		_shared_globals.max_threads = args.jobs
 		_shared_globals.semaphore = threading.BoundedSemaphore( value = _shared_globals.max_threads )
 
-	#if platform.system() == "Windows":
-	#Parallel link doesn't currently work correctly on any platform.
-	_shared_globals.max_linker_threads = 1
-	_shared_globals.link_semaphore = threading.BoundedSemaphore( value = _shared_globals.max_linker_threads )
-	#elif args.linker_jobs:
-	#	_shared_globals.max_linker_threads = max(args.linker_jobs, _shared_globals.max_threads)
-	#	_shared_globals.link_semaphore = threading.BoundedSemaphore( value = _shared_globals.max_linker_threads )
-
+	if args.linker_jobs:
+		_shared_globals.max_linker_threads = max(args.linker_jobs, _shared_globals.max_threads)
+		_shared_globals.link_semaphore = threading.BoundedSemaphore( value = _shared_globals.max_linker_threads )
+	
 	_shared_globals.profile = args.profile
 	_shared_globals.disable_chunks = args.no_chunks
 	_shared_globals.disable_precompile = args.no_precompile or args.profile
@@ -2660,6 +2816,8 @@ def _run( ):
 		for proj in _shared_globals.projects.keys( ):
 			if proj.rsplit( "@", 1 )[0] in project_build_list:
 				_shared_globals.project_build_list.add( proj )
+	else:
+		_shared_globals.project_build_list = set(_shared_globals.projects.keys())
 
 	for projName in _shared_globals.project_build_list:
 		project = _shared_globals.projects[projName]
@@ -2672,7 +2830,7 @@ def _run( ):
 				if dep in intermediates_added:
 					continue
 				intermediates_added.add(dep)
-				project.reconciledLinkDepends.append(dep)
+				project.reconciledLinkDepends.add(dep)
 				proj = _shared_globals.projects[dep]
 				add_finals(proj.linkDependsIntermediate)
 
@@ -2681,7 +2839,7 @@ def _run( ):
 				if dep in finals_added:
 					continue
 				finals_added.add(dep)
-				project.reconciledLinkDepends.append(dep)
+				project.reconciledLinkDepends.add(dep)
 				proj = _shared_globals.projects[dep]
 				add_finals(proj.linkDependsFinal)
 
@@ -2691,7 +2849,7 @@ def _run( ):
 
 		for dep in depends:
 			proj = _shared_globals.projects[dep]
-			project.reconciledLinkDepends.append(dep)
+			project.reconciledLinkDepends.add(dep)
 			if args.dg:
 				add_finals(proj.linkDependsFinal)
 				add_intermediates(proj.linkDependsIntermediate)
@@ -2708,9 +2866,7 @@ def _run( ):
 		if proj not in already_errored_link:
 			already_errored_link[proj] = set( )
 			already_errored_source[proj] = set( )
-		for index in range( len( proj.reconciledLinkDepends ) ):
-			depend = proj.reconciledLinkDepends[index]
-
+		for depend in proj.reconciledLinkDepends:
 			if depend in already_inserted:
 				log.LOG_WARN(
 					"Circular dependencies detected: {0} and {1} in linkDepends".format( depend.rsplit( "@", 1 )[0],
@@ -2723,7 +2879,7 @@ def _run( ):
 						"Project {} references non-existent link dependency {}".format( proj.name,
 							depend.rsplit( "@", 1 )[0] ) )
 					already_errored_link[proj].add( depend )
-					del proj.reconciledLinkDepends[index]
+					proj.reconciledLinkDepends.remove(depend)
 				continue
 
 			projData = _shared_globals.projects[depend]
@@ -2764,7 +2920,7 @@ def _run( ):
 		_shared_globals.projects = newProjList
 
 	_shared_globals.sortedProjects = _utils.sortProjects( _shared_globals.projects )
-
+		
 	if args.dg:
 		builder = 'digraph G {\n\tlayout="neato";\n\toverlap="false";\n\tsplines="spline"\n'
 		colors = [
@@ -2777,12 +2933,13 @@ def _run( ):
 			"#00a2f2", "#397ee6", "#0000e6", "#8d29a6", "#990052"
 		]
 		idx = 0
+		libs_drawn = set()
 		for project in _shared_globals.sortedProjects:
 			color = colors[idx]
 			idx += 1
 			if idx == len(colors):
 				idx = 0
-			builder += '\t{} [shape="{}" color="{}"];\n'.format(project.name, "box3d" if project.type == ProjectType.Application else "oval", color);
+			builder += '\t{0} [shape="{1}" color="{2}" style="filled" fillcolor="{2}30"];\n'.format(project.name, "box3d" if project.type == ProjectType.Application else "oval", color)
 			for dep in project.linkDepends:
 				otherProj = _shared_globals.projects[dep]
 				builder += '\t{} -> {} [color="{}"];\n'.format(project.name, otherProj.name, color)
@@ -2792,6 +2949,16 @@ def _run( ):
 			for dep in project.linkDependsFinal:
 				otherProj = _shared_globals.projects[dep]
 				builder += '\t{} -> {} [color="{}B0" style="dashed" arrowhead="onormal"];\n'.format(project.name, otherProj.name, color)
+
+			if args.with_libs:
+				project.activeToolchain = project.toolchains[project.activeToolchainName]
+				project.activeToolchain.SetActiveTool("linker")
+				for lib in project.libraries:
+					lib = lib.replace("-", "_")
+					if lib not in libs_drawn:
+						builder += '\t{} [shape="diamond" color="#303030" style="filled" fillcolor="#D0D0D080"];\n'.format(lib)
+						libs_drawn.add(lib)
+					builder += '\t{} -> {} [color="{}" style="dotted" arrowhead="onormal"];\n'.format(project.name, lib, color)
 		builder += "}\n"
 		with open("depends.gv", "w") as f:
 			f.write(builder)
@@ -2807,8 +2974,27 @@ def _run( ):
 			log.LOG_BUILD("Wrote depends.png")
 		return
 
+	headerCacheFile = os.path.join(_shared_globals.cacheDirectory, "header_info.csbc")
+	if os.path.exists(headerCacheFile):
+		log.LOG_BUILD("Loading cache data...")
+		with open(headerCacheFile, "rb") as f:
+			_shared_globals.allheaders = pickle.load(f)
+		mtime = os.path.getmtime(headerCacheFile)
+		for header in _shared_globals.allheaders.keys():
+			if not header:
+				continue
+			try:
+				htime = os.path.getmtime(header)
+				if htime > mtime:
+					del _shared_globals.allheaders[header]
+			except:
+				del _shared_globals.allheaders[header]
+
 	for proj in _shared_globals.sortedProjects:
 		proj.prepareBuild( )
+
+	with open(headerCacheFile, "wb") as f:
+		pickle.dump(_shared_globals.allheaders, f, 2)
 
 	_utils.check_version( )
 
@@ -2822,7 +3008,7 @@ def _run( ):
 
 	if args.gui:
 		_shared_globals.autoCloseGui = args.auto_close_gui
-		from csbuild import _gui
+		from . import _gui
 		global _guiModule
 		_guiModule = _gui
 
@@ -2863,8 +3049,6 @@ def _run( ):
 		for error in _shared_globals.errors[0:-1]:
 			log.LOG_ERROR( error )
 
-	_barWriter.stop( )
-
 	if not _shared_globals.build_success:
 		Exit( 1 )
 	else:
@@ -2878,7 +3062,6 @@ try:
 	_run( )
 	Exit( 0 )
 except Exception as e:
-	_barWriter.stop( )
 	if not imp.lock_held():
 		imp.acquire_lock()
 	raise

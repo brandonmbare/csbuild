@@ -27,10 +27,11 @@ import shlex
 import subprocess
 import re
 import sys
-from csbuild import _shared_globals
-from csbuild import toolchain
+import platform
+from . import _shared_globals
+from . import toolchain
 import csbuild
-from csbuild import log
+from . import log
 
 class gccBase( object ):
 	def __init__( self ):
@@ -390,6 +391,7 @@ class linker_gcc( gccBase, toolchain.linkerBase ):
 
 		self._actual_library_names = { }
 		self._setup = False
+		self._project_settings = None
 
 
 	def copy(self):
@@ -397,6 +399,7 @@ class linker_gcc( gccBase, toolchain.linkerBase ):
 		gccBase.copyTo(self, ret)
 		ret.strictOrdering = self.strictOrdering
 		ret._actual_library_names = dict(self._actual_library_names)
+		ret._project_settings = self._project_settings
 		return ret
 
 
@@ -406,6 +409,7 @@ class linker_gcc( gccBase, toolchain.linkerBase ):
 
 	def SetupForProject( self, project ):
 		self._include_lib64 = False
+		self._project_settings = project
 
 		# Only include lib64 if we're on a 64-bit platform and we haven't specified whether to build a 64bit or 32bit
 		# binary or if we're explicitly told to build a 64bit binary.
@@ -413,10 +417,15 @@ class linker_gcc( gccBase, toolchain.linkerBase ):
 			self._include_lib64 = True
 
 	def get_library_arg(self, lib):
-		if lib in self._actual_library_names:
-			return "-l:{} ".format( self._actual_library_names[lib] )
-		else:
-			return "-l{} ".format(lib)
+		for depend in self._project_settings.reconciledLinkDepends:
+			dependProj = _shared_globals.projects[depend]
+			if dependProj.type == csbuild.ProjectType.Application:
+				continue
+			dependLibName = dependProj.output_name
+			splitName = os.path.splitext(dependLibName)[0]
+			if ( splitName == lib or splitName == "lib{}".format( lib ) ):
+				return '-l:{} '.format( dependLibName )
+		return "-l:{} ".format( self._actual_library_names[lib] )
 
 	def get_libraries( self, libraries ):
 		"""Returns a string containing all of the passed libraries, formatted to be passed to gcc/g++."""
@@ -461,6 +470,21 @@ class linker_gcc( gccBase, toolchain.linkerBase ):
 
 	def get_link_command( self, project, outputFile, objList ):
 		self.SetupForProject( project )
+		linkFile = os.path.join(self._project_settings.csbuild_dir, "{}.cmd".format(self._project_settings.name))
+
+		data = " ".join( objList )
+		if sys.version_info >= (3, 0):
+			data = data.encode("utf-8")
+
+		file_mode = 438 # Octal 0666
+		flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+		if platform.system() == "Windows":
+			flags |= os.O_NOINHERIT
+		fd = os.open(linkFile, flags, file_mode)
+		os.write(fd, data)
+		os.fsync(fd)
+		os.close(fd)
+
 		if project.type == csbuild.ProjectType.StaticLibrary:
 			return "\"{}\" rcs {} {}".format( self._ar, outputFile, " ".join( objList ) )
 		else:
@@ -482,7 +506,7 @@ class linker_gcc( gccBase, toolchain.linkerBase ):
 				archArg,
 				"-pg " if project.profile else "",
 				outputFile,
-				" ".join( objList ),
+				"@{}".format(linkFile),
 				"-static-libgcc -static-libstdc++ " if project.static_runtime else "",
 				"-Wl,--no-as-needed -Wl,--start-group" if not self.strictOrdering else "",
 				self.get_libraries( project.libraries ),

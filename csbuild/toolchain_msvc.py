@@ -33,9 +33,9 @@ import re
 import subprocess
 import sys
 
-from csbuild import toolchain
-from csbuild import _shared_globals
-from csbuild import log
+from . import toolchain
+from . import _shared_globals
+from . import log
 import csbuild
 
 ### Reference: http://msdn.microsoft.com/en-us/library/f35ctcxw.aspx
@@ -397,7 +397,7 @@ class compiler_msvc( MsvcBase, toolchain.compilerBase ):
 		#This is safe to do because csbuild always creates C++ precompiled headers with a .hpp extension.
 		srcFile = os.path.join("{}.{}".format(split[0], "c" if split[1] == "h" else "cpp"))
 		file_mode = 438 # Octal 0666
-		fd = os.open(srcFile, os.O_WRONLY | os.O_CREAT | os.O_NOINHERIT, file_mode)
+		fd = os.open(srcFile, os.O_WRONLY | os.O_CREAT | os.O_NOINHERIT | os.O_TRUNC, file_mode)
 		data = "#include \"{}\"\n".format(input_file)
 		if sys.version_info >= (3, 0):
 			data = data.encode("utf-8")
@@ -592,13 +592,16 @@ class linker_msvc( MsvcBase, toolchain.linkerBase ):
 			self._project_settings.shared_libraries
 		):
 			found = False
-			for depend in self._project_settings.linkDepends:
-				if (
-					_shared_globals.projects[depend].output_name.startswith( lib ) or
-					_shared_globals.projects[depend].output_name.startswith( "lib{}.".format( lib ) )
-				):
+			for depend in self._project_settings.reconciledLinkDepends:
+				dependProj = _shared_globals.projects[depend]
+				if dependProj.type == csbuild.ProjectType.Application:
+					continue
+				dependLibName = dependProj.output_name
+				splitName = os.path.splitext(dependLibName)[0]
+				if ( splitName == lib or splitName == "lib{}".format( lib ) ):
 					found = True
-					args += '"{}" '.format( os.path.splitext(_shared_globals.projects[depend].output_name)[0] + ".lib" )
+					args += '"{}" '.format( dependLibName )
+					break
 			if not found:
 				args += '"{}" '.format( self._actual_library_names[lib] )
 
@@ -635,10 +638,22 @@ class linker_msvc( MsvcBase, toolchain.linkerBase ):
 
 
 	def getLinkerCommand( self, output_file, obj_list ):
+		linkFile = os.path.join(self._project_settings.csbuild_dir, "{}.cmd".format(self._project_settings.name))
+
+		file_mode = 438 # Octal 0666
+		fd = os.open(linkFile, os.O_WRONLY | os.O_CREAT | os.O_NOINHERIT | os.O_TRUNC, file_mode)
+
+		data = self._get_linker_args( output_file, obj_list )
+		if sys.version_info >= (3, 0):
+			data = data.encode("utf-8")
+		os.write(fd, data)
+		os.fsync(fd)
+		os.close(fd)
+
 		return "{}{}{}{}".format(
 			self._get_linker_exe( ),
 			"/NXCOMPAT /DYNAMICBASE " if self._project_settings.type != csbuild.ProjectType.StaticLibrary else "",
-			self._get_linker_args( output_file, obj_list ),
+			"@{}".format(linkFile),
 			" ".join( self._project_settings.linker_flags ) )
 
 
