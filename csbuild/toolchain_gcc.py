@@ -207,6 +207,16 @@ class compiler_gcc( gccBase, toolchain.compilerBase ):
 		self.warnFlags = []
 		self.cppStandard = ""
 		self.cStandard = ""
+		self.frameworks = set()
+		self.frameworkDirs = set()
+
+
+	def AddFrameworkDirectory(self, directory):
+		self.frameworkDirs.add(directory)
+
+
+	def AddFramework(self, framework):
+		self.frameworks.add(framework)
 
 
 	def copy(self):
@@ -225,6 +235,22 @@ class compiler_gcc( gccBase, toolchain.compilerBase ):
 		ret = ""
 		for flag in warnFlags:
 			ret += "-W{} ".format( flag )
+		return ret
+
+
+	def _getFrameworkDirectories(self):
+		ret = ""
+		if platform.system() == "Darwin":
+			for directory in self.frameworkDirs:
+				ret += "-F{} ".format(directory)
+		return ret
+
+
+	def _getFrameworks(self):
+		ret = ""
+		if platform.system() == "Darwin":
+			for framework in self.frameworks:
+				ret += "-framework {} ".format(framework)
 		return ret
 
 
@@ -276,10 +302,12 @@ class compiler_gcc( gccBase, toolchain.compilerBase ):
 			log.LOG_ERROR("Architecture {} is not natively supported by GCC toolchain. Cross-compiling must be implemented by the makefile.")
 			archArg = ""
 
-		return "\"{}\" {}{} -Winvalid-pch -c {}{} -O{} {}{}{} {}".format(
+		return "\"{}\" {}{} -Winvalid-pch -c {}{}{}{} -O{} {}{}{} {}".format(
 			compiler,
 			archArg,
 			exitcodes,
+		    self._getFrameworkDirectories(),
+		    self._getFrameworks(),
 			self.get_defines( project.defines, project.undefines ),
 			"-g" if project.debug_level != csbuild.DebugLevel.Disabled else "",
 			self._getOptFlag(project.opt_level),
