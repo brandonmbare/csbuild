@@ -106,6 +106,9 @@ class MsvcBase( object ):
 	def GetValidArchitectures(self):
 		return ['x86', 'x64']
 
+	def GetMsvcBinPath(self):
+		return self._bin_path
+
 	def SetupForProject( self, project ):
 		platform_architectures = {
 			"amd64": X64,
