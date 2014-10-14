@@ -207,16 +207,21 @@ class compiler_gcc( gccBase, toolchain.compilerBase ):
 		self.warnFlags = []
 		self.cppStandard = ""
 		self.cStandard = ""
-		self.frameworks = set()
-		self.frameworkDirs = set()
+		self.objcAbiVersion = None
+
+		if platform.system() == "Darwin":
+			#TODO: Find the best SDK available instead of hardcoding one.
+			self.sysroot = "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.9.sdk"
+		else:
+			self.sysroot = "/"
 
 
-	def AddFrameworkDirectory(self, directory):
-		self.frameworkDirs.add(directory)
+	def SetObjcAbiVersion(self, version):
+		self.objcAbiVersion = version
 
 
-	def AddFramework(self, framework):
-		self.frameworks.add(framework)
+	def SetSysRoot(self, sysroot):
+		self.sysroot = sysroot
 
 
 	def copy(self):
@@ -238,20 +243,8 @@ class compiler_gcc( gccBase, toolchain.compilerBase ):
 		return ret
 
 
-	def _getFrameworkDirectories(self):
-		ret = ""
-		if platform.system() == "Darwin":
-			for directory in self.frameworkDirs:
-				ret += "-F{} ".format(directory)
-		return ret
-
-
-	def _getFrameworks(self):
-		ret = ""
-		if platform.system() == "Darwin":
-			for framework in self.frameworks:
-				ret += "-framework {} ".format(framework)
-		return ret
+	def _getObjcAbiVersion(self):
+		return "--fobjc-abi-version={}".format(self.objcAbiVersion) if self.objcAbiVersion else ""
 
 
 	def get_defines( self, defines, undefines ):
@@ -272,6 +265,7 @@ class compiler_gcc( gccBase, toolchain.compilerBase ):
 		ret += "-I/usr/include -I/usr/local/include "
 		return ret
 
+
 	def _getOptFlag(self, optLevel):
 		if optLevel == csbuild.OptimizationLevel.Max:
 			return "3"
@@ -281,6 +275,7 @@ class compiler_gcc( gccBase, toolchain.compilerBase ):
 			return "s"
 		else:
 			return "0"
+
 
 	def get_base_command( self, compiler, project, isCpp ):
 		exitcodes = ""
@@ -302,12 +297,12 @@ class compiler_gcc( gccBase, toolchain.compilerBase ):
 			log.LOG_ERROR("Architecture {} is not natively supported by GCC toolchain. Cross-compiling must be implemented by the makefile.")
 			archArg = ""
 
-		return "\"{}\" {}{} -Winvalid-pch -c {}{}{}{} -O{} {}{}{} {}".format(
+		return "\"{}\" {}{} -Winvalid-pch -c -isysroot=\"{}\" {}{}{} -O{} {}{}{} {}".format(
 			compiler,
 			archArg,
 			exitcodes,
-		    self._getFrameworkDirectories(),
-		    self._getFrameworks(),
+			self.sysroot,
+			self._getObjcAbiVersion(),
 			self.get_defines( project.defines, project.undefines ),
 			"-g" if project.debug_level != csbuild.DebugLevel.Disabled else "",
 			self._getOptFlag(project.opt_level),
@@ -374,6 +369,7 @@ class compiler_gcc( gccBase, toolchain.compilerBase ):
 	def get_pch_file( self, fileName ):
 		return fileName + ".gch"
 
+
 	def WarnFlags( self, *args ):
 		"""
 		Sets warn flags to be passed to the compiler.
@@ -408,6 +404,7 @@ class compiler_gcc( gccBase, toolchain.compilerBase ):
 		"""
 		self.cStandard = s
 
+
 class linker_gcc( gccBase, toolchain.linkerBase ):
 	def __init__( self ):
 		gccBase.__init__(self)
@@ -420,6 +417,31 @@ class linker_gcc( gccBase, toolchain.linkerBase ):
 		self._actual_library_names = { }
 		self._setup = False
 		self._project_settings = None
+
+		self.frameworks = set()
+		self.frameworkDirs = set()
+
+
+	def AddFrameworkDirectory(self, directory):
+		self.frameworkDirs.add(directory)
+
+
+	def AddFramework(self, framework):
+		self.frameworks.add(framework)
+
+
+	def _getFrameworkDirectories(self):
+		ret = ""
+		for directory in self.frameworkDirs:
+			ret += "-F{} ".format(directory)
+		return ret
+
+
+	def _getFrameworks(self):
+		ret = ""
+		for framework in self.frameworks:
+			ret += "-framework {} ".format(framework)
+		return ret
 
 
 	def copy(self):
@@ -529,9 +551,11 @@ class linker_gcc( gccBase, toolchain.linkerBase ):
 				log.LOG_ERROR("Architecture {} is not natively supported by GCC toolchain. Cross-compiling must be implemented by the makefile.")
 				archArg = ""
 
-			return "\"{}\" {}{}-o{} {} {} {} {}{}{} {} {}-g{} -O{} {} {}".format(
+			return "\"{}\" {}{}{}{}-o{} {} {} {} {}{}{} {} {}-g{} -O{} {} {}".format(
 				cmd,
 				archArg,
+				self._getFrameworkDirectories(),
+				self._getFrameworks(),
 				"-pg " if project.profile else "",
 				outputFile,
 				"@{}".format(linkFile),

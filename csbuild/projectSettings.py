@@ -502,11 +502,14 @@ class projectSettings( object ):
 		self.cExtensions = {".c"}
 		self.cppExtensions = {".cpp", ".cxx", ".cc", ".cp", ".c++"}
 		self.asmExtensions = {".s", ".asm"}
-		self.objcExtensions = {".m"}
-		self.objcppExtensions = {".mm"}
 		self.cHeaderExtensions = set()
 		self.cppHeaderExtensions = {".hpp", ".hxx", ".hh", ".hp", ".h++"}
 		self.ambiguousHeaderExtensions = {".h", ".inl"}
+
+		#TODO: Add proper Objective-C/C++ support for all platforms.
+		if platform.system() == "Darwin":
+			self.cExtensions.add(".m")
+			self.cppExtensions.add(".mm")
 
 		self.chunkMutexes = {}
 		self.chunkExcludes = set()
