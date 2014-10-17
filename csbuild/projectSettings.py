@@ -1437,6 +1437,12 @@ class projectSettings( object ):
 
 		extension = "." + chunk[0].rsplit(".", 1)[1]
 		newFileExtension = "." + newFile.rsplit(".", 1)[1]
+
+		#TODO: Remove this once the source file extension management has been reworked.
+		# Objective-C/C++ files should not be chunked since they won't play nice with C++.
+		if extension == ".m" or extension == ".mm":
+			return False
+
 		if(
 			(extension in self.cExtensions and newFileExtension in self.cppExtensions) or
 			(extension in self.cppExtensions and newFileExtension in self.cExtensions)
@@ -1533,6 +1539,16 @@ class projectSettings( object ):
 			if srcFile in chunk:
 				return _utils.get_chunk_name( self.output_name, chunk )
 		return None
+
+
+	def ContainsChunk( self, inputChunkFile ):
+		# This logic really sucks and needs to be improved.
+		inputChunkFile = os.path.splitext( os.path.basename( inputChunkFile ) )[0]
+		for chunk in self.chunks:
+			chunkName = _utils.get_chunk_name( self.output_name, chunk )
+			if inputChunkFile == chunkName:
+				return True
+		return False
 
 
 	def save_md5( self, inFile ):

@@ -462,7 +462,7 @@ class threaded_build( threading.Thread ):
 def base_names( l ):
 	ret = []
 	for srcFile in l:
-		ret.append( os.path.basename( srcFile ).split( "." )[0] )
+		ret.append( os.path.basename( srcFile ) )
 	return ret
 
 
@@ -850,8 +850,11 @@ def GetChunkedObjPath(project, chunk):
 	))
 
 
-def GetSourceObjPath(project, source):
-	objSubPath = os.path.dirname(os.path.relpath(os.path.abspath(source), project.workingDirectory))
+def GetSourceObjPath(project, source, sourceIsChunkPath=False):
+	if not sourceIsChunkPath:
+		objSubPath = os.path.dirname(os.path.relpath(os.path.abspath(source), project.workingDirectory))
+	else:
+		objSubPath = ""
 	return os.path.join(project.obj_dir, objSubPath, "{}_{}{}".format(
 		os.path.basename( source ).split( '.' )[0],
 		project.targetName,

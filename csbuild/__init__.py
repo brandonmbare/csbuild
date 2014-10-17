@@ -1500,7 +1500,7 @@ def build( ):
 						)
 
 					built = True
-					obj = _utils.GetSourceObjPath(projectSettings.currentProject, chunk)
+					obj = _utils.GetSourceObjPath(projectSettings.currentProject, chunk, sourceIsChunkPath=projectSettings.currentProject.ContainsChunk(chunk))
 					if not _shared_globals.semaphore.acquire( False ):
 						if _shared_globals.max_threads != 1:
 							log.LOG_INFO( "Waiting for a build thread to become available..." )
@@ -1953,7 +1953,7 @@ def linkThreadLoop():
 								break
 						if not okToLink:
 							break
-				
+
 				if okToLink:
 					with linkThreadMutex:
 						currentLinkThreads.add(project.key)
@@ -2633,7 +2633,7 @@ def _run( ):
 	if args.linker_jobs:
 		_shared_globals.max_linker_threads = max(args.linker_jobs, _shared_globals.max_threads)
 		_shared_globals.link_semaphore = threading.BoundedSemaphore( value = _shared_globals.max_linker_threads )
-	
+
 	_shared_globals.profile = args.profile
 	_shared_globals.disable_chunks = args.no_chunks
 	_shared_globals.disable_precompile = args.no_precompile or args.profile
@@ -2992,7 +2992,7 @@ def _run( ):
 		_shared_globals.projects = newProjList
 
 	_shared_globals.sortedProjects = _utils.sortProjects( _shared_globals.projects )
-		
+
 	if args.dg:
 		builder = 'digraph G {\n\tlayout="neato";\n\toverlap="false";\n\tsplines="spline"\n'
 		colors = [
