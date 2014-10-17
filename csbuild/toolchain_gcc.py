@@ -36,12 +36,37 @@ from . import log
 class gccBase( object ):
 	def __init__( self ):
 		self.isClang = False
+		self._objcAbiVersion = None
+
+		if platform.system() == "Darwin":
+			#TODO: Find the best SDK available instead of hardcoding one.
+			self._sysroot = "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.9.sdk"
+		else:
+			self._sysroot = "/"
 
 	def copyTo(self, other):
 		other.isClang = self.isClang
+		other._objcAbiVersion = self._objcAbiVersion
+		other._sysroot = self._sysroot
 
 	def GetValidArchitectures(self):
 		return ['x86', 'x64']
+
+	def SetObjcAbiVersion(self, version):
+		self._objcAbiVersion = version
+
+	def _getObjcAbiVersion(self):
+		return "-fobjc-abi-version={} ".format(self._objcAbiVersion) if self._objcAbiVersion else ""
+
+	def _getArchFlag(self, project):
+		archArg = ""
+		if project.outputArchitecture == 'x86':
+			archArg = "-m32 "
+		elif project.outputArchitecture == 'x64':
+			archArg = "-m64 "
+		else:
+			log.LOG_ERROR("Architecture {} is not natively supported by GCC toolchain. Cross-compiling must be implemented by the makefile.")
+		return archArg
 
 	def parseClangOutput(self, outputStr):
 		command = re.compile("^clang(\\+\\+)?: +(fatal +)?(warning|error|note): (.*)$")
@@ -207,21 +232,6 @@ class compiler_gcc( gccBase, toolchain.compilerBase ):
 		self.warnFlags = []
 		self.cppStandard = ""
 		self.cStandard = ""
-		self.objcAbiVersion = None
-
-		if platform.system() == "Darwin":
-			#TODO: Find the best SDK available instead of hardcoding one.
-			self.sysroot = "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.9.sdk"
-		else:
-			self.sysroot = "/"
-
-
-	def SetObjcAbiVersion(self, version):
-		self.objcAbiVersion = version
-
-
-	def SetSysRoot(self, sysroot):
-		self.sysroot = sysroot
 
 
 	def copy(self):
@@ -241,10 +251,6 @@ class compiler_gcc( gccBase, toolchain.compilerBase ):
 		for flag in warnFlags:
 			ret += "-W{} ".format( flag )
 		return ret
-
-
-	def _getObjcAbiVersion(self):
-		return "--fobjc-abi-version={}".format(self.objcAbiVersion) if self.objcAbiVersion else ""
 
 
 	def get_defines( self, defines, undefines ):
@@ -289,19 +295,13 @@ class compiler_gcc( gccBase, toolchain.compilerBase ):
 		else:
 			standard = self.cStandard
 
-		if project.outputArchitecture == 'x86':
-			archArg = "-m32 "
-		elif project.outputArchitecture == 'x64':
-			archArg = "-m64 "
-		else:
-			log.LOG_ERROR("Architecture {} is not natively supported by GCC toolchain. Cross-compiling must be implemented by the makefile.")
-			archArg = ""
+		archArg = self._getArchFlag(project)
 
-		return "\"{}\" {}{} -Winvalid-pch -c -isysroot=\"{}\" {}{}{} -O{} {}{}{} {}".format(
+		return "\"{}\" {}{} -Winvalid-pch -c -isysroot \"{}\" {}{}{} -O{} {}{}{} {}".format(
 			compiler,
 			archArg,
 			exitcodes,
-			self.sysroot,
+			self._sysroot,
 			self._getObjcAbiVersion(),
 			self.get_defines( project.defines, project.undefines ),
 			"-g" if project.debug_level != csbuild.DebugLevel.Disabled else "",
@@ -418,30 +418,8 @@ class linker_gcc( gccBase, toolchain.linkerBase ):
 		self._setup = False
 		self._project_settings = None
 
-		self.frameworks = set()
-		self.frameworkDirs = set()
-
-
-	def AddFrameworkDirectory(self, directory):
-		self.frameworkDirs.add(directory)
-
-
-	def AddFramework(self, framework):
-		self.frameworks.add(framework)
-
-
-	def _getFrameworkDirectories(self):
-		ret = ""
-		for directory in self.frameworkDirs:
-			ret += "-F{} ".format(directory)
-		return ret
-
-
-	def _getFrameworks(self):
-		ret = ""
-		for framework in self.frameworks:
-			ret += "-framework {} ".format(framework)
-		return ret
+		self._frameworks = set()
+		self._frameworkDirs = set()
 
 
 	def copy(self):
@@ -450,6 +428,30 @@ class linker_gcc( gccBase, toolchain.linkerBase ):
 		ret.strictOrdering = self.strictOrdering
 		ret._actual_library_names = dict(self._actual_library_names)
 		ret._project_settings = self._project_settings
+		ret._frameworkDirs = self._frameworkDirs
+		ret._frameworks = self._frameworks
+		return ret
+
+
+	def AddFrameworkDirectory(self, directory):
+		self._frameworkDirs.add(directory)
+
+
+	def AddFramework(self, framework):
+		self._frameworks.add(framework)
+
+
+	def _getFrameworkDirectories(self, project):
+		ret = ""
+		for directory in project.frameworkDirs:
+			ret += "-F{} ".format(directory)
+		return ret
+
+
+	def _getFrameworks(self, project):
+		ret = ""
+		for framework in project.frameworks:
+			ret += "-framework {} ".format(framework)
 		return ret
 
 
@@ -518,6 +520,20 @@ class linker_gcc( gccBase, toolchain.linkerBase ):
 		return ret
 
 
+	def _getStartGroupFlags(self):
+		if platform.system() == "Darwin":
+			# OSX doesn't support the start/end group flags.
+			return ""
+		return "-Wl,--no-as-needed -Wl,--start-group"
+
+
+	def _getEndGroupFlags(self):
+		if platform.system() == "Darwin":
+			# OSX doesn't support he start/end group flags.
+			return ""
+		return "-Wl,--end-group"
+
+
 	def get_link_command( self, project, outputFile, objList ):
 		self.SetupForProject( project )
 		linkFile = os.path.join(self._project_settings.csbuild_dir, "{}.cmd".format(self._project_settings.name))
@@ -543,28 +559,24 @@ class linker_gcc( gccBase, toolchain.linkerBase ):
 			else:
 				cmd = project.cc
 
-			if project.outputArchitecture == 'x86':
-				archArg = "-m32 "
-			elif project.outputArchitecture == 'x64':
-				archArg = "-m64 "
-			else:
-				log.LOG_ERROR("Architecture {} is not natively supported by GCC toolchain. Cross-compiling must be implemented by the makefile.")
-				archArg = ""
+			archArg = self._getArchFlag(project)
 
-			return "\"{}\" {}{}{}{}-o{} {} {} {} {}{}{} {} {}-g{} -O{} {} {}".format(
+			return "\"{}\" -isysroot \"{}\" {}{}{}{}{}-o{} {} {} {} {}{}{} {} {}-g{} -O{} {} {}".format(
 				cmd,
+				self._sysroot,
+				self._getObjcAbiVersion(),
 				archArg,
-				self._getFrameworkDirectories(),
-				self._getFrameworks(),
+				self._getFrameworkDirectories(project),
+				self._getFrameworks(project),
 				"-pg " if project.profile else "",
 				outputFile,
 				"@{}".format(linkFile),
 				"-static-libgcc -static-libstdc++ " if project.static_runtime else "",
-				"-Wl,--no-as-needed -Wl,--start-group" if not self.strictOrdering else "",
+				"{}".format(self._getStartGroupFlags()) if not self.strictOrdering else "",
 				self.get_libraries( project.libraries ),
 				self.get_static_libraries( project.static_libraries ),
 				self.get_shared_libraries( project.shared_libraries ),
-				"-Wl,--end-group" if not self.strictOrdering else "",
+				"{}".format(self._getEndGroupFlags()) if not self.strictOrdering else "",
 				self.get_library_dirs( project.library_dirs, True ),
 				project.debug_level,
 				project.opt_level,
@@ -646,7 +658,12 @@ class linker_gcc( gccBase, toolchain.linkerBase ):
 		elif projectType == csbuild.ProjectType.StaticLibrary:
 			return ".a"
 		elif projectType == csbuild.ProjectType.SharedLibrary:
-			return ".so"
+			if platform.system() == "Darwin":
+				return ".dylib"
+			elif platform.system() == "Windows":
+				return ".dll"
+			else:
+				return ".so"
 
 
 	def EnableStrictOrdering( self ):

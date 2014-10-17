@@ -840,3 +840,27 @@ def get_chunk_name( projectName, chunk ):
 		projectName.split( '.' )[0],
 		hashlib.md5( chunk_names ).hexdigest()
 	)
+
+
+def GetChunkedObjPath(project, chunk):
+	return os.path.join(project.obj_dir, "{}_{}{}".format(
+		get_chunk_name( project.output_name, chunk),
+		project.targetName,
+		project.activeToolchain.Compiler().get_obj_ext()
+	))
+
+
+def GetSourceObjPath(project, source):
+	objSubPath = os.path.dirname(os.path.relpath(os.path.abspath(source), project.workingDirectory))
+	return os.path.join(project.obj_dir, objSubPath, "{}_{}{}".format(
+		os.path.basename( source ).split( '.' )[0],
+		project.targetName,
+		project.activeToolchain.Compiler().get_obj_ext() ) )
+
+
+def GetUnityChunkObjPath(project):
+	return os.path.join(project.obj_dir, "{}_unity_{}{}".format(
+		project.output_name,
+		project.targetName,
+		project.activeToolchain.Compiler().get_obj_ext()
+	))

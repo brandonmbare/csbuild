@@ -112,6 +112,7 @@ from . import toolchain
 from . import toolchain_msvc
 from . import toolchain_gcc
 from . import toolchain_android
+from . import toolchain_ios
 from . import log
 from . import _shared_globals
 from . import projectSettings
@@ -258,6 +259,16 @@ def SharedLibraries( *args ):
 	projectSettings.currentProject.shared_libraries |= set( args )
 
 
+def AddFrameworks( *args ):
+	"""
+	Add frameworks for Objective-C/C++ compilations.
+
+	@type args: an arbitrary number of strings
+	@param args: The list of libraries to link in.
+	"""
+	projectSettings.currentProject.frameworks |= set( args )
+
+
 def IncludeDirs( *args ):
 	"""
 	Search the given directories for include headers. This may be called multiple times to add additional directories.
@@ -288,6 +299,19 @@ def LibDirs( *args ):
 	for arg in args:
 		arg = os.path.abspath( arg )
 		projectSettings.currentProject.library_dirs.append( arg )
+
+
+def AddFrameworkDirs( *args ):
+	"""
+	Search the given directories for framworks to link. This may be called multiple times to add additional directories.
+	Directories are relative to the location of the script itself, not the specified project working directory.
+
+	@type args: an arbitrary number of strings
+	@param args: The list of directories to be searched.
+	"""
+	for arg in args:
+		arg = os.path.abspath( arg )
+		projectSettings.currentProject.frameworkDirs.add( arg )
 
 
 def ClearLibraries( ):
@@ -1461,9 +1485,6 @@ def build( ):
 			project.startTime = time.time()
 
 			if project.precompile_headers( ):
-				if not os.access(projectSettings.currentProject.obj_dir , os.F_OK):
-					os.makedirs( projectSettings.currentProject.obj_dir )
-
 				for chunk in projectSettings.currentProject.final_chunk_set:
 					#not set until here because final_chunk_set may be empty.
 					project.built_something = True
@@ -1479,9 +1500,7 @@ def build( ):
 						)
 
 					built = True
-					obj = os.path.join(projectSettings.currentProject.obj_dir, "{}_{}{}".format(
-						os.path.basename( chunk ).split( '.' )[0],
-						project.targetName, project.activeToolchain.Compiler().get_obj_ext() ) )
+					obj = _utils.GetSourceObjPath(projectSettings.currentProject, chunk)
 					if not _shared_globals.semaphore.acquire( False ):
 						if _shared_globals.max_threads != 1:
 							log.LOG_INFO( "Waiting for a build thread to become available..." )
@@ -1655,6 +1674,7 @@ def link( project, *objs ):
 		linkQueue.append( (project, list(objs)) )
 		linkCond.notify()
 
+
 def performLink(project, objs):
 	project.linkStart = time.time()
 
@@ -1674,32 +1694,22 @@ def performLink(project, objs):
 	if not objs:
 		for chunk in project.chunks:
 			if not project.unity:
-				obj = os.path.join(project.obj_dir, "{}_{}{}".format(
-					_utils.get_chunk_name( project.output_name, chunk ),
-					project.targetName,
-					project.activeToolchain.Compiler().get_obj_ext()
-				))
+				obj = _utils.GetChunkedObjPath(project, chunk)
 			else:
-				obj = os.path.join(project.obj_dir, "{}_unity_{}{}".format(
-					project.output_name,
-					project.targetName,
-					project.activeToolchain.Compiler().get_obj_ext()
-				))
+				obj = _utils.GetUnityChunkObjPath(project)
 			if project.use_chunks and not _shared_globals.disable_chunks and os.access(obj , os.F_OK):
 				objs.append( obj )
 			else:
 				if type( chunk ) == list:
 					for source in chunk:
-						obj = os.path.join(project.obj_dir, "{}_{}{}".format( os.path.basename( source ).split( '.' )[0],
-							project.targetName, project.activeToolchain.Compiler().get_obj_ext() ) )
+						obj = _utils.GetSourceObjPath(project, source)
 						if os.access(obj , os.F_OK):
 							objs.append( obj )
 						else:
 							log.LOG_ERROR( "Could not find {} for linking. Something went wrong here.".format(obj) )
 							return LinkStatus.Fail
 				else:
-					obj = os.path.join(project.obj_dir, "{}_{}{}".format( os.path.basename( chunk ).split( '.' )[0],
-						project.targetName, project.activeToolchain.Compiler().get_obj_ext() ) )
+					obj = _utils.GetSourceObjPath(project, chunk)
 					if os.access(obj , os.F_OK):
 						objs.append( obj )
 					else:
@@ -1766,32 +1776,22 @@ def performLink(project, objs):
 		if proj.type == ProjectType.StaticLibrary and project.linkMode == StaticLinkMode.LinkIntermediateObjects:
 			for chunk in proj.chunks:
 				if not proj.unity:
-					obj = os.path.join(proj.obj_dir, "{}_{}{}".format(
-						_utils.get_chunk_name( proj.output_name, chunk ),
-						proj.targetName,
-						proj.activeToolchain.Compiler().get_obj_ext()
-					))
+					obj = _utils.GetChunkedObjPath(proj, chunk)
 				else:
-					obj = os.path.join(proj.obj_dir, "{}_unity_{}{}".format(
-						proj.output_name,
-						proj.targetName,
-						proj.activeToolchain.Compiler().get_obj_ext()
-					))
+					obj = _utils.GetUnityChunkObjPath(proj)
 				if proj.use_chunks and not _shared_globals.disable_chunks and os.access(obj , os.F_OK):
 					objs.append( obj )
 				else:
 					if type( chunk ) == list:
 						for source in chunk:
-							obj = os.path.join(proj.obj_dir, "{}_{}{}".format( os.path.basename( source ).split( '.' )[0],
-								proj.targetName, proj.activeToolchain.Compiler().get_obj_ext() ) )
+							obj = _utils.GetSourceObjPath(proj, source)
 							if os.access(obj , os.F_OK):
 								objs.append( obj )
 							else:
 								log.LOG_ERROR( "Could not find {} for linking. Something went wrong here.".format(obj) )
 								return LinkStatus.Fail
 					else:
-						obj = os.path.join(proj.obj_dir, "{}_{}{}".format( os.path.basename( chunk ).split( '.' )[0],
-							proj.targetName, proj.activeToolchain.Compiler().get_obj_ext() ) )
+						obj = _utils.GetSourceObjPath(proj, chunk)
 						if os.access(obj , os.F_OK):
 							objs.append( obj )
 						else:
@@ -1980,17 +1980,9 @@ def clean( silent = False ):
 		# Delete any chunks in the current project.
 		for chunk in project.chunks:
 			if not project.unity:
-				obj = os.path.join(project.obj_dir, "{}_{}{}".format(
-					_utils.get_chunk_name( project.output_name, chunk ),
-					project.targetName,
-					project.activeToolchain.Compiler().get_obj_ext()
-				))
+				obj = _utils.GetChunkedObjPath(project, chunk)
 			else:
-				obj = os.path.join(project.obj_dir, "{}_unity_{}{}".format(
-					project.output_name,
-					project.targetName,
-					project.activeToolchain.Compiler().get_obj_ext()
-				))
+				obj = _utils.GetUnityChunkObjPath(project)
 			if os.access(obj , os.F_OK):
 				if not silent:
 					log.LOG_INFO( "Deleting {0}".format( obj ) )
@@ -1998,8 +1990,7 @@ def clean( silent = False ):
 
 		# Individual source files may not be in the chunks list, so we're gonna play it safe and delete any single source file objects that may exist.
 		for source in project.sources:
-			obj = os.path.join( project.obj_dir, "{}_{}{}".format(  os.path.basename( source ).split( '.' )[0],
-				project.targetName, project.activeToolchain.Compiler().get_obj_ext() ) )
+			obj = _utils.GetSourceObjPath(project, source)
 			if os.access(obj , os.F_OK):
 				if not silent:
 					log.LOG_INFO( "Deleting {0}".format( obj ) )
@@ -2178,6 +2169,7 @@ def _setupdefaults( ):
 	RegisterToolchain( "gcc", toolchain_gcc.compiler_gcc, toolchain_gcc.linker_gcc )
 	RegisterToolchain( "msvc", toolchain_msvc.compiler_msvc, toolchain_msvc.linker_msvc )
 	RegisterToolchain( "android", toolchain_android.AndroidCompiler, toolchain_android.AndroidLinker )
+	RegisterToolchain( "ios", toolchain_ios.iOSCompiler, toolchain_ios.iOSLinker )
 
 	RegisterProjectGenerator( "qtcreator", project_generator_qtcreator.project_generator_qtcreator )
 	RegisterProjectGenerator( "slickedit", project_generator_slickedit.project_generator_slickedit )

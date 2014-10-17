@@ -385,8 +385,10 @@ class projectSettings( object ):
 		self.libraries = set()
 		self.static_libraries = set()
 		self.shared_libraries = set()
+		self.frameworks = set()
 		self.include_dirs = []
 		self.library_dirs = []
+		self.frameworkDirs = set()
 
 		self.opt_level = csbuild.OptimizationLevel.Disabled
 		self.debug_level = csbuild.DebugLevel.Disabled
@@ -590,6 +592,8 @@ class projectSettings( object ):
 
 		self.activeToolchain.SetActiveTool("linker")
 		self.output_dir = os.path.abspath( self.output_dir ).format(project=self)
+
+		# Create the executable/library output directory if it doesn't exist.
 		if not os.access(self.output_dir, os.F_OK):
 			os.makedirs(self.output_dir)
 
@@ -654,6 +658,14 @@ class projectSettings( object ):
 
 		if not os.access(self.csbuild_dir , os.F_OK):
 			os.makedirs( self.csbuild_dir )
+
+		# Walk the source directory and construct the paths to each possible intermediate object file.
+		# Make sure the paths exist, and if they don't, create them.
+		for root, _, _ in os.walk(self.workingDirectory):
+			tempFilename = os.path.join(root, "not_a_real.file")
+			objFilePath = os.path.dirname(_utils.GetSourceObjPath(self, tempFilename))
+			if not os.access(objFilePath, os.F_OK):
+				os.makedirs(objFilePath)
 
 		for item in self.fileOverrideSettings.items():
 			item[1].activeToolchain = item[1].toolchains[self.activeToolchainName]
@@ -815,8 +827,10 @@ class projectSettings( object ):
 			"libraries": set( self.libraries ),
 			"static_libraries": set( self.static_libraries ),
 			"shared_libraries": set( self.shared_libraries ),
+			"frameworks": set( self.frameworks ),
 			"include_dirs": list( self.include_dirs ),
 			"library_dirs": list( self.library_dirs ),
+			"frameworkDirs": set( self.frameworkDirs ),
 			"opt_level": self.opt_level,
 			"debug_level": self.debug_level,
 			"defines": list( self.defines ),
