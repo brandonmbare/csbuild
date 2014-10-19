@@ -662,6 +662,9 @@ class projectSettings( object ):
 		# Walk the source directory and construct the paths to each possible intermediate object file.
 		# Make sure the paths exist, and if they don't, create them.
 		for root, _, _ in os.walk(self.workingDirectory):
+			# Exclude the intermediate and output paths in case they're in the working directory.
+			if ".csbuild" in root or self.output_dir in root or self.obj_dir in root:
+				continue
 			tempFilename = os.path.join(root, "not_a_real.file")
 			objFilePath = os.path.dirname(_utils.GetSourceObjPath(self, tempFilename))
 			if not os.access(objFilePath, os.F_OK):
@@ -1008,7 +1011,7 @@ class projectSettings( object ):
 					if absroot != self.csbuild_dir:
 						log.LOG_INFO( "Skipping dir {0}".format( root ) )
 					continue
-				if ".csbuild" in root:
+				if ".csbuild" in root or self.obj_dir in root or self.output_dir in root:
 					continue
 				if absroot == self.csbuild_dir or absroot.startswith( self.csbuild_dir ):
 					continue
