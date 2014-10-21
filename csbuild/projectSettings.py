@@ -919,8 +919,12 @@ class projectSettings( object ):
 
 				self._finalizedSettings[tool][name] = base["obj"]
 		self.activeToolchain.SetActiveTool("linker")
-		self.GetAttr = types.MethodType(projectSettings.GetAttrNext, self, projectSettings)
-		self.SetAttr = types.MethodType(projectSettings.SetAttrNext, self, projectSettings)
+		if sys.version_info >= (3,0):
+			self.GetAttr = types.MethodType(projectSettings.GetAttrNext, self)
+			self.SetAttr = types.MethodType(projectSettings.SetAttrNext, self)
+		else:
+			self.GetAttr = types.MethodType(projectSettings.GetAttrNext, self, projectSettings)
+			self.SetAttr = types.MethodType(projectSettings.SetAttrNext, self, projectSettings)
 
 
 	def finalizeSettings2(self):
