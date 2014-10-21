@@ -19,20 +19,20 @@
 # SOFTWARE.
 
 """
-B{ProjectSettings module}
+**ProjectSettings module**
 
 Defines the projectSettings class.
 
-@var currentProject: The current project being built. Note that if this is accessed outside of an @project
+:var currentProject: The current project being built. Note that if this is accessed outside of an @project
 block, the project returned will only be a temporary variable that will not be valid for compilation
-@type currentProject: projectSettings
+:type currentProject: projectSettings
 
-@var rootGroup: This is the top-level project group that all projects and project groups fall under.
+:var rootGroup: This is the top-level project group that all projects and project groups fall under.
 It has no name and is NOT itself a valid or "real" group.
-@type rootGroup: ProjectGroup
+:type rootGroup: ProjectGroup
 
-@var currentGroup: The current group that's being populated
-@type currentGroup: ProjectGroup
+:var currentGroup: The current group that's being populated
+:type currentGroup: ProjectGroup
 """
 
 import csbuild
@@ -48,308 +48,293 @@ import platform
 import glob
 import itertools
 import threading
+import types
 
 from . import log
 from . import _shared_globals
 from . import _utils
+from . import toolchain
 
 class projectSettings( object ):
 	"""
 	Contains settings for the project
 
-	@ivar name: The project's name
-	@type name: str
+	:ivar name: The project's name
+	:type name: str
 
-	@ivar key: A unique key made by combining project name and target
-	@type key: str
+	:ivar key: A unique key made by combining project name and target
+	:type key: str
 
-	@ivar workingDirectory: The directory containing all of the project's files
-	@type workingDirectory: str
+	:ivar workingDirectory: The directory containing all of the project's files
+	:type workingDirectory: str
 
-	@ivar linkDepends: The projects that this one depends on for linking
-	@type linkDepends: list[str]
+	:ivar linkDepends: The projects that this one depends on for linking
+	:type linkDepends: list[str]
 
-	@ivar srcDepends: The projects that this one depends on for compiling
-	@type srcDepends: str
+	:ivar srcDepends: The projects that this one depends on for compiling
+	:type srcDepends: str
 
-	@ivar func: The project's settings function - the function wrapped in the @project decorator
-	@type func: function
+	:ivar func: The project's settings function - the function wrapped in the @project decorator
+	:type func: function
 
-	@ivar libraries: The libraries the project will link against
-	@type libraries: list[str]
+	:ivar libraries: The libraries the project will link against
+	:type libraries: list[str]
 
-	@ivar static_libraries: The libraries the project will forcibly statically link against
-	@type static_libraries: list[str]
+	:ivar static_libraries: The libraries the project will forcibly statically link against
+	:type static_libraries: list[str]
 
-	@ivar shared_libraries: The libraries the project will forcibly statically link against
-	@type shared_libraries: list[str]
+	:ivar shared_libraries: The libraries the project will forcibly statically link against
+	:type shared_libraries: list[str]
 
-	@ivar include_dirs: Directories to search for included headers in
-	@type include_dirs: list[str]
+	:ivar include_dirs: Directories to search for included headers in
+	:type include_dirs: list[str]
 
-	@ivar library_dirs: Directories to search for libraries in
-	@type library_dirs: list[str]
+	:ivar library_dirs: Directories to search for libraries in
+	:type library_dirs: list[str]
 
-	@ivar opt_level: Optimization level for this project
-	@type opt_level: csbuild.OptimizationLevel
+	:ivar opt_level: Optimization level for this project
+	:type opt_level: csbuild.OptimizationLevel
 
-	@ivar debug_level: Debug level for this project
-	@type debug_level: csbuild.DebugLevel
+	:ivar debug_level: Debug level for this project
+	:type debug_level: csbuild.DebugLevel
 
-	@ivar defines: #define declarations for this project
-	@type defines: list[str]
+	:ivar defines: #define declarations for this project
+	:type defines: list[str]
 
-	@ivar undefines: #undef declarations for this project
-	@type undefines: list[str]
+	:ivar undefines: #undef declarations for this project
+	:type undefines: list[str]
 
-	@ivar cxx: C++ compiler executable for this project
-	@type cxx: str
+	:ivar cxx: C++ compiler executable for this project
+	:type cxx: str
 
-	@ivar cc: C compiler executable for this project
-	@type cc: str
+	:ivar cc: C compiler executable for this project
+	:type cc: str
 
-	@ivar hasCppFiles: Whether or not the project includes C++ files
-	@type hasCppFiles: bool
+	:ivar hasCppFiles: Whether or not the project includes C++ files
+	:type hasCppFiles: bool
 
-	@ivar obj_dir: Output directory for intermediate object files
-	@type obj_dir: str
+	:ivar obj_dir: Output directory for intermediate object files
+	:type obj_dir: str
 
-	@ivar output_dir: Output directory for the final output file
-	@type output_dir: str
+	:ivar output_dir: Output directory for the final output file
+	:type output_dir: str
 
-	@ivar csbuild_dir: Output directory for csbuild internal data, subdir of obj_dir
-	@type csbuild_dir: str
+	:ivar csbuild_dir: Output directory for csbuild internal data, subdir of obj_dir
+	:type csbuild_dir: str
 
-	@ivar output_name: Final filename to be generated for this project
-	@type output_name: str
+	:ivar output_name: Final filename to be generated for this project
+	:type output_name: str
 
-	@ivar header_subdir: Subdirectory that headers live in for this project
-	@type header_subdir: str
+	:ivar header_subdir: Subdirectory that headers live in for this project
+	:type header_subdir: str
 
-	@ivar sources: Source files within this project that are being compiled during this run
-	@type sources: list[str]
+	:ivar sources: Source files within this project that are being compiled during this run
+	:type sources: list[str]
 
-	@ivar allsources: All source files within this project
-	@type allsources: list[str]
+	:ivar allsources: All source files within this project
+	:type allsources: list[str]
 
-	@ivar allheaders: Headers within this project
-	@type allheaders: list[str]
+	:ivar allheaders: Headers within this project
+	:type allheaders: list[str]
 
-	@ivar type: Project type
-	@type type: L{csbuild.ProjectType}
+	:ivar type: Project type
+	:type type: :class:`csbuild.ProjectType`
 
-	@ivar ext: Extension override for output
-	@type ext: str or None
+	:ivar ext: Extension override for output
+	:type ext: str or None
 
-	@ivar profile: Whether or not to optimize for profiling
-	@type profile: bool
+	:ivar profile: Whether or not to optimize for profiling
+	:type profile: bool
 
-	@ivar cpp_compiler_flags: Literal flags to pass to the C++ compiler
-	@type cpp_compiler_flags: list[str]
+	:ivar cpp_compiler_flags: Literal flags to pass to the C++ compiler
+	:type cpp_compiler_flags: list[str]
 
-	@ivar c_compiler_flags: Literal flags to pass to the C compiler
-	@type c_compiler_flags: list[str]
+	:ivar c_compiler_flags: Literal flags to pass to the C compiler
+	:type c_compiler_flags: list[str]
 
-	@ivar linker_flags: Literal flags to pass to the linker
-	@type linker_flags: list[str]
+	:ivar linker_flags: Literal flags to pass to the linker
+	:type linker_flags: list[str]
 
-	@ivar exclude_dirs: Directories excluded from source file discovery
-	@type exclude_dirs: list[str]
+	:ivar exclude_dirs: Directories excluded from source file discovery
+	:type exclude_dirs: list[str]
 
-	@ivar exclude_files: Files excluded from source file discovery
-	@type exclude_files: list[str]
+	:ivar exclude_files: Files excluded from source file discovery
+	:type exclude_files: list[str]
 
-	@ivar output_dir_set: Whether or not the output directory has been set
-	@type output_dir_set: bool
+	:ivar output_dir_set: Whether or not the output directory has been set
+	:type output_dir_set: bool
 
-	@ivar obj_dir_set: Whether or not the object directory has been set
-	@type obj_dir_set: bool
+	:ivar obj_dir_set: Whether or not the object directory has been set
+	:type obj_dir_set: bool
 
-	@ivar debug_set: Whether or not debug settings have been set
-	@type debug_set: bool
+	:ivar debug_set: Whether or not debug settings have been set
+	:type debug_set: bool
 
-	@ivar opt_set: Whether or not optimization settings have been set
-	@type opt_set: bool
+	:ivar opt_set: Whether or not optimization settings have been set
+	:type opt_set: bool
 
-	@ivar allpaths: All the paths used to contain all headers included by this project
-	@type allpaths: list[str]
+	:ivar allpaths: All the paths used to contain all headers included by this project
+	:type allpaths: list[str]
 
-	@ivar chunks: Compiled list of chunks to be compiled in this project
-	@type chunks: list[str]
+	:ivar chunks: Compiled list of chunks to be compiled in this project
+	:type chunks: list[str]
 
-	@ivar chunksByFile: Dictionary to get the list of files in a chunk from its filename
-	@type chunksByFile: dict[str, list[str]]
+	:ivar chunksByFile: Dictionary to get the list of files in a chunk from its filename
+	:type chunksByFile: dict[str, list[str]]
 
-	@ivar use_chunks: Whether or not to use chunks
-	@type use_chunks: bool
+	:ivar use_chunks: Whether or not to use chunks
+	:type use_chunks: bool
 
-	@ivar chunk_tolerance: minimum number of modified files needed to build a chunk as a chunk
-	@type chunk_tolerance: int
+	:ivar chunk_tolerance: minimum number of modified files needed to build a chunk as a chunk
+	:type chunk_tolerance: int
 
-	@ivar chunk_size: number of files per chunk
-	@type chunk_size: int
+	:ivar chunk_size: number of files per chunk
+	:type chunk_size: int
 
-	@ivar chunk_filesize: maximum file size of a built chunk, in bytes
-	@type chunk_filesize: int
+	:ivar chunk_filesize: maximum file size of a built chunk, in bytes
+	:type chunk_filesize: int
 
-	@ivar chunk_size_tolerance: minimum total filesize of modified files needed to build a chunk as a chunk
-	@type chunk_size_tolerance: int
+	:ivar chunk_size_tolerance: minimum total filesize of modified files needed to build a chunk as a chunk
+	:type chunk_size_tolerance: int
 
-	@ivar header_recursion: Depth to recurse when building header information
-	@type header_recursion: int
+	:ivar header_recursion: Depth to recurse when building header information
+	:type header_recursion: int
 
-	@ivar ignore_external_headers: Whether or not to ignore external headers when building header information
-	@type ignore_external_headers: bool
+	:ivar ignore_external_headers: Whether or not to ignore external headers when building header information
+	:type ignore_external_headers: bool
 
-	@ivar default_target: The target to be built when none is specified
-	@type default_target: str
+	:ivar default_target: The target to be built when none is specified
+	:type default_target: str
 
-	@ivar chunk_precompile: Whether or not to precompile all headers in the project
-	@type chunk_precompile: bool
+	:ivar chunk_precompile: Whether or not to precompile all headers in the project
+	:type chunk_precompile: bool
 
-	@ivar precompile: List of files to precompile
-	@type precompile: list[str]
+	:ivar precompile: List of files to precompile
+	:type precompile: list[str]
 
-	@ivar precompile_exclude: List of files NOT to precompile
-	@type precompile_exclude: list[str]
+	:ivar precompile_exclude: List of files NOT to precompile
+	:type precompile_exclude: list[str]
 
-	@ivar cppheaderfile: The C++ precompiled header that's been built (if any)
-	@type cppheaderfile: str
+	:ivar cppheaderfile: The C++ precompiled header that's been built (if any)
+	:type cppheaderfile: str
 
-	@ivar cheaderfile: The C precompiled header that's been built (if any)
-	@type cheaderfile: str
+	:ivar cheaderfile: The C precompiled header that's been built (if any)
+	:type cheaderfile: str
 
-	@ivar needs_cpp_precompile: Whether or not the C++ precompiled header needs to be rebuilt during this compile
-	@type needs_cpp_precompile: bool
+	:ivar needs_cpp_precompile: Whether or not the C++ precompiled header needs to be rebuilt during this compile
+	:type needs_cpp_precompile: bool
 
-	@ivar needs_c_precompile: Whether or not the C++ precompiled header needs to be rebuilt during this compile
-	@type needs_c_precompile: bool
+	:ivar needs_c_precompile: Whether or not the C++ precompiled header needs to be rebuilt during this compile
+	:type needs_c_precompile: bool
 
-	@ivar unity: Whether or not to build in full unity mode (all files included in one translation unit)
-	@type unity: bool
+	:ivar unity: Whether or not to build in full unity mode (all files included in one translation unit)
+	:type unity: bool
 
-	@ivar precompile_done: Whether or not the project's precompile step has been completed
-	@type precompile_done: bool
+	:ivar precompile_done: Whether or not the project's precompile step has been completed
+	:type precompile_done: bool
 
-	@ivar no_warnings: Whether or not to disable all warnings for this project
-	@type no_warnings: bool
+	:ivar no_warnings: Whether or not to disable all warnings for this project
+	:type no_warnings: bool
 
-	@ivar toolchains: All toolchains enabled for this project
-	@type toolchains: dict[str, csbuild.toolchain.toolchain]
+	:ivar toolchains: All toolchains enabled for this project
+	:type toolchains: dict[str, csbuild.toolchain.toolchain]
 
-	@ivar cxxcmd: Base C++ compile command, returned from toolchain.get_base_cxx_command
-	@type cxxcmd: str
+	:ivar cxxcmd: Base C++ compile command, returned from toolchain.get_base_cxx_command
+	:type cxxcmd: str
 
-	@ivar cccmd: Base C compile command, returned from toolchain.get_base_cc_command
-	@type cccmd: str
+	:ivar cccmd: Base C compile command, returned from toolchain.get_base_cc_command
+	:type cccmd: str
 
-	@ivar cxxpccmd: Base C++ precompile command, returned from toolchain.get_base_cxx_precompile_command
-	@type cxxpccmd: str
+	:ivar cxxpccmd: Base C++ precompile command, returned from toolchain.get_base_cxx_precompile_command
+	:type cxxpccmd: str
 
-	@ivar ccpccmd: Base C precompile command, returned from toolchain.get_base_cc_precompile_command
-	@type ccpccmd: str
+	:ivar ccpccmd: Base C precompile command, returned from toolchain.get_base_cc_precompile_command
+	:type ccpccmd: str
 
-	@ivar recompile_all: Whether or not conditions have caused the entire project to need recompilation
-	@type recompile_all: bool
+	:ivar recompile_all: Whether or not conditions have caused the entire project to need recompilation
+	:type recompile_all: bool
 
-	@ivar targets: List of targets in this project with their associated settings functions, decorated with @target
-	@type targets: dict[str, list[function]]
+	:ivar targets: List of targets in this project with their associated settings functions, decorated with @target
+	:type targets: dict[str, list[function]]
 
-	@ivar targetName: The target name for this project as it's currently being built
-	@type targetName: str
+	:ivar targetName: The target name for this project as it's currently being built
+	:type targetName: str
 
-	@ivar final_chunk_set: The list of chunks to be built after building all chunks, determining whether or not to build
-	them as chunks, etc.
-	@type final_chunk_set: list[str]
+	:ivar final_chunk_set: The list of chunks to be built after building all chunks, determining whether or not to build
+		them as chunks, etc.
+	:type final_chunk_set: list[str]
 
-	@ivar compiles_completed: The number of files that have been compiled (successfully or not) at this point in the
-	compile process. Note that this variable is modified in multiple threads and should be handled within project.mutex
-	@type compiles_completed: int
+	:ivar compiles_completed: The number of files that have been compiled (successfully or not) at this point in the
+		compile process. Note that this variable is modified in multiple threads and should be handled within project.mutex
+	:type compiles_completed: int
 
-	@ivar compile_failed: Whether or not ANY compilation unit has failed to successfully compile in this build
-	@type compile_failed: bool
+	:ivar compile_failed: Whether or not ANY compilation unit has failed to successfully compile in this build
+	:type compile_failed: bool
 
-	@ivar static_runtime: Whether or not to link against a static runtime
-	@type static_runtime: bool
+	:ivar static_runtime: Whether or not to link against a static runtime
+	:type static_runtime: bool
 
-	@ivar cppheaders: List of C++ headers
-	@type cppheaders: list[str]
+	:ivar cppheaders: List of C++ headers
+	:type cppheaders: list[str]
 
-	@ivar cheaders: List of C headers
-	@type cheaders: list[str]
+	:ivar cheaders: List of C headers
+	:type cheaders: list[str]
 
-	@ivar activeToolchainName: The name of the currently active toolchain
-	@type activeToolchainName: str
+	:ivar activeToolchainName: The name of the currently active toolchain
+	:type activeToolchainName: str
 
-	@ivar activeToolchain: The actual currently active toolchain
-	@type activeToolchain: csbuild.toolchain.toolchain
+	:ivar activeToolchain: The actual currently active toolchain
+	:type activeToolchain: csbuild.toolchain.toolchain
 
-	@ivar warnings_as_errors: Whether all warnings should be treated as errors
-	@type warnings_as_errors: bool
+	:ivar warnings_as_errors: Whether all warnings should be treated as errors
+	:type warnings_as_errors: bool
 
-	@ivar built_something: Whether or not ANY file has been compiled in this build
-	@type built_something: bool
+	:ivar built_something: Whether or not ANY file has been compiled in this build
+	:type built_something: bool
 
-	@ivar outputArchitecture: The architecture to build against
-	@type outputArchitecture: csbuild.ArchitectureType
+	:ivar outputArchitecture: The architecture to build against
+	:type outputArchitecture: csbuild.ArchitectureType
 
-	@ivar library_locs: evaluated locations of the project's libraries
-	@type library_locs: list[str]
+	:ivar library_locs: evaluated locations of the project's libraries
+	:type library_locs: list[str]
 
-	@ivar scriptPath: The location of the script file this project is defined in
-	@type scriptPath: str
+	:ivar scriptPath: The location of the script file this project is defined in
+	:type scriptPath: str
 
-	@ivar mutex: A mutex used to control modification of project data across multiple threads
-	@type mutex: threading.Lock
+	:ivar mutex: A mutex used to control modification of project data across multiple threads
+	:type mutex: threading.Lock
 
-	@ivar preBuildStep: A function that will be executed before compile of this project begins
-	@type preBuildStep: function
+	:ivar preBuildStep: A function that will be executed before compile of this project begins
+	:type preBuildStep: function
 
-	@ivar postBuildStep: A function that will be executed after compile of this project ends
-	@type postBuildStep: function
+	:ivar postBuildStep: A function that will be executed after compile of this project ends
+	:type postBuildStep: function
 
-	@ivar parentGroup: The group this project is contained within
-	@type parentGroup: ProjectGroup
+	:ivar parentGroup: The group this project is contained within
+	:type parentGroup: ProjectGroup
 
-	@ivar state: Current state of the project
-	@type state: L{_shared_globals.ProjectState}
+	:ivar state: Current state of the project
+	:type state: :_shared_globals.ProjectState:
 
-	@ivar startTime: The time the project build started
-	@type startTime: float
+	:ivar startTime: The time the project build started
+	:type startTime: float
 
-	@ivar endTime: The time the project build ended
-	@type endTime: float
+	:ivar endTime: The time the project build ended
+	:type endTime: float
 
-	@type extraFiles: list[str]
-	@ivar extraFiles: Extra files being compiled, these will be rolled into project.sources, so use that instead
+	:type extraFiles: list[str]
+	:ivar extraFiles: Extra files being compiled, these will be rolled into project.sources, so use that instead
 
-	@type extraDirs: list[str]
-	@ivar extraDirs: Extra directories used to search for files
+	:type extraDirs: list[str]
+	:ivar extraDirs: Extra directories used to search for files
 
-	@type extraObjs: list[str]
-	@ivar extraObjs: Extra objects to pass to the linker
+	:type extraObjs: list[str]
+	:ivar extraObjs: Extra objects to pass to the linker
 
-	@undocumented: prepareBuild
-	@undocumented: __getattribute__
-	@undocumented: __setattr__
-	@undocumented: get_files
-	@undocumented: get_full_path
-	@undocumented: get_included_files
-	@undocumented: follow_headers
-	@undocumented: follow_headers2
-	@undocumented: should_recompile
-	@undocumented: check_libraries
-	@undocumented: make_chunks
-	@undocumented: get_chunk
-	@undocumented: save_md5
-	@undocumented: save_md5s
-	@undocumented: precompile_headers
-	@undocumented: copy
-	@undocumented: CanJoinChunk
+	.. note:: Toolchains can define additional variables that will show up on this class's
+		instance variable list when that toolchain is active. See toolchain documentation for
+		more details on what additional instance variables are available.
 
-	@note: Toolchains can define additional variables that will show up on this class's
-	instance variable list when that toolchain is active. See toolchain documentation for
-	more details on what additional instance variables are available.
 	"""
 
 	class UserData(object):
@@ -368,7 +353,14 @@ class projectSettings( object ):
 		"""
 		Default projectSettings constructor
 		"""
+		self._currentScope = csbuild.ScopeDef.Self
+
 		self.name = ""
+		"""
+		:type: :class:`str`
+		Project name
+		"""
+
 		self.priority = -1
 		self.ignoreDependencyOrdering = False
 		self.key = ""
@@ -377,6 +369,7 @@ class projectSettings( object ):
 		self.linkDependsIntermediate = []
 		self.linkDependsFinal = []
 		self.reconciledLinkDepends = set()
+		self.flattenedDepends = set()
 		self.srcDepends = []
 		self.srcDependsIntermediate = []
 		self.srcDependsFinal = []
@@ -442,7 +435,7 @@ class projectSettings( object ):
 
 		self.default_target = "release"
 
-		self.chunk_precompile = True
+		self.chunk_precompile = False
 		self.precompile = []
 		self.precompileAsC = []
 		self.precompile_exclude = []
@@ -459,6 +452,8 @@ class projectSettings( object ):
 		self.no_warnings = False
 
 		self.toolchains = { }
+		self.intermediateToolchains = {}
+		self.finalToolchains = {}
 
 		self.cxxcmd = ""  # return value of get_base_cxx_command
 		self.cccmd = ""  # return value of get_base_cc_command
@@ -546,6 +541,9 @@ class projectSettings( object ):
 
 		self.userData = projectSettings.UserData()
 
+		self._intermediateScopeSettings = {}
+		self._finalScopeSettings = {}
+
 		#GUI support
 		self.state = _shared_globals.ProjectState.PENDING
 		self.startTime = 0
@@ -576,11 +574,12 @@ class projectSettings( object ):
 		self.parsedLinkErrors = None
 
 	def prepareBuild( self ):
-		log.LOG_BUILD( "Preparing tasks for {} ({} {}/{})...".format( self.output_name, self.targetName, self.outputArchitecture, self.activeToolchainName ) )
 		wd = os.getcwd( )
 		os.chdir( self.workingDirectory )
 
-		self.activeToolchain = self.toolchains[self.activeToolchainName]
+		self.activeToolchain.SetActiveTool("linker")
+
+		log.LOG_BUILD( "Preparing tasks for {} ({} {}/{})...".format( self.output_name, self.targetName, self.outputArchitecture, self.activeToolchainName ) )
 
 		global currentProject
 		currentProject = self
@@ -590,7 +589,6 @@ class projectSettings( object ):
 			log.LOG_BUILD( "Running pre-PrepareBuild step for {} ({} {}/{})".format( self.output_name, self.targetName, self.outputArchitecture, self.activeToolchainName ) )
 			self.prePrepareBuildStep(self)
 
-		self.activeToolchain.SetActiveTool("linker")
 		self.output_dir = os.path.abspath( self.output_dir ).format(project=self)
 
 		# Create the executable/library output directory if it doesn't exist.
@@ -612,9 +610,13 @@ class projectSettings( object ):
 
 		for dep in self.reconciledLinkDepends:
 			proj = _shared_globals.projects[dep]
+			proj.activeToolchain.SetActiveTool("linker")
 			if proj.type == csbuild.ProjectType.StaticLibrary and self.linkMode == csbuild.StaticLinkMode.LinkIntermediateObjects:
 				continue
 			self.libraries.add(proj.output_name.split(".")[0])
+			dir = proj.output_dir.format(project=proj)
+			if dir not in self.library_dirs:
+				self.library_dirs.append(dir)
 
 		self.activeToolchain.SetActiveTool("compiler")
 		self.obj_dir = os.path.abspath( self.obj_dir ).format(project=self)
@@ -750,68 +752,224 @@ class projectSettings( object ):
 
 		_shared_globals.allfiles |= set(self.sources)
 
-	def __getattribute__( self, name ):
-		activeToolchain = object.__getattribute__( self, "activeToolchain" )
-		if activeToolchain:
-			if activeToolchain.activeTool and name in activeToolchain.activeTool.settingsOverrides:
-				ret = activeToolchain.activeTool.settingsOverrides[name]
+	def SetValue(self, key, value):
+		scope = self._currentScope
+		if scope & csbuild.ScopeDef.Self:
+			setattr(self, key, value)
+		if scope & csbuild.ScopeDef.Intermediate:
+			self._intermediateScopeSettings[key] = value
+		if scope & csbuild.ScopeDef.Final:
+			self._finalScopeSettings[key] = value
 
-				if ret:
-					if isinstance( ret, dict ):
-						ret2 = object.__getattribute__( self, name )
-						ret2.update( ret )
-						return ret2
-					elif isinstance( ret, list ):
-						return ret + object.__getattribute__( self, name )
-					elif isinstance( ret, set ):
-						return ret | object.__getattribute__( self, name )
-					elif isinstance( ret, csbuild.projectSettings.projectSettings.UserData ):
-						ret2 = object.__getattribute__( self, name )
-						ret2.dataDict.update( ret.dataDict )
-						return ret2
+	def ExtendList(self, key, value):
+		scope = self._currentScope
+		if scope & csbuild.ScopeDef.Self:
+			setattr(self, key, getattr(self, key) + value)
+		if scope & csbuild.ScopeDef.Intermediate:
+			if key not in self._intermediateScopeSettings:
+				self._intermediateScopeSettings[key] = []
+			self._intermediateScopeSettings[key] += value
+		if scope & csbuild.ScopeDef.Final:
+			if key not in self._finalScopeSettings:
+				self._finalScopeSettings[key] = []
+			self._finalScopeSettings[key] += value
 
-				return ret
-			elif name in activeToolchain.settingsOverrides:
-				ret = activeToolchain.settingsOverrides[name]
+	def AppendList(self, key, value):
+		scope = self._currentScope
+		if scope & csbuild.ScopeDef.Self:
+			getattr(self, key).append(value)
+		if scope & csbuild.ScopeDef.Intermediate:
+			if key not in self._intermediateScopeSettings:
+				self._intermediateScopeSettings[key] = []
+			self._intermediateScopeSettings[key].append(value)
+		if scope & csbuild.ScopeDef.Final:
+			if key not in self._finalScopeSettings:
+				self._finalScopeSettings[key] = []
+			self._finalScopeSettings[key].append(value)
 
-				if ret:
-					if isinstance( ret, dict ):
-						ret2 = object.__getattribute__( self, name )
-						ret2.update( ret )
-						return ret2
-					elif isinstance( ret, list ):
-						return ret + object.__getattribute__( self, name )
-					elif isinstance( ret, set ):
-						return ret | object.__getattribute__( self, name )
-					elif isinstance( ret, csbuild.projectSettings.projectSettings.UserData ):
-						ret2 = object.__getattribute__( self, name )
-						ret2.dataDict.update( ret.dataDict )
-						return ret2
+	def UpdateDict(self, key, value):
+		scope = self._currentScope
+		if scope & csbuild.ScopeDef.Self:
+			getattr(self, key).update(value)
+		if scope & csbuild.ScopeDef.Intermediate:
+			if key not in self._intermediateScopeSettings:
+				self._intermediateScopeSettings[key] = {}
+			self._intermediateScopeSettings[key].update(value)
+		if scope & csbuild.ScopeDef.Final:
+			if key not in self._finalScopeSettings:
+				self._finalScopeSettings[key] = {}
+			self._finalScopeSettings[key].update(value)
 
-				return ret
-		return object.__getattribute__( self, name )
+	def UnionSet(self, key, value):
+		scope = self._currentScope
+		if scope & csbuild.ScopeDef.Self:
+			setattr(self, key, getattr(self, key) | value)
+		if scope & csbuild.ScopeDef.Intermediate:
+			if key not in self._intermediateScopeSettings:
+				self._intermediateScopeSettings[key] = set()
+			self._intermediateScopeSettings[key] |= value
+		if scope & csbuild.ScopeDef.Final:
+			if key not in self._finalScopeSettings:
+				self._finalScopeSettings[key] = set()
+			self._finalScopeSettings[key] |= value
+
+	def AddToSet(self, key, value):
+		scope = self._currentScope
+		if scope & csbuild.ScopeDef.Self:
+			getattr(self, key).add(value)
+		if scope & csbuild.ScopeDef.Intermediate:
+			if key not in self._intermediateScopeSettings:
+				self._intermediateScopeSettings[key] = set()
+			self._intermediateScopeSettings[key].add(value)
+		if scope & csbuild.ScopeDef.Final:
+			if key not in self._finalScopeSettings:
+				self._finalScopeSettings[key] = set()
+			self._finalScopeSettings[key].add(value)
 
 
-	def __setattr__( self, name, value ):
+	def GetAttr(self, name):
+		return object.__getattribute__(self, name)
+
+
+	def SetAttr(self, name, value):
+		object.__setattr__(self, name, value)
+
+
+	def __getattribute__(self, item):
+		return object.__getattribute__(self, "GetAttr")(item)
+
+
+	def __setattr__(self, key, value):
+		object.__getattribute__(self, "SetAttr")(key, value)
+
+
+	def GetAttrNext(self, name):
+		settings = object.__getattribute__(self, "_finalizedSettings")
+		if name == "_finalizedSettings":
+			return settings
+
+		tool = object.__getattribute__(self, "activeToolchain").activeToolName
+
+		try:
+			return settings[tool][name]
+		except:
+			return object.__getattribute__(self, name)
+
+	def SetAttrNext(self, name, value):
 		if name == "state":
 			with self.mutex:
 				self.updated = True
 
-		if hasattr( self, "activeToolchain" ):
-			activeToolchain = object.__getattribute__( self, "activeToolchain" )
-			if activeToolchain:
-				if activeToolchain.activeTool and name in activeToolchain.activeTool.settingsOverrides:
-					del activeToolchain.activeTool.settingsOverrides[name]
-				if name in activeToolchain.settingsOverrides:
-					del activeToolchain.settingsOverrides[name]
-		object.__setattr__( self, name, value )
+		settings = object.__getattribute__(self, "_finalizedSettings")
+		toolchain = object.__getattribute__(self, "activeToolchain")
+
+		wasSet = False
+		for tool in toolchain.tools:
+			if name in settings[tool]:
+				settings[tool][name] = value
+				wasSet = True
+
+		if not wasSet:
+			object.__setattr__(self, name, value)
+
+	@staticmethod
+	def _combineObjects(baseObj, newObj):
+		if newObj is None:
+			return
+
+		if isinstance( newObj, dict ):
+			baseObj["obj"].update( newObj )
+		elif isinstance( newObj, list ):
+			baseObj["obj"] += newObj
+		elif isinstance( newObj, set ):
+			baseObj["obj"] |= newObj
+		elif isinstance( newObj, csbuild.projectSettings.projectSettings.UserData ):
+			baseObj["obj"].dataDict.update( newObj.dataDict )
+		else:
+			baseObj["obj"] = newObj
+
+
+	@staticmethod
+	def _processToolchain(baseObj, toolchain, name):
+		if toolchain:
+			if toolchain.activeTool and name in toolchain.activeTool.settingsOverrides:
+				obj = toolchain.activeTool.settingsOverrides[name]
+				projectSettings._combineObjects(baseObj, obj)
+
+
+	def finalizeSettings(self):
+		"""
+		Finalize the settings by applying the settings from the selected toolchain and architecture
+		:return: None
+		"""
+
+		self._finalizedSettings = {}
+		self.activeToolchain = self.toolchains[self.activeToolchainName]
+
+		for tool in self.activeToolchain.tools:
+			self._finalizedSettings[tool] = {}
+			self.activeToolchain.SetActiveTool(tool)
+			for name in self.__dict__:
+				if name == "_finalizedSettings":
+					continue
+
+				base = { "obj" : object.__getattribute__(self, name) }
+
+				projectSettings._processToolchain(base, self.activeToolchain, name)
+
+				self._finalizedSettings[tool][name] = base["obj"]
+		self.activeToolchain.SetActiveTool("linker")
+		self.GetAttr = types.MethodType(projectSettings.GetAttrNext, self, projectSettings)
+		self.SetAttr = types.MethodType(projectSettings.SetAttrNext, self, projectSettings)
+
+
+	def finalizeSettings2(self):
+		"""
+		Extra-finalize the settings by pulling in settings from the project dependency tree
+		:return: None
+		"""
+
+		for tool in self.activeToolchain.tools:
+			self.activeToolchain.SetActiveTool(tool)
+			for name in self.__dict__:
+				if name not in self._finalizedSettings[tool]:
+					continue
+
+				base = { "obj" : self._finalizedSettings[tool][name] }
+
+				for depend in object.__getattribute__(self, "flattenedDepends"):
+					dependProj = _shared_globals.projects[depend]
+					if self.type == csbuild.ProjectType.Application:
+						settings = object.__getattribute__(dependProj, "_finalScopeSettings")
+						if name in settings:
+							obj = settings[name]
+							projectSettings._combineObjects(base, obj)
+						toolchain = object.__getattribute__(dependProj, "finalToolchains")[object.__getattribute__(self, "activeToolchainName")]
+						toolchain.SetActiveTool(tool)
+						projectSettings._processToolchain(base, toolchain, name)
+					else:
+						settings = object.__getattribute__(dependProj, "_intermediateScopeSettings")
+						if name in settings:
+							obj = settings[name]
+							projectSettings._combineObjects(base, obj)
+						toolchain = object.__getattribute__(dependProj, "intermediateToolchains")[object.__getattribute__(self, "activeToolchainName")]
+						toolchain.SetActiveTool(tool)
+						projectSettings._processToolchain(base, toolchain, name)
+
+				self._finalizedSettings[tool][name] = base["obj"]
 
 
 	def copy( self ):
 		ret = projectSettings( )
 		toolchains = { }
+		intermediateToolchains = {}
+		finalToolchains = {}
 		for kvp in self.toolchains.items( ):
 			toolchains[kvp[0]] = kvp[1].copy( )
+		for kvp in self.intermediateToolchains.items( ):
+			intermediateToolchains[kvp[0]] = kvp[1].copy( )
+		for kvp in self.finalToolchains.items( ):
+			finalToolchains[kvp[0]] = kvp[1].copy( )
 
 		ret.__dict__ = {
 			"name": self.name,
@@ -823,6 +981,7 @@ class projectSettings( object ):
 			"linkDependsIntermediate": list( self.linkDependsIntermediate ),
 			"linkDependsFinal": list( self.linkDependsFinal ),
 			"reconciledLinkDepends" : set( self.reconciledLinkDepends ),
+			"flattenedDepends" : set(self.flattenedDepends),
 			"srcDepends": list( self.srcDepends ),
 			"srcDependsIntermediate": list( self.srcDependsIntermediate ),
 			"srcDependsFinal": list( self.srcDependsFinal ),
@@ -886,6 +1045,8 @@ class projectSettings( object ):
 			"precompile_started": self.precompile_started,
 			"no_warnings": self.no_warnings,
 			"toolchains": toolchains,
+			"intermediateToolchains": intermediateToolchains,
+			"finalToolchains": finalToolchains,
 			"cxxcmd": self.cxxcmd,
 			"cccmd": self.cccmd,
 			"recompile_all": self.recompile_all,
@@ -930,6 +1091,9 @@ class projectSettings( object ):
 			"linkMode" : self.linkMode,
 			"linkModeSet" : self.linkModeSet,
 			"splitChunks" : dict(self.splitChunks),
+			"_currentScope" : self._currentScope,
+			"_intermediateScopeSettings" : {},
+			"_finalScopeSettings" : {},
 			"state" : self.state,
 			"startTime" : self.startTime,
 			"buildEnd" : self.buildEnd,
@@ -983,6 +1147,28 @@ class projectSettings( object ):
 
 		for file in self.fileOverrideSettings:
 			ret.fileOverrideSettings.update( { file : self.fileOverrideSettings[file].copy() } )
+
+		for key in self._intermediateScopeSettings:
+			val = self._intermediateScopeSettings[key]
+			if isinstance(val, list):
+				ret._intermediateScopeSettings[key] = list(val)
+			elif isinstance(val, set):
+				ret._intermediateScopeSettings[key] = set(val)
+			elif isinstance(val, dict):
+				ret._intermediateScopeSettings[key] = dict(val)
+			else:
+				ret._intermediateScopeSettings[key] = val
+
+		for key in self._finalScopeSettings:
+			val = self._finalScopeSettings[key]
+			if isinstance(val, list):
+				ret._finalScopeSettings[key] = list(val)
+			elif isinstance(val, set):
+				ret._finalScopeSettings[key] = set(val)
+			elif isinstance(val, dict):
+				ret._finalScopeSettings[key] = dict(val)
+			else:
+				ret._finalScopeSettings[key] = val
 
 		return ret
 
@@ -1229,19 +1415,20 @@ class projectSettings( object ):
 					srcFile ) )
 			return True
 
-		basename = os.path.basename( srcFile ).split( '.' )[0]
 		if not ofile:
-			ofile = os.path.join( self.obj_dir, "{}_{}{}".format( basename,
-				self.targetName, self.activeToolchain.Compiler().get_obj_ext() ))
+			ofile = _utils.GetSourceObjPath( self, srcFile )
 
 		if self.use_chunks and not _shared_globals.disable_chunks:
 			chunk = self.get_chunk( srcFile )
-			chunkfile = os.path.join( self.obj_dir, "{}_{}{}".format( chunk,
-				self.targetName, self.activeToolchain.Compiler().get_obj_ext() ) )
+			if chunk:
+				log.LOG_INFO("{} belongs to chunk {}".format(srcFile, chunk))
 
-			#First check: If the object file doesn't exist, we obviously have to create it.
-			if not os.access(ofile , os.F_OK):
-				ofile = chunkfile
+				chunkfile = _utils.GetChunkedObjPath( self, chunk )
+
+				log.LOG_INFO("Checking for chunk file {}...".format(chunkfile))
+				#First check: If the object file doesn't exist, we obviously have to create it.
+				if not os.access(ofile , os.F_OK):
+					ofile = chunkfile
 
 		if not os.access(ofile , os.F_OK):
 			log.LOG_INFO(
@@ -1679,31 +1866,31 @@ class ProjectGroup( object ):
 	"""
 	Defines a group of projects, and also may contain subgroups.
 
-	@ivar tempprojects: Temporary list of projects directly under this group
-	@type tempprojects: dict[str, projectSettings]
+	:ivar tempprojects: Temporary list of projects directly under this group
+	:type tempprojects: dict[str, projectSettings]
 
-	@ivar projects: Fully fleshed-out list of projects under this group
+	:ivar projects: Fully fleshed-out list of projects under this group
 	Dict is { name : { target : project } }
-	@type projects: dict[str, dict[str, projectSettings]]
+	:type projects: dict[str, dict[str, projectSettings]]
 
-	@ivar subgroups: List of child groups
-	@type subgroups: dict[str, ProjectGroup]
+	:ivar subgroups: List of child groups
+	:type subgroups: dict[str, ProjectGroup]
 
-	@ivar name: Group name
-	@type name: str
+	:ivar name: Group name
+	:type name: str
 
-	@ivar parentGroup: The group's parent group
-	@type parentGroup: ProjectGroup
+	:ivar parentGroup: The group's parent group
+	:type parentGroup: ProjectGroup
 	"""
 	def __init__( self, name, parentGroup ):
 		"""
 		Create a new ProjectGroup
 
-		@param name: Group name
-		@type name: str
+		:param name: Group name
+		:type name: str
 
-		@param parentGroup: parent group
-		@type parentGroup: ProjectGroup
+		:param parentGroup: parent group
+		:type parentGroup: ProjectGroup
 		"""
 		self.tempprojects = {}
 		self.projects = {}

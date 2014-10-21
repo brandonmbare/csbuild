@@ -19,11 +19,9 @@
 # SOFTWARE.
 
 """
-B{Toolchain Module}
+**Toolchain Module**
 
 Defines the base class for creating custom toolchains
-
-@undocumented: ClassCombiner
 """
 
 from abc import abstractmethod, ABCMeta
@@ -39,7 +37,7 @@ class ClassCombiner( object ):
 	"""
 	Represents the combined return value of a multi-object accessor.
 
-	@ivar objs: The objects contained within the combined class
+	:ivar objs: The objects contained within the combined class
 	@itype objs: list[object]
 	"""
 	def __init__( self, objs ):
@@ -90,11 +88,11 @@ class SettingsOverrider( object ):
 		"""
 		Enables installation of the compiled output file.
 		Default target is /usr/local/lib, unless the --prefix option is specified.
-		If --prefix is specified, the target will be I{{prefix}}/lib
+		If --prefix is specified, the target will be *{prefix*}/lib
 
-		@type s: str
-		@param s: Override directory - i.e., if you specify this as "libraries", the libraries will be installed
-		to I{{prefix}}/libraries.
+		:type s: str
+		:param s: Override directory - i.e., if you specify this as "libraries", the libraries will be installed
+		to *{prefix*}/libraries.
 		"""
 		self.settingsOverrides["install_output"] = True
 
@@ -103,22 +101,22 @@ class SettingsOverrider( object ):
 		"""
 		Enables installation of the project's headers
 		Default target is /usr/local/include, unless the --prefix option is specified.
-		If --prefix is specified, the target will be I{{prefix}}/include
+		If --prefix is specified, the target will be *{prefix*}/include
 
-		@type s: str
-		@param s: Override directory - i.e., if you specify this as "headers", the headers will be installed
-		to I{{prefix}}/headers.
+		:type s: str
+		:param s: Override directory - i.e., if you specify this as "headers", the headers will be installed
+		to *{prefix*}/headers.
 		"""
 		self.settingsOverrides["install_headers"] = True
 
 
 	def InstallSubdir( self, s ):
 		"""
-		Specifies a subdirectory of I{{prefix}}/include in which to install the headers.
+		Specifies a subdirectory of *{prefix*}/include in which to install the headers.
 
-		@type s: str
-		@param s: The desired subdirectory; i.e., if you specify this as "myLib", the headers will be
-		installed under I{{prefix}}/include/myLib.
+		:type s: str
+		:param s: The desired subdirectory; i.e., if you specify this as "myLib", the headers will be
+		installed under *{prefix*}/include/myLib.
 		"""
 		self.settingsOverrides["header_subdir"] = s
 
@@ -128,8 +126,8 @@ class SettingsOverrider( object ):
 		Exclude the given directories from the project. This may be called multiple times to add additional excludes.
 		Directories are relative to the location of the script itself, not the specified project working directory.
 
-		@type args: an arbitrary number of strings
-		@param args: The list of directories to be excluded.
+		:type args: an arbitrary number of strings
+		:param args: The list of directories to be excluded.
 		"""
 		if "exclude_dirs" not in self.settingsOverrides:
 			self.settingsOverrides["exclude_dirs"] = []
@@ -147,8 +145,8 @@ class SettingsOverrider( object ):
 		Exclude the given files from the project. This may be called multiple times to add additional excludes.
 		Files are relative to the location of the script itself, not the specified project working directory.
 
-		@type args: an arbitrary number of strings
-		@param args: The list of files to be excluded.
+		:type args: an arbitrary number of strings
+		:param args: The list of files to be excluded.
 		"""
 		if "exclude_files" not in self.settingsOverrides:
 			self.settingsOverrides["exclude_files"] = []
@@ -173,8 +171,8 @@ class SettingsOverrider( object ):
 		will then search for it with the lib prefix. I.e., csbuild.Libraries("MyLib") will first search for MyLib.lib,
 		and if that isn't found, will then search for libMyLib.lib.
 
-		@type args: an arbitrary number of strings
-		@param args: The list of libraries to link in.
+		:type args: an arbitrary number of strings
+		:param args: The list of libraries to link in.
 		"""
 		if "libraries" not in self.settingsOverrides:
 			self.settingsOverrides["libraries"] = set()
@@ -186,8 +184,8 @@ class SettingsOverrider( object ):
 		"""
 		Similar to csbuild.toolchain.Libraries, but forces these libraries to be linked statically.
 
-		@type args: an arbitrary number of strings
-		@param args: The list of libraries to link in.
+		:type args: an arbitrary number of strings
+		:param args: The list of libraries to link in.
 		"""
 		if "static_libraries" not in self.settingsOverrides:
 			self.settingsOverrides["static_libraries"] = set()
@@ -199,13 +197,28 @@ class SettingsOverrider( object ):
 		"""
 		Similar to csbuild.toolchain.Libraries, but forces these libraries to be linked dynamically.
 
-		@type args: an arbitrary number of strings
-		@param args: The list of libraries to link in.
+		:type args: an arbitrary number of strings
+		:param args: The list of libraries to link in.
 		"""
 		if "shared_libraries" not in self.settingsOverrides:
 			self.settingsOverrides["shared_libraries"] = set()
 
 		self.settingsOverrides["shared_libraries"] |= set( args )
+
+
+	def AddFrameworks( self, *args ):
+		"""
+		When linking the project, link against the given frameworks. This may be called multiple times to add additional frameworks.
+
+		These will have no effect on toolchains that do not support frameworks.
+
+		:type args: an arbitrary number of strings
+		:param args: The list of frameworks to link in.
+		"""
+		if "frameworks" not in self.settingsOverrides:
+			self.settingsOverrides["frameworks"] = set()
+
+		self.settingsOverrides["frameworks"] |= set( args )
 
 
 	def IncludeDirs( self, *args ):
@@ -216,8 +229,8 @@ class SettingsOverrider( object ):
 		In the gcc toolchain, /usr/include and /usr/local/include (or the platform appropriate equivalents) will always
 		be appended to the end of this list.
 
-		@type args: an arbitrary number of strings
-		@param args: The list of directories to be searched.
+		:type args: an arbitrary number of strings
+		:param args: The list of directories to be searched.
 		"""
 		if "include_dirs" not in self.settingsOverrides:
 			self.settingsOverrides["include_dirs"] = []
@@ -235,8 +248,8 @@ class SettingsOverrider( object ):
 		In the gcc toolchain, /usr/lib and /usr/local/lib (or the platform appropriate equivalents) will always
 		be appended to the end of this list.
 
-		@type args: an arbitrary number of strings
-		@param args: The list of directories to be searched.
+		:type args: an arbitrary number of strings
+		:param args: The list of directories to be searched.
 		"""
 		if "library_dirs" not in self.settingsOverrides:
 			self.settingsOverrides["library_dirs"] = []
@@ -244,6 +257,22 @@ class SettingsOverrider( object ):
 		for arg in args:
 			arg = os.path.abspath( arg )
 			self.settingsOverrides["library_dirs"].append( arg )
+
+
+	def AddFrameworkDirs( self, *args ):
+		"""
+		Search the given directories for frameworks. This may be called multiple times to add additional directories.
+		Directories are relative to the location of the script itself, not the specified project working directory.
+
+		:type args: an arbitrary number of strings
+		:param args: The list of directories to be searched.
+		"""
+		if "frameworkDirs" not in self.settingsOverrides:
+			self.settingsOverrides["frameworkDirs"] = []
+
+		for arg in args:
+			arg = os.path.abspath( arg )
+			self.settingsOverrides["frameworkDirs"].append( arg )
 
 
 	def ClearLibraries( self ):
@@ -261,6 +290,11 @@ class SettingsOverrider( object ):
 		self.settingsOverrides["shared_libraries"] = set()
 
 
+	def ClearFrameworks( self ):
+		"""Clears the list of framworks"""
+		self.settingsOverrides["frameworks"] = set()
+
+
 	def ClearIncludeDirs( self ):
 		"""Clears the include directories, including the defaults."""
 		self.settingsOverrides["include_dirs"] = []
@@ -271,12 +305,17 @@ class SettingsOverrider( object ):
 		self.settingsOverrides["library_dirs"] = []
 
 
+	def ClearFrameworkDirs( self ):
+		"""Clears the framework directories, including the defaults."""
+		self.settingsOverrides["frameworkDirs"] = []
+
+
 	def Opt( self, i ):
 		"""
 		Sets the optimization level. Due to toolchain differences, this should be called per-toolchain, usually.
 
-		@type i: either str or int
-		@param i: A toolchain-appropriate optimization level.
+		:type i: either str or int
+		:param i: A toolchain-appropriate optimization level.
 		"""
 		self.settingsOverrides["opt_level"] = i
 		self.settingsOverrides["opt_set"] = True
@@ -286,8 +325,8 @@ class SettingsOverrider( object ):
 		"""
 		Sets the debug level. Due to toolchain differences, this should be called per-toolchain, usually.
 
-		@type i: either str or int
-		@param i: A toolchain-appropriate debug level.
+		:type i: either str or int
+		:param i: A toolchain-appropriate debug level.
 		"""
 		self.settingsOverrides["debug_level"] = i
 		self.settingsOverrides["debug_set"] = True
@@ -297,8 +336,8 @@ class SettingsOverrider( object ):
 		"""
 		Add additionally defined preprocessor directives, as if each file had a #define directive at the very top.
 
-		@type args: an arbitrary number of strings
-		@param args: The list of preprocessor directives to define
+		:type args: an arbitrary number of strings
+		:param args: The list of preprocessor directives to define
 		"""
 		if "defines" not in self.settingsOverrides:
 			self.settingsOverrides["defines"] = []
@@ -315,8 +354,8 @@ class SettingsOverrider( object ):
 		"""
 		Add explicitly undefined preprocessor directives, as if each file had a #undef directive at the very top.
 
-		@type args: an arbitrary number of strings
-		@param args: The list of preprocessor directives to undefine
+		:type args: an arbitrary number of strings
+		:param args: The list of preprocessor directives to undefine
 		"""
 		if "undefines" not in self.settingsOverrides:
 			self.settingsOverrides["undefines"] = []
@@ -333,8 +372,8 @@ class SettingsOverrider( object ):
 		"""
 		Specify the compiler executable to be used for compiling C++ files. Ignored by the msvc toolchain.
 
-		@type s: str
-		@param s: Path to the executable to use for compilation
+		:type s: str
+		:param s: Path to the executable to use for compilation
 		"""
 		self.settingsOverrides["cxx"] = s
 
@@ -343,8 +382,8 @@ class SettingsOverrider( object ):
 		"""
 		Specify the compiler executable to be used for compiling C files. Ignored by the msvc toolchain.
 
-		@type s: str
-		@param s: Path to the executable to use for compilation
+		:type s: str
+		:param s: Path to the executable to use for compilation
 		"""
 		self.settingsOverrides["cc"] = s
 
@@ -353,12 +392,12 @@ class SettingsOverrider( object ):
 		"""
 		Sets the output options for this project.
 
-		@type name: str
-		@param name: The output name. Do not include an extension, and do not include the "lib" prefix for libraries on
+		:type name: str
+		:param name: The output name. Do not include an extension, and do not include the "lib" prefix for libraries on
 		Linux. These are added automatically.
 
-		@type projectType: csbuild.ProjectType
-		@param projectType: The type of project to compile. The options are:
+		:type projectType: csbuild.ProjectType
+		:param projectType: The type of project to compile. The options are:
 			- ProjectType.Application - on Windows, this will be built with a .exe extension. On Linux, there is no extension.
 			- ProjectType.SharedLibrary - on Windows, this will generate a .lib and a .dll.
 			On Linux, this will generate a .so and prefix "lib" to the output name.
@@ -373,8 +412,8 @@ class SettingsOverrider( object ):
 		"""
 		This allows you to override the extension used for the output file.
 
-		@type name: str
-		@param name: The desired extension, including the .; i.e., csbuild.Extension( ".exe" )
+		:type name: str
+		:param name: The desired extension, including the .; i.e., csbuild.Extension( ".exe" )
 		"""
 		self.settingsOverrides["ext"] = name
 
@@ -383,8 +422,8 @@ class SettingsOverrider( object ):
 		"""
 		Specifies the directory in which to place the output file.
 
-		@type s: str
-		@param s: The output directory, relative to the current script location, NOT to the project working directory.
+		:type s: str
+		:param s: The output directory, relative to the current script location, NOT to the project working directory.
 		"""
 		self.settingsOverrides["output_dir"] = os.path.abspath( s )
 		self.settingsOverrides["output_dir_set"] = True
@@ -394,8 +433,8 @@ class SettingsOverrider( object ):
 		"""
 		Specifies the directory in which to place the intermediate .o or .obj files.
 
-		@type s: str
-		@param s: The object directory, relative to the current script location, NOT to the project working directory.
+		:type s: str
+		:param s: The object directory, relative to the current script location, NOT to the project working directory.
 		"""
 		self.settingsOverrides["obj_dir"] = os.path.abspath( s )
 		self.settingsOverrides["obj_dir_set"] = True
@@ -420,8 +459,8 @@ class SettingsOverrider( object ):
 		Specifies a list of literal strings to be passed to the C++ compiler. As this is toolchain-specific, it should be
 		called on a per-toolchain basis.
 
-		@type args: an arbitrary number of strings
-		@param args: The list of flags to be passed
+		:type args: an arbitrary number of strings
+		:param args: The list of flags to be passed
 		"""
 		if "cpp_compiler_flags" not in self.settingsOverrides:
 			self.settingsOverrides["cpp_compiler_flags"] = []
@@ -441,8 +480,8 @@ class SettingsOverrider( object ):
 		Specifies a list of literal strings to be passed to the C compiler. As this is toolchain-specific, it should be
 		called on a per-toolchain basis.
 
-		@type args: an arbitrary number of strings
-		@param args: The list of flags to be passed
+		:type args: an arbitrary number of strings
+		:param args: The list of flags to be passed
 		"""
 		if "c_compiler_flags" not in self.settingsOverrides:
 			self.settingsOverrides["c_compiler_flags"] = []
@@ -462,8 +501,8 @@ class SettingsOverrider( object ):
 		Specifies a list of literal strings to be passed to the both the C compiler and the C++ compiler.
 		As this is toolchain-specific, it should be called on a per-toolchain basis.
 
-		@type args: an arbitrary number of strings
-		@param args: The list of flags to be passed
+		:type args: an arbitrary number of strings
+		:param args: The list of flags to be passed
 		"""
 		self.CCompilerFlags( *args )
 		self.CppCompilerFlags( *args )
@@ -482,8 +521,8 @@ class SettingsOverrider( object ):
 		Specifies a list of literal strings to be passed to the linker. As this is toolchain-specific, it should be
 		called on a per-toolchain basis.
 
-		@type args: an arbitrary number of strings
-		@param args: The list of flags to be passed
+		:type args: an arbitrary number of strings
+		:param args: The list of flags to be passed
 		"""
 		if "linker_flags" not in self.settingsOverrides:
 			self.settingsOverrides["linker_flags"] = []
@@ -517,8 +556,8 @@ class SettingsOverrider( object ):
 
 		Mutually exclusive with ChunkFilesize().
 
-		@type i: int
-		@param i: Number of files per chunk
+		:type i: int
+		:param i: Number of files per chunk
 		"""
 		self.settingsOverrides["chunk_size"] = i
 		self.settingsOverrides["chunk_filesize"] = 0
@@ -532,8 +571,8 @@ class SettingsOverrider( object ):
 
 		Mutually exclusive with ChunkNumFiles()
 
-		@type i: int
-		@param i: Maximum size per chunk in bytes.
+		:type i: int
+		:param i: Maximum size per chunk in bytes.
 		"""
 		self.settingsOverrides["chunk_filesize"] = i
 		self.settingsOverrides["chunk_size"] = i
@@ -541,7 +580,7 @@ class SettingsOverrider( object ):
 
 	def ChunkTolerance( self, i ):
 		"""
-		B{If building using ChunkSize():}
+		**If building using ChunkSize():**
 
 		Set the number of modified files below which a chunk will be split into individual files.
 
@@ -549,7 +588,7 @@ class SettingsOverrider( object ):
 		if more than three of its files need to be built; if three or less need to be built, they will
 		be built individually to save build time.
 
-		B{If building using ChunkFilesize():}
+		**If building using ChunkFilesize():**
 
 		Sets the total combined filesize of modified files within a chunk below which the chunk will be split into
 		individual files.
@@ -558,8 +597,8 @@ class SettingsOverrider( object ):
 		filesize of the files needing to be built exceeds 150kb. If less than 150kb worth of data needs to be built,
 		they will be built individually to save time.
 
-		@type i: int
-		@param i: Number of files required to trigger chunk building.
+		:type i: int
+		:param i: Number of files required to trigger chunk building.
 		"""
 		if "chunk_filesize" in self.settingsOverrides and self.settingsOverrides["chunk_filesize"] > 0:
 			self.settingsOverrides["chunk_size_tolerance"] = i
@@ -576,8 +615,8 @@ class SettingsOverrider( object ):
 		NOTE that setting this will disable the automatic file gathering, so any files in the project directory that
 		are not specified here will not be built.
 
-		@type chunks: an arbitrary number of lists of strings
-		@param chunks: Lists containing filenames of files to be built,
+		:type chunks: an arbitrary number of lists of strings
+		:param chunks: Lists containing filenames of files to be built,
 		relativel to the script's location, NOT the project working directory. Each list will be built as one chunk.
 		"""
 		chunks = list( chunks )
@@ -599,8 +638,8 @@ class SettingsOverrider( object ):
 		This is very useful if you're using a large library (such as boost) or a very large project and are experiencing
 		long waits prior to compilation.
 
-		@type i: int
-		@param i: Recursion depth for header examination
+		:type i: int
+		:param i: Recursion depth for header examination
 		"""
 		self.settingsOverrides["header_recursion"] = i
 
@@ -625,8 +664,8 @@ class SettingsOverrider( object ):
 		"""
 		Sets the default target if none is specified. The default value for this is release.
 
-		@type s: str
-		@param s: Name of the target to build for this project if none is specified.
+		:type s: str
+		:param s: Name of the target to build for this project if none is specified.
 		"""
 		self.settingsOverrides["default_target"] = s.lower( )
 
@@ -635,8 +674,8 @@ class SettingsOverrider( object ):
 		"""
 		Explicit list of header files to precompile. Disables chunk precompile when called.
 
-		@type args: an arbitrary number of strings
-		@param args: The files to precompile.
+		:type args: an arbitrary number of strings
+		:param args: The files to precompile.
 		"""
 		self.settingsOverrides["precompile"] = []
 		for arg in list( args ):
@@ -648,8 +687,8 @@ class SettingsOverrider( object ):
 		"""
 		Specifies header files that should be compiled as C headers instead of C++ headers.
 
-		@type args: an arbitrary number of strings
-		@param args: The files to specify as C files.
+		:type args: an arbitrary number of strings
+		:param args: The files to specify as C files.
 		"""
 		self.settingsOverrides["precompileAsC"] = []
 		for arg in list( args ):
@@ -667,8 +706,8 @@ class SettingsOverrider( object ):
 		"""
 		Disables precompilation and handles headers as usual.
 
-		@type args: an arbitrary number of strings
-		@param args: A list of files to disable precompilation for.
+		:type args: an arbitrary number of strings
+		:param args: A list of files to disable precompilation for.
 		If this list is empty, it will disable precompilation entirely.
 		"""
 		if "precompile_exclude" not in self.settingsOverrides:
@@ -713,8 +752,8 @@ class SettingsOverrider( object ):
 		"""
 		Set the output architecture.
 
-		@type arch: ArchitectureType
-		@param arch: The desired architecture.
+		:type arch: ArchitectureType
+		:param arch: The desired architecture.
 		"""
 		self.settingsOverrides["outputArchitecture"] = arch
 
@@ -722,8 +761,8 @@ class SettingsOverrider( object ):
 		"""
 		Adds additional files to be compiled that are not in the project directory.
 
-		@type args: an arbitrary number of strings
-		@param args: A list of files to add.
+		:type args: an arbitrary number of strings
+		:param args: A list of files to add.
 		"""
 		if "extraFiles" not in self.settingsOverrides:
 			self.settingsOverrides["extraFiles"] = []
@@ -743,8 +782,8 @@ class SettingsOverrider( object ):
 		"""
 		Adds additional directories to search for files in.
 
-		@type args: an arbitrary number of strings
-		@param args: A list of directories to search.
+		:type args: an arbitrary number of strings
+		:param args: A list of directories to search.
 		"""
 		if "extraDirs" not in self.settingsOverrides:
 			self.settingsOverrides["extraDirs"] = []
@@ -778,10 +817,10 @@ class SettingsOverrider( object ):
 		File1 and File2 will never appear together in the same chunk. If you specify more than two files,
 		or a pattern that matches more than two files, no two files in the list will ever appear together.
 
-		@type pattern: string
-		@param pattern: Pattern to search for files with (i.e., Source/*_Unchunkable.cpp)
-		@type additionalPatterns: arbitrary number of optional strings
-		@param additionalPatterns: Additional patterns to compile the list of mutually exclusive files with
+		:type pattern: string
+		:param pattern: Pattern to search for files with (i.e., Source/*_Unchunkable.cpp)
+		:type additionalPatterns: arbitrary number of optional strings
+		:param additionalPatterns: Additional patterns to compile the list of mutually exclusive files with
 		"""
 		if "chunkMutexes" not in self.settingsOverrides:
 			self.settingsOverrides["chunkMutexes"] = {}
@@ -805,8 +844,8 @@ class SettingsOverrider( object ):
 		Prevents the listed files (or files matching the listed patterns) from ever being placed
 		in a chunk, ever.
 
-		@type files: arbitrary number of strings
-		@param files: filenames or patterns to exclude from chunking
+		:type files: arbitrary number of strings
+		:param files: filenames or patterns to exclude from chunking
 		"""
 
 		if "chunkExcludes" not in self.settingsOverrides:
@@ -828,16 +867,16 @@ class SettingsOverrider( object ):
 	def SetStaticLinkMode(self, mode):
 		"""
 		Determines how static links are handled. With the msvc toolchain, iterative link times of a project with many libraries
-		can be significantly improved by setting this to L{StaticLinkMode.LinkIntermediateObjects}. This will cause the linker to link
+		can be significantly improved by setting this to :StaticLinkMode.LinkIntermediateObjects:. This will cause the linker to link
 		the .obj files used to make a library directly into the dependent project. Link times for full builds may be slightly slower,
 		but this will allow incremental linking to function when libraries are being changed. (Usually, changing a .lib results
 		in a full link.)
 
-		On most toolchains, this defaults to L{StaticLinkMode.LinkLibs}. In debug mode only for the msvc toolchain, this defaults
-		to L{StaticLinkMode.LinkIntermediateObjects}.
+		On most toolchains, this defaults to :StaticLinkMode.LinkLibs:. In debug mode only for the msvc toolchain, this defaults
+		to :StaticLinkMode.LinkIntermediateObjects:.
 
-		@type mode: L{StaticLinkMode}
-		@param mode: The link mode to set
+		:type mode: :StaticLinkMode:
+		:param mode: The link mode to set
 		"""
 		self.settingsOverrides["linkMode"] = mode
 		self.settingsOverrides["linkModeSet"] = True
@@ -855,10 +894,10 @@ class SettingsOverrider( object ):
 
 		project.userData.someData
 
-		@type key: str
-		@param key: name of the variable to set
-		@type value: any
-		@param value: value to set to that variable
+		:type key: str
+		:param key: name of the variable to set
+		:type value: any
+		:param value: value to set to that variable
 		"""
 		if "userData" not in self.settingsOverrides:
 			self.settingsOverrides["userData"] = csbuild.projectSettings.projectSettings.UserData()
@@ -903,8 +942,8 @@ class linkerBase( SettingsOverrider ):
 		"""
 		Asks for additional command-line arguments to be added by the toolchain.
 
-		@param parser: A parser for these arguments to be added to
-		@type parser: argparse.argument_parser
+		:param parser: A parser for these arguments to be added to
+		:type parser: argparse.argument_parser
 		"""
 		pass
 
@@ -914,8 +953,8 @@ class linkerBase( SettingsOverrider ):
 		"""
 		Get the exit code that the compiler returns if the compile process is interrupted.
 
-		@return: The linker's interrupt exit code
-		@rtype: int
+		:return: The linker's interrupt exit code
+		:rtype: int
 		"""
 		pass
 
@@ -924,8 +963,8 @@ class linkerBase( SettingsOverrider ):
 		"""
 		Get the list of architectures supported by this linker.
 
-		@return: List of architectures
-		@rtype: list[str]
+		:return: List of architectures
+		:rtype: list[str]
 		"""
 		pass
 
@@ -934,17 +973,17 @@ class linkerBase( SettingsOverrider ):
 		"""
 		Retrieves the command to be used for linking for this toolchain.
 
-		@param project: The project currently being linked, which can be used to retrieve any needed information.
-		@type project: L{csbuild.projectSettings.projectSettings}
+		:param project: The project currently being linked, which can be used to retrieve any needed information.
+		:type project: :class:`csbuild.projectSettings.projectSettings`
 
-		@param outputFile: The file that will be the result of the link operation.
-		@type outputFile: str
+		:param outputFile: The file that will be the result of the link operation.
+		:type outputFile: str
 
-		@param objList: List of objects being linked
-		@type objList: list[str]
+		:param objList: List of objects being linked
+		:type objList: list[str]
 
-		@return: The fully formatted link command
-		@rtype: str
+		:return: The fully formatted link command
+		:rtype: str
 		"""
 		pass
 
@@ -954,36 +993,36 @@ class linkerBase( SettingsOverrider ):
 		"""
 		Search for a library and verify that it is installed.
 
-		@param project: The project currently being checked, which can be used to retrieve any needed information.
-		@type project: L{csbuild.projectSettings.projectSettings}
+		:param project: The project currently being checked, which can be used to retrieve any needed information.
+		:type project: :class:`csbuild.projectSettings.projectSettings`
 
-		@param library: The library being searched for
-		@type library: str
+		:param library: The library being searched for
+		:type library: str
 
-		@param library_dirs: The directories to search for the library in
-		@type library_dirs: list[str]
+		:param library_dirs: The directories to search for the library in
+		:type library_dirs: list[str]
 
-		@param force_static: Whether or not this library should be forced to link statically
-		@type force_static: bool
+		:param force_static: Whether or not this library should be forced to link statically
+		:type force_static: bool
 
-		@param force_shared: Whether or not this library should be forced to link dynamically
-		@type force_shared: bool
+		:param force_shared: Whether or not this library should be forced to link dynamically
+		:type force_shared: bool
 
-		@return: The location to the library if found, or None
-		@rtype: str or None
+		:return: The location to the library if found, or None
+		:rtype: str or None
 		"""
 		pass
 
 	@abstractmethod
 	def get_default_extension( self, projectType ):
 		"""
-		Get the default extension for a given L{csbuild.ProjectType} value.
+		Get the default extension for a given :class:`csbuild.ProjectType` value.
 
-		@param projectType: The requested output type
-		@type projectType: L{csbuild.ProjectType}
+		:param projectType: The requested output type
+		:type projectType: :class:`csbuild.ProjectType`
 
-		@return: The extension, including the . (i.e., .so, .a, .lib, .exe)
-		@rtype: str
+		:return: The extension, including the . (i.e., .so, .a, .lib, .exe)
+		:rtype: str
 		"""
 		pass
 
@@ -1033,8 +1072,8 @@ class compilerBase( SettingsOverrider ):
 		"""
 		Asks for additional command-line arguments to be added by the toolchain.
 
-		@param parser: A parser for these arguments to be added to
-		@type parser: argparse.argument_parser
+		:param parser: A parser for these arguments to be added to
+		:type parser: argparse.argument_parser
 		"""
 		pass
 
@@ -1044,8 +1083,8 @@ class compilerBase( SettingsOverrider ):
 		"""
 		Get the exit code that the compiler returns if the compile process is interrupted.
 
-		@return: The compiler's interrupt exit code
-		@rtype: int
+		:return: The compiler's interrupt exit code
+		:rtype: int
 		"""
 		pass
 
@@ -1054,8 +1093,8 @@ class compilerBase( SettingsOverrider ):
 		"""
 		Get the list of architectures supported by this compiler.
 
-		@return: List of architectures
-		@rtype: list[str]
+		:return: List of architectures
+		:rtype: list[str]
 		"""
 		pass
 
@@ -1073,11 +1112,11 @@ class compilerBase( SettingsOverrider ):
 
 		Thus, anything that can be changed without forcing a clean rebuild should be in the extended command, not the base.
 
-		@param project: The project currently being compiled, which can be used to retrieve any needed information.
-		@type project: L{csbuild.projectSettings.projectSettings}
+		:param project: The project currently being compiled, which can be used to retrieve any needed information.
+		:type project: :class:`csbuild.projectSettings.projectSettings`
 
-		@return: The base command string
-		@rtype: str
+		:return: The base command string
+		:rtype: str
 		"""
 		pass
 
@@ -1095,11 +1134,11 @@ class compilerBase( SettingsOverrider ):
 
 		Thus, anything that can be changed without forcing a clean rebuild should be in the extended command, not the base.
 
-		@param project: The project currently being compiled, which can be used to retrieve any needed information.
-		@type project: L{csbuild.projectSettings.projectSettings}
+		:param project: The project currently being compiled, which can be used to retrieve any needed information.
+		:type project: :class:`csbuild.projectSettings.projectSettings`
 
-		@return: The base command string
-		@rtype: str
+		:return: The base command string
+		:rtype: str
 		"""
 		pass
 
@@ -1117,24 +1156,24 @@ class compilerBase( SettingsOverrider ):
 
 		Thus, anything that can be changed without forcing a clean rebuild should be in the extended command, not the base.
 
-		@param baseCmd: The project's base command as returned from L{get_base_cxx_command} or L{get_base_cc_command},
+		:param baseCmd: The project's base command as returned from :get_base_cxx_command: or :get_base_cc_command:,
 		as is appropriate for the file being compiled.
-		@type baseCmd: str
+		:type baseCmd: str
 
-		@param project: The project currently being compiled, which can be used to retrieve any needed information.
-		@type project: L{csbuild.projectSettings.projectSettings}
+		:param project: The project currently being compiled, which can be used to retrieve any needed information.
+		:type project: :class:`csbuild.projectSettings.projectSettings`
 
-		@param forceIncludeFile: A precompiled header that's being forcefully included.
-		@type forceIncludeFile: str
+		:param forceIncludeFile: A precompiled header that's being forcefully included.
+		:type forceIncludeFile: str
 
-		@param outObj: The object file to be generated by this command
-		@type outObj: str
+		:param outObj: The object file to be generated by this command
+		:type outObj: str
 
-		@param inFile: The file being compiled
-		@type inFile: str
+		:param inFile: The file being compiled
+		:type inFile: str
 
-		@return: The extended command string, including the base command string
-		@rtype: str
+		:return: The extended command string, including the base command string
+		:rtype: str
 		"""
 		pass
 
@@ -1152,11 +1191,11 @@ class compilerBase( SettingsOverrider ):
 
 		Thus, anything that can be changed without forcing a clean rebuild should be in the extended command, not the base.
 
-		@param project: The project currently being compiled, which can be used to retrieve any needed information.
-		@type project: L{csbuild.projectSettings.projectSettings}
+		:param project: The project currently being compiled, which can be used to retrieve any needed information.
+		:type project: :class:`csbuild.projectSettings.projectSettings`
 
-		@return: The base command string
-		@rtype: str
+		:return: The base command string
+		:rtype: str
 		"""
 		pass
 
@@ -1174,11 +1213,11 @@ class compilerBase( SettingsOverrider ):
 
 		Thus, anything that can be changed without forcing a clean rebuild should be in the extended command, not the base.
 
-		@param project: The project currently being compiled, which can be used to retrieve any needed information.
-		@type project: L{csbuild.projectSettings.projectSettings}
+		:param project: The project currently being compiled, which can be used to retrieve any needed information.
+		:type project: :class:`csbuild.projectSettings.projectSettings`
 
-		@return: The base command string
-		@rtype: str
+		:return: The base command string
+		:rtype: str
 		"""
 		pass
 
@@ -1196,24 +1235,24 @@ class compilerBase( SettingsOverrider ):
 
 		Thus, anything that can be changed without forcing a clean rebuild should be in the extended command, not the base.
 
-		@param baseCmd: The project's base command as returned from L{get_base_cxx_command} or L{get_base_cc_command},
+		:param baseCmd: The project's base command as returned from :get_base_cxx_command: or :get_base_cc_command:,
 		as is appropriate for the file being compiled.
-		@type baseCmd: str
+		:type baseCmd: str
 
-		@param project: The project currently being compiled, which can be used to retrieve any needed information.
-		@type project: L{csbuild.projectSettings.projectSettings}
+		:param project: The project currently being compiled, which can be used to retrieve any needed information.
+		:type project: :class:`csbuild.projectSettings.projectSettings`
 
-		@param forceIncludeFile: Currently unused for precompiled headers.
-		@type forceIncludeFile: str
+		:param forceIncludeFile: Currently unused for precompiled headers.
+		:type forceIncludeFile: str
 
-		@param outObj: The object file to be generated by this command
-		@type outObj: str
+		:param outObj: The object file to be generated by this command
+		:type outObj: str
 
-		@param inFile: The file being compiled
-		@type inFile: str
+		:param inFile: The file being compiled
+		:type inFile: str
 
-		@return: The extended command string, including the base command string
-		@rtype: str
+		:return: The extended command string, including the base command string
+		:rtype: str
 		"""
 		pass
 
@@ -1223,11 +1262,11 @@ class compilerBase( SettingsOverrider ):
 		"""
 		Get the properly formatted precompiled header output file for a given header input.
 
-		@param fileName: The input header
-		@type fileName: str
+		:param fileName: The input header
+		:type fileName: str
 
-		@return: The formatted output file (i.e., "header.pch" or "header.gch")
-		@rtype: str
+		:return: The formatted output file (i.e., "header.pch" or "header.gch")
+		:rtype: str
 		"""
 		pass
 
@@ -1257,11 +1296,11 @@ class compilerBase( SettingsOverrider ):
 		pass
 
 
-class toolchain( SettingsOverrider ):
+class toolchain( object ):
 	"""
 	Base class used for custom toolchains
 	To create a new toolchain, inherit from this class, and then use
-	L{csbuild.RegisterToolchain()<csbuild.RegisterToolchain>}
+	:func:`csbuild.RegisterToolchain`
 	"""
 	def __init__( self ):
 		"""
@@ -1292,10 +1331,10 @@ class toolchain( SettingsOverrider ):
 
 		csbuild.Toolchain("msvc").Tool("compiler", "linker").SetMsvcVersion(110)
 
-		@type args: arbitrary number of strings
-		@param args: The list of tools to act on
+		:type args: arbitrary number of strings
+		:param args: The list of tools to act on
 
-		@return: A proxy object that enables functions to be applied to one or more specific tools.
+		:return: A proxy object that enables functions to be applied to one or more specific tools.
 		"""
 		tools = []
 		for arg in list( args ):
@@ -1371,10 +1410,10 @@ class toolchain( SettingsOverrider ):
 		"""
 		Create a deep copy of this toolchain.
 
-		@return: a copy of this toolchain
-		@rtype: toolchain
+		:return: a copy of this toolchain
+		:rtype: toolchain
 		"""
-		ret = SettingsOverrider.copy(self)
+		ret = toolchain()
 
 		for kvp in self.tools.items():
 			ret.tools[kvp[0]] = kvp[1].copy()

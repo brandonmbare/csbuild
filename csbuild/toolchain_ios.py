@@ -98,7 +98,7 @@ class iOSBase(object):
 
 
 	def _getAugmentedCommand(self, originalCmd, project):
-		return "{}{}{}".format(
+		return "{} {}{}".format(
 			originalCmd,
 			self._getMinVersionArg(project.outputArchitecture),
 			self._getArchitectureArg(project.outputArchitecture),
@@ -164,10 +164,6 @@ class iOSLinker(iOSBase, toolchain_gcc.linker_gcc):
 		return ""
 
 
-	def get_library_dirs( self, libDirs, forLinker ):
-		return ""
-
-
 	def _getStartGroupFlags(self):
 		return ""
 
@@ -179,4 +175,7 @@ class iOSLinker(iOSBase, toolchain_gcc.linker_gcc):
 	def get_link_command( self, project, outputFile, objList ):
 		self._setSysRoot(project.outputArchitecture)
 		originalCmd = toolchain_gcc.linker_gcc.get_link_command(self, project, outputFile, objList)
-		return self._getAugmentedCommand(originalCmd, project)
+		if not project.type == csbuild.ProjectType.StaticLibrary:
+			return self._getAugmentedCommand(originalCmd, project)
+		else:
+			return originalCmd

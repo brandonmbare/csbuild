@@ -42,12 +42,6 @@ class OutputType:
 class project_generator_slickedit(project_generator.project_generator):
 	"""
 	Generator used to create a SlickEdit project files.
-
-	@undocumented: __init__
-	@undocumented: _WriteWorkspace
-	@undocumented: _WriteSubGroup
-	@undocumented: _WriteProject
-	@undocumented: _SaveXmlFile
 	"""
 
 	def __init__(self, path, solutionName, extraArgs):

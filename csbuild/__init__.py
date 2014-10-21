@@ -19,39 +19,15 @@
 # SOFTWARE.
 
 """
-B{CSBuild main module}
+.. module:: CSBuild
+	:synopsis: cross-platform c/c++ build system
 
-Provides access to most CSBuild functionality
-
-@var mainfile: The base filename of the main makefile.
-(If you're not within an @project function, os.getcwd() will return the path to this file)
-@type mainfile: str
-
-@attention: To support CSBuild's operation, Python's import lock is DISABLED once CSBuild has started.
+.. moduleauthor:: Jaedyn K. Draper, Brandon M. Bare
+.. attention:: To support CSBuild's operation, Python's import lock is DISABLED once CSBuild has started.
 This should not be a problem for most makefiles, but if you do any threading within your makefile, take note:
 anything that's imported and used by those threads should always be implemented on the main thread before that
 thread's execution starts. Otherwise, CSBuild does not guarantee that the import will have completed
 once that thread tries to use it. Long story short: Don't import modules within threads.
-
-@var ARG_NOT_SET: A unique variable returned from get_option() for an option that has never been added to the option list
-@var helpMode: True if the script has been executed with --help or -h
-
-@undocumented: _guiModule
-@undocumented: dummy
-@undocumented: _setupdefaults
-@undocumented: _execfile
-@undocumented: _run
-@undocumented: build
-@undocumented: link
-@undocumented: clean
-@undocumented: install
-@undocumented: make
-@undocumented: _options
-@undocumented: __credits__
-@undocumented: __maintainer__
-@undocumented: __email__
-@undocumented: __status__
-@undocumented: __package__
 """
 
 import argparse
@@ -131,8 +107,6 @@ __maintainer__ = "Jaedyn K. Draper"
 __email__ = "jaedyn.csbuild-contact@jaedyn.co"
 __status__ = "Development"
 
-__all__ = []
-
 
 with open( os.path.dirname( __file__ ) + "/version", "r" ) as f:
 	__version__ = f.read( )
@@ -157,35 +131,35 @@ def InstallOutput( ):
 	Enables installation of the compiled output file.
 	Argument is a subdirectory of the libdir (by default, /usr/local/lib)
 
-	@type s: str
-	@param s: Install sdirectory - i.e., if you specify this as "libraries", the libraries will be installed
-	to I{{libdir}}/libraries.
+	:type s: str
+	:param s: Install sdirectory - i.e., if you specify this as "libraries", the libraries will be installed
+	to *{libdir*}/libraries.
 	"""
-	projectSettings.currentProject.install_output = True
+	projectSettings.currentProject.SetValue("install_output", True)
 
 
 def InstallHeaders( ):
 	"""
 	Enables installation of the project's headers
 	Default target is /usr/local/include, unless the --prefix option is specified.
-	If --prefix is specified, the target will be I{{prefix}}/include
+	If --prefix is specified, the target will be *{prefix*}/include
 
-	@type s: str
-	@param s: Override directory - i.e., if you specify this as "headers", the headers will be installed
-	to I{{prefix}}/headers.
+	:type s: str
+	:param s: Override directory - i.e., if you specify this as "headers", the headers will be installed
+	to *{prefix*}/headers.
 	"""
-	projectSettings.currentProject.install_headers = True
+	projectSettings.currentProject.SetValue("install_headers", True)
 
 
 def InstallSubdir( s ):
 	"""
-	Specifies a subdirectory of I{{prefix}}/include in which to install the headers.
+	Specifies a subdirectory of *{prefix*}/include in which to install the headers.
 
-	@type s: str
-	@param s: The desired subdirectory; i.e., if you specify this as "myLib", the headers will be
-	installed under I{{prefix}}/include/myLib.
+	:type s: str
+	:param s: The desired subdirectory; i.e., if you specify this as "myLib", the headers will be
+	installed under *{prefix*}/include/myLib.
 	"""
-	projectSettings.currentProject.header_subdir = s
+	projectSettings.currentProject.SetValue("header_subdir", s)
 
 
 def ExcludeDirs( *args ):
@@ -193,8 +167,8 @@ def ExcludeDirs( *args ):
 	Exclude the given directories from the project. This may be called multiple times to add additional excludes.
 	Directories are relative to the location of the script itself, not the specified project working directory.
 
-	@type args: an arbitrary number of strings
-	@param args: The list of directories to be excluded.
+	:type args: an arbitrary number of strings
+	:param args: The list of directories to be excluded.
 	"""
 	args = list( args )
 	newargs = []
@@ -202,7 +176,7 @@ def ExcludeDirs( *args ):
 		if arg[0] != '/' and not arg.startswith( "./" ):
 			arg = "./" + arg
 		newargs.append( os.path.abspath( arg ) )
-	projectSettings.currentProject.exclude_dirs += newargs
+	projectSettings.currentProject.ExtendList("exclude_dirs", newargs)
 
 
 def ExcludeFiles( *args ):
@@ -210,8 +184,8 @@ def ExcludeFiles( *args ):
 	Exclude the given files from the project. This may be called multiple times to add additional excludes.
 	Files are relative to the location of the script itself, not the specified project working directory.
 
-	@type args: an arbitrary number of strings
-	@param args: The list of files to be excluded.
+	:type args: an arbitrary number of strings
+	:param args: The list of files to be excluded.
 	"""
 	args = list( args )
 	newargs = []
@@ -219,7 +193,7 @@ def ExcludeFiles( *args ):
 		if arg[0] != '/' and not arg.startswith( "./" ):
 			arg = "./" + arg
 		newargs.append( os.path.abspath( arg ) )
-	projectSettings.currentProject.exclude_files += newargs
+	projectSettings.currentProject.ExtendList("exclude_files", newargs)
 
 
 def Libraries( *args ):
@@ -233,40 +207,40 @@ def Libraries( *args ):
 	will then search for it with the lib prefix. I.e., csbuild.Libraries("MyLib") will first search for MyLib.lib,
 	and if that isn't found, will then search for libMyLib.lib.
 
-	@type args: an arbitrary number of strings
-	@param args: The list of libraries to link in.
+	:type args: an arbitrary number of strings
+	:param args: The list of libraries to link in.
 	"""
-	projectSettings.currentProject.libraries |= set( args )
+	projectSettings.currentProject.UnionSet("libraries", set( args ))
 
 
 def StaticLibraries( *args ):
 	"""
 	Similar to csbuild.Libraries, but forces these libraries to be linked statically.
 
-	@type args: an arbitrary number of strings
-	@param args: The list of libraries to link in.
+	:type args: an arbitrary number of strings
+	:param args: The list of libraries to link in.
 	"""
-	projectSettings.currentProject.static_libraries |= set( args )
+	projectSettings.currentProject.UnionSet("static_libraries", set( args ))
 
 
 def SharedLibraries( *args ):
 	"""
 	Similar to csbuild.Libraries, but forces these libraries to be linked dynamically.
 
-	@type args: an arbitrary number of strings
-	@param args: The list of libraries to link in.
+	:type args: an arbitrary number of strings
+	:param args: The list of libraries to link in.
 	"""
-	projectSettings.currentProject.shared_libraries |= set( args )
+	projectSettings.currentProject.UnionSet("shared_libraries", set( args ))
 
 
 def AddFrameworks( *args ):
 	"""
 	Add frameworks for Objective-C/C++ compilations.
 
-	@type args: an arbitrary number of strings
-	@param args: The list of libraries to link in.
+	:type args: an arbitrary number of strings
+	:param args: The list of libraries to link in.
 	"""
-	projectSettings.currentProject.frameworks |= set( args )
+	projectSettings.currentProject.UnionSet("frameworks", set( args ))
 
 
 def IncludeDirs( *args ):
@@ -277,12 +251,12 @@ def IncludeDirs( *args ):
 	In the gcc toolchain, /usr/include and /usr/local/include (or the platform appropriate equivalents) will always
 	be appended to the end of this list.
 
-	@type args: an arbitrary number of strings
-	@param args: The list of directories to be searched.
+	:type args: an arbitrary number of strings
+	:param args: The list of directories to be searched.
 	"""
 	for arg in args:
 		arg = os.path.abspath( arg )
-		projectSettings.currentProject.include_dirs.append( arg )
+		projectSettings.currentProject.AppendList("include_dirs",  arg )
 
 
 def LibDirs( *args ):
@@ -293,12 +267,12 @@ def LibDirs( *args ):
 	In the gcc toolchain, /usr/lib and /usr/local/lib (or the platform appropriate equivalents) will always
 	be appended to the end of this list.
 
-	@type args: an arbitrary number of strings
-	@param args: The list of directories to be searched.
+	:type args: an arbitrary number of strings
+	:param args: The list of directories to be searched.
 	"""
 	for arg in args:
 		arg = os.path.abspath( arg )
-		projectSettings.currentProject.library_dirs.append( arg )
+		projectSettings.currentProject.AppendList("library_dirs",  arg )
 
 
 def AddFrameworkDirs( *args ):
@@ -306,175 +280,175 @@ def AddFrameworkDirs( *args ):
 	Search the given directories for framworks to link. This may be called multiple times to add additional directories.
 	Directories are relative to the location of the script itself, not the specified project working directory.
 
-	@type args: an arbitrary number of strings
-	@param args: The list of directories to be searched.
+	:type args: an arbitrary number of strings
+	:param args: The list of directories to be searched.
 	"""
 	for arg in args:
 		arg = os.path.abspath( arg )
-		projectSettings.currentProject.frameworkDirs.add( arg )
+		projectSettings.currentProject.AddToSet("frameworkDirs",  arg )
 
 
 def ClearLibraries( ):
 	"""Clears the list of libraries"""
-	projectSettings.currentProject.libraries = set()
+	projectSettings.currentProject.SetValue("libraries", set())
 
 
 def ClearStaticLibraries( ):
 	"""Clears the list of statically-linked libraries"""
-	projectSettings.currentProject.static_libraries = set()
+	projectSettings.currentProject.SetValue("static_libraries", set())
 
 
 def ClearSharedibraries( ):
 	"""Clears the list of dynamically-linked libraries"""
-	projectSettings.currentProject.shared_libraries = set()
+	projectSettings.currentProject.SetValue("shared_libraries", set())
 
 
 def ClearIncludeDirs( ):
 	"""Clears the include directories"""
-	projectSettings.currentProject.include_dirs = []
+	projectSettings.currentProject.SetValue("include_dirs", [])
 
 
 def ClearLibDirs( ):
 	"""Clears the library directories"""
-	projectSettings.currentProject.library_dirs = []
+	projectSettings.currentProject.SetValue("library_dirs", [])
 
 
 def Opt( i ):
 	"""
 	Sets the optimization level. Due to toolchain differences, this should be called per-toolchain, usually.
 
-	@type i: OptimizationLevel
-	@param i: The level of optimization to use
+	:type i: OptimizationLevel
+	:param i: The level of optimization to use
 	"""
-	projectSettings.currentProject.opt_level = i
-	projectSettings.currentProject.opt_set = True
+	projectSettings.currentProject.SetValue("opt_level", i)
+	projectSettings.currentProject.SetValue("opt_set", True)
 
 
 def Debug( i ):
 	"""
 	Sets the debug level. Due to toolchain differences, this should be called per-toolchain, usually.
 
-	@type i: DebugLevel
-	@param i: How (and if) symbols should be generated
+	:type i: DebugLevel
+	:param i: How (and if) symbols should be generated
 	"""
-	projectSettings.currentProject.debug_level = i
-	projectSettings.currentProject.debug_set = True
+	projectSettings.currentProject.SetValue("debug_level", i)
+	projectSettings.currentProject.SetValue("debug_set", True)
 
 
 def Define( *args ):
 	"""
 	Add additionally defined preprocessor directives, as if each file had a #define directive at the very top.
 
-	@type args: an arbitrary number of strings
-	@param args: The list of preprocessor directives to define
+	:type args: an arbitrary number of strings
+	:param args: The list of preprocessor directives to define
 	"""
-	projectSettings.currentProject.defines += list( args )
+	projectSettings.currentProject.ExtendList("defines", list( args ))
 
 
 def ClearDefines( ):
 	"""Clear the list of defined preprocessor directives"""
-	projectSettings.currentProject.defines = []
+	projectSettings.currentProject.SetValue("defines", [])
 
 
 def Undefine( *args ):
 	"""
 	Add explicitly undefined preprocessor directives, as if each file had a #undef directive at the very top.
 
-	@type args: an arbitrary number of strings
-	@param args: The list of preprocessor directives to undefine
+	:type args: an arbitrary number of strings
+	:param args: The list of preprocessor directives to undefine
 	"""
-	projectSettings.currentProject.undefines += list( args )
+	projectSettings.currentProject.ExtendList("undefines", list( args ))
 
 
 def ClearUndefines( ):
 	"""Clear the list of undefined preprocessor directives"""
-	projectSettings.currentProject.undefines = []
+	projectSettings.currentProject.SetValue("undefines", [])
 
 
 def CppCompiler( s ):
 	"""
 	Specify the compiler executable to be used for compiling C++ files. Ignored by the msvc toolchain.
 
-	@type s: str
-	@param s: Path to the executable to use for compilation
+	:type s: str
+	:param s: Path to the executable to use for compilation
 	"""
-	projectSettings.currentProject.cxx = s
+	projectSettings.currentProject.SetValue("cxx", s)
 
 
 def CCompiler( s ):
 	"""
 	Specify the compiler executable to be used for compiling C files. Ignored by the msvc toolchain.
 
-	@type s: str
-	@param s: Path to the executable to use for compilation
+	:type s: str
+	:param s: Path to the executable to use for compilation
 	"""
-	projectSettings.currentProject.cc = s
+	projectSettings.currentProject.SetValue("cc", s)
 
 
 def Output( name, projectType = ProjectType.Application ):
 	"""
 	Sets the output options for this project.
 
-	@type name: str
-	@param name: The output name. Do not include an extension, and do not include the "lib" prefix for libraries on
+	:type name: str
+	:param name: The output name. Do not include an extension, and do not include the "lib" prefix for libraries on
 	Linux. These are added automatically.
 
-	@type projectType: csbuild.ProjectType
-	@param projectType: The type of project to compile. The options are:
+	:type projectType: csbuild.ProjectType
+	:param projectType: The type of project to compile. The options are:
 		- ProjectType.Application - on Windows, this will be built with a .exe extension. On Linux, there is no extension.
 		- ProjectType.SharedLibrary - on Windows, this will generate a .lib and a .dll.
 		On Linux, this will generate a .so and prefix "lib" to the output name.
 		- ProjectType.StaticLibrary - on Windows, this will generate a .lib. On Linux, this will generate a .a and prefix
 		"lib" ot the output name.
 	"""
-	projectSettings.currentProject.output_name = name
-	projectSettings.currentProject.type = projectType
+	projectSettings.currentProject.SetValue("output_name", name)
+	projectSettings.currentProject.SetValue("type", projectType)
 
 
 def Extension( name ):
 	"""
 	This allows you to override the extension used for the output file.
 
-	@type name: str
-	@param name: The desired extension, including the .; i.e., csbuild.Extension( ".exe" )
+	:type name: str
+	:param name: The desired extension, including the .; i.e., csbuild.Extension( ".exe" )
 	"""
-	projectSettings.currentProject.ext = name
+	projectSettings.currentProject.SetValue("ext", name)
 
 
 def OutDir( s ):
 	"""
 	Specifies the directory in which to place the output file.
 
-	@type s: str
-	@param s: The output directory, relative to the current script location, NOT to the project working directory.
+	:type s: str
+	:param s: The output directory, relative to the current script location, NOT to the project working directory.
 	"""
-	projectSettings.currentProject.output_dir = os.path.abspath( s )
-	projectSettings.currentProject.output_dir_set = True
+	projectSettings.currentProject.SetValue("output_dir", os.path.abspath( s ))
+	projectSettings.currentProject.SetValue("output_dir_set", True)
 
 
 def ObjDir( s ):
 	"""
 	Specifies the directory in which to place the intermediate .o or .obj files.
 
-	@type s: str
-	@param s: The object directory, relative to the current script location, NOT to the project working directory.
+	:type s: str
+	:param s: The object directory, relative to the current script location, NOT to the project working directory.
 	"""
-	projectSettings.currentProject.obj_dir = os.path.abspath( s )
-	projectSettings.currentProject.obj_dir_set = True
+	projectSettings.currentProject.SetValue("obj_dir", os.path.abspath( s ))
+	projectSettings.currentProject.SetValue("obj_dir_set", True)
 
 
 def EnableProfile( ):
 	"""
 	Optimize output for profiling
 	"""
-	projectSettings.currentProject.profile = True
+	projectSettings.currentProject.SetValue("profile", True)
 
 
 def DisableProfile( ):
 	"""
 	Turns profiling optimizations back off
 	"""
-	projectSettings.currentProject.profile = False
+	projectSettings.currentProject.SetValue("profile", False)
 
 
 def CppCompilerFlags( *args ):
@@ -482,17 +456,17 @@ def CppCompilerFlags( *args ):
 	Specifies a list of literal strings to be passed to the C++ compiler. As this is toolchain-specific, it should be
 	called on a per-toolchain basis.
 
-	@type args: an arbitrary number of strings
-	@param args: The list of flags to be passed
+	:type args: an arbitrary number of strings
+	:param args: The list of flags to be passed
 	"""
-	projectSettings.currentProject.cpp_compiler_flags += list( args )
+	projectSettings.currentProject.ExtendList("cpp_compiler_flags", list( args ))
 
 
 def ClearCppCompilerFlags( ):
 	"""
 	Clears the list of literal C++ compiler flags.
 	"""
-	projectSettings.currentProject.cpp_compiler_flags = []
+	projectSettings.currentProject.SetValue("cpp_compiler_flags", [])
 
 
 def CCompilerFlags( *args ):
@@ -500,17 +474,17 @@ def CCompilerFlags( *args ):
 	Specifies a list of literal strings to be passed to the C compiler. As this is toolchain-specific, it should be
 	called on a per-toolchain basis.
 
-	@type args: an arbitrary number of strings
-	@param args: The list of flags to be passed
+	:type args: an arbitrary number of strings
+	:param args: The list of flags to be passed
 	"""
-	projectSettings.currentProject.c_compiler_flags += list( args )
+	projectSettings.currentProject.ExtendList("c_compiler_flags", list( args ))
 
 
 def ClearCCompilerFlags( ):
 	"""
 	Clears the list of literal C compiler flags.
 	"""
-	projectSettings.currentProject.c_compiler_flags = []
+	projectSettings.currentProject.SetValue("c_compiler_flags", [])
 
 
 def CompilerFlags( *args ):
@@ -518,8 +492,8 @@ def CompilerFlags( *args ):
 	Specifies a list of literal strings to be passed to the both the C compiler and the C++ compiler.
 	As this is toolchain-specific, it should be called on a per-toolchain basis.
 
-	@type args: an arbitrary number of strings
-	@param args: The list of flags to be passed
+	:type args: an arbitrary number of strings
+	:param args: The list of flags to be passed
 	"""
 	CCompilerFlags( *args )
 	CppCompilerFlags( *args )
@@ -538,27 +512,27 @@ def LinkerFlags( *args ):
 	Specifies a list of literal strings to be passed to the linker. As this is toolchain-specific, it should be
 	called on a per-toolchain basis.
 
-	@type args: an arbitrary number of strings
-	@param args: The list of flags to be passed
+	:type args: an arbitrary number of strings
+	:param args: The list of flags to be passed
 	"""
-	projectSettings.currentProject.linker_flags += list( args )
+	projectSettings.currentProject.ExtendList("linker_flags", list( args ))
 
 
 def ClearLinkerFlags( ):
 	"""
 	Clears the list of literal linker flags.
 	"""
-	projectSettings.currentProject.linker_flags = []
+	projectSettings.currentProject.SetValue("linker_flags", [])
 
 
 def DisableChunkedBuild( ):
 	"""Turn off the chunked/unity build system and build using individual files."""
-	projectSettings.currentProject.use_chunks = False
+	projectSettings.currentProject.SetValue("use_chunks", False)
 
 
 def EnableChunkedBuild( ):
 	"""Turn chunked/unity build on and build using larger compilation units. This is the default."""
-	projectSettings.currentProject.use_chunks = True
+	projectSettings.currentProject.SetValue("use_chunks", True)
 
 
 def StopOnFirstError():
@@ -577,11 +551,11 @@ def ChunkNumFiles( i ):
 
 	Mutually exclusive with ChunkFilesize().
 
-	@type i: int
-	@param i: Number of files per chunk
+	:type i: int
+	:param i: Number of files per chunk
 	"""
-	projectSettings.currentProject.chunk_size = i
-	projectSettings.currentProject.chunk_filesize = 0
+	projectSettings.currentProject.SetValue("chunk_size", i)
+	projectSettings.currentProject.SetValue("chunk_filesize", 0)
 
 
 def ChunkFilesize( i ):
@@ -592,18 +566,18 @@ def ChunkFilesize( i ):
 
 	Mutually exclusive with ChunkNumFiles()
 
-	@type i: int
-	@param i: Maximum size per chunk in bytes.
+	:type i: int
+	:param i: Maximum size per chunk in bytes.
 	"""
-	projectSettings.currentProject.chunk_filesize = i
-	projectSettings.currentProject.chunk_size = i
+	projectSettings.currentProject.SetValue("chunk_filesize", i)
+	projectSettings.currentProject.SetValue("chunk_size", i)
 
 
 def ChunkTolerance( i ):
 	"""
 	Please see detailed description.
 
-	B{If building using ChunkSize():}
+	**If building using ChunkSize():**
 
 	Set the number of modified files below which a chunk will be split into individual files.
 
@@ -611,7 +585,7 @@ def ChunkTolerance( i ):
 	if more than three of its files need to be built; if three or less need to be built, they will
 	be built individually to save build time.
 
-	B{If building using ChunkFilesize():}
+	**If building using ChunkFilesize():**
 
 	Sets the total combined filesize of modified files within a chunk below which the chunk will be split into
 	individual files.
@@ -620,13 +594,13 @@ def ChunkTolerance( i ):
 	filesize of the files needing to be built exceeds 150kb. If less than 150kb worth of data needs to be built,
 	they will be built individually to save time.
 
-	@type i: int
-	@param i: Number of files required to trigger chunk building.
+	:type i: int
+	:param i: Number of files required to trigger chunk building.
 	"""
 	if projectSettings.currentProject.chunk_filesize > 0:
-		projectSettings.currentProject.chunk_size_tolerance = i
+		projectSettings.currentProject.SetValue("chunk_size_tolerance", i)
 	elif projectSettings.currentProject.chunk_size > 0:
-		projectSettings.currentProject.chunk_tolerance = i
+		projectSettings.currentProject.SetValue("chunk_tolerance", i)
 	else:
 		log.LOG_WARN( "Chunk size and chunk filesize are both zero or negative, cannot set a tolerance." )
 
@@ -638,17 +612,17 @@ def SetChunks( *chunks ):
 	NOTE that setting this will disable the automatic file gathering, so any files in the project directory that
 	are not specified here will not be built.
 
-	@type chunks: an arbitrary number of lists of strings
-	@param chunks: Lists containing filenames of files to be built,
+	:type chunks: an arbitrary number of lists of strings
+	:param chunks: Lists containing filenames of files to be built,
 	relativel to the script's location, NOT the project working directory. Each list will be built as one chunk.
 	"""
 	chunks = list( chunks )
-	projectSettings.currentProject.forceChunks = chunks
+	projectSettings.currentProject.SetValue("forceChunks", chunks)
 
 
 def ClearChunks( ):
 	"""Clears the explicitly set list of chunks and returns the behavior to the default."""
-	projectSettings.currentProject.forceChunks = []
+	projectSettings.currentProject.SetValue("forceChunks", [])
 
 
 def HeaderRecursionLevel( i ):
@@ -661,10 +635,10 @@ def HeaderRecursionLevel( i ):
 	This is very useful if you're using a large library (such as boost) or a very large project and are experiencing
 	long waits prior to compilation.
 
-	@type i: int
-	@param i: Recursion depth for header examination
+	:type i: int
+	:param i: Recursion depth for header examination
 	"""
-	projectSettings.currentProject.header_recursion = i
+	projectSettings.currentProject.SetValue("header_recursion", i)
 
 
 def IgnoreExternalHeaders( ):
@@ -673,64 +647,64 @@ def IgnoreExternalHeaders( ):
 	base project's directory and its subdirectories will be checked. This will speed up header checking, but if you
 	modify any external headers, you will need to manually --clean or --rebuild the project.
 	"""
-	projectSettings.currentProject.ignore_external_headers = True
+	projectSettings.currentProject.SetValue("ignore_external_headers", True)
 
 
 def DisableWarnings( ):
 	"""
 	Disables all warnings.
 	"""
-	projectSettings.currentProject.no_warnings = True
+	projectSettings.currentProject.SetValue("no_warnings", True)
 
 
 def DefaultTarget( s ):
 	"""
 	Sets the default target if none is specified. The default value for this is release.
 
-	@type s: str
-	@param s: Name of the target to build for this project if none is specified.
+	:type s: str
+	:param s: Name of the target to build for this project if none is specified.
 	"""
-	projectSettings.currentProject.default_target = s.lower( )
+	projectSettings.currentProject.SetValue("default_target", s.lower( ))
 
 
 def Precompile( *args ):
 	"""
 	Explicit list of header files to precompile. Disables chunk precompile when called.
 
-	@type args: an arbitrary number of strings
-	@param args: The files to precompile.
+	:type args: an arbitrary number of strings
+	:param args: The files to precompile.
 	"""
-	projectSettings.currentProject.precompile = []
+	projectSettings.currentProject.SetValue("precompile", [])
 	for arg in list( args ):
-		projectSettings.currentProject.precompile.append( os.path.abspath( arg ) )
-	projectSettings.currentProject.chunk_precompile = False
+		projectSettings.currentProject.AppendList("precompile",  os.path.abspath( arg ) )
+	projectSettings.currentProject.SetValue("chunk_precompile", False)
 
 
 def PrecompileAsC( *args ):
 	"""
 	Specifies header files that should be compiled as C headers instead of C++ headers.
 
-	@type args: an arbitrary number of strings
-	@param args: The files to specify as C files.
+	:type args: an arbitrary number of strings
+	:param args: The files to specify as C files.
 	"""
-	projectSettings.currentProject.precompileAsC = []
+	projectSettings.currentProject.SetValue("precompileAsC", [])
 	for arg in list( args ):
-		projectSettings.currentProject.precompileAsC.append( os.path.abspath( arg ) )
+		projectSettings.currentProject.AppendList("precompileAsC",  os.path.abspath( arg ) )
 
 
 def ChunkPrecompile( ):
 	"""
 	When this is enabled, all header files will be precompiled into a single "superheader" and included in all files.
 	"""
-	projectSettings.currentProject.chunk_precompile = True
+	projectSettings.currentProject.SetValue("chunk_precompile", True)
 
 
 def NoPrecompile( *args ):
 	"""
 	Disables precompilation and handles headers as usual.
 
-	@type args: an arbitrary number of strings
-	@param args: A list of files to disable precompilation for.
+	:type args: an arbitrary number of strings
+	:param args: A list of files to disable precompilation for.
 	If this list is empty, it will disable precompilation entirely.
 	"""
 	args = list( args )
@@ -740,112 +714,112 @@ def NoPrecompile( *args ):
 			if arg[0] != '/' and not arg.startswith( "./" ):
 				arg = "./" + arg
 			newargs.append( os.path.abspath( arg ) )
-			projectSettings.currentProject.precompile_exclude += newargs
+			projectSettings.currentProject.ExtendList("precompile_exclude", newargs)
 	else:
-		projectSettings.currentProject.chunk_precompile = False
-		projectSettings.currentProject.precompile = []
-		projectSettings.currentProject.precompileAsC = []
+		projectSettings.currentProject.SetValue("chunk_precompile", False)
+		projectSettings.currentProject.SetValue("precompile", [])
+		projectSettings.currentProject.SetValue("precompileAsC", [])
 
 
 def EnableUnity( ):
 	"""
 	Turns on true unity builds, combining all files into only one compilation unit.
 	"""
-	projectSettings.currentProject.unity = True
+	projectSettings.currentProject.SetValue("unity", True)
 
 
 def StaticRuntime( ):
 	"""
 	Link against a static C/C++ runtime library.
 	"""
-	projectSettings.currentProject.static_runtime = True
+	projectSettings.currentProject.SetValue("static_runtime", True)
 
 
 def SharedRuntime( ):
 	"""
 	Link against a dynamic C/C++ runtime library.
 	"""
-	projectSettings.currentProject.static_runtime = False
+	projectSettings.currentProject.SetValue("static_runtime", False)
 
 
 def OutputArchitecture( arch ):
 	"""
 	Set the output architecture.
 
-	@type arch: str
-	@param arch: The desired architecture. Choose from x86, x64, ARM.
+	:type arch: str
+	:param arch: The desired architecture. Choose from x86, x64, ARM.
 	"""
-	projectSettings.currentProject.outputArchitecture = arch
+	projectSettings.currentProject.SetValue("outputArchitecture", arch)
 
 
 def ExtraFiles( *args ):
 	"""
 	Adds additional files to be compiled that are not in the project directory.
 
-	@type args: an arbitrary number of strings
-	@param args: A list of files to add.
+	:type args: an arbitrary number of strings
+	:param args: A list of files to add.
 	"""
 	for arg in list( args ):
 		for file in glob.glob( arg ):
-			projectSettings.currentProject.extraFiles.append( os.path.abspath( file ) )
+			projectSettings.currentProject.AppendList("extraFiles",  os.path.abspath( file ) )
 
 
 def ClearExtraFiles():
 	"""
 	Clear the list of external files to compile.
 	"""
-	projectSettings.currentProject.extraFiles = []
+	projectSettings.currentProject.SetValue("extraFiles", [])
 
 
 def ExtraDirs( *args ):
 	"""
 	Adds additional directories to search for files in.
 
-	@type args: an arbitrary number of strings
-	@param args: A list of directories to search.
+	:type args: an arbitrary number of strings
+	:param args: A list of directories to search.
 	"""
 	for arg in list( args ):
-		projectSettings.currentProject.extraDirs.append( os.path.abspath( arg ) )
+		projectSettings.currentProject.AppendList("extraDirs",  os.path.abspath( arg ) )
 
 
 def ClearExtraDirs():
 	"""
 	Clear the list of external directories to search.
 	"""
-	projectSettings.currentProject.extraDirs = []
+	projectSettings.currentProject.SetValue("extraDirs", [])
 
 
 def ExtraObjs( *args ):
 	"""
 	Adds additional objects to be passed to the linker that are not in the project directory.
 
-	@type args: an arbitrary number of strings
-	@param args: A list of objects to add.
+	:type args: an arbitrary number of strings
+	:param args: A list of objects to add.
 	"""
 	for arg in list( args ):
 		for file in glob.glob( arg ):
-			projectSettings.currentProject.extraObjs.append( os.path.abspath( file ) )
+			projectSettings.currentProject.AppendList("extraObjs",  os.path.abspath( file ) )
 
 
 def ClearExtraObjs():
 	"""
 	Clear the list of external objects to link.
 	"""
-	projectSettings.currentProject.extraObjs = []
+	projectSettings.currentProject.SetValue("extraObjs", [])
 
 
 def EnableWarningsAsErrors( ):
 	"""
 	Promote all warnings to errors.
 	"""
-	projectSettings.currentProject.warnings_as_errors = True
+	projectSettings.currentProject.SetValue("warnings_as_errors", True)
 
 
 def DisableWarningsAsErrors( ):
 	"""
 	Disable the promotion of warnings to errors.
 	"""
-	projectSettings.currentProject.warnings_as_errors = False
+	projectSettings.currentProject.SetValue("warnings_as_errors", False)
 
 
 def DoNotChunkTogether(pattern, *additionalPatterns):
@@ -855,10 +829,13 @@ def DoNotChunkTogether(pattern, *additionalPatterns):
 	File1 and File2 will never appear together in the same chunk. If you specify more than two files,
 	or a pattern that matches more than two files, no two files in the list will ever appear together.
 
-	@type pattern: string
-	@param pattern: Pattern to search for files with (i.e., Source/*_Unchunkable.cpp)
-	@type additionalPatterns: arbitrary number of optional strings
-	@param additionalPatterns: Additional patterns to compile the list of mutually exclusive files with
+	.. note:
+		This setting is not eligible for scope inheritance.
+
+	:type pattern: string
+	:param pattern: Pattern to search for files with (i.e., Source/*_Unchunkable.cpp)
+	:type additionalPatterns: arbitrary number of optional strings
+	:param additionalPatterns: Additional patterns to compile the list of mutually exclusive files with
 	"""
 	patterns = [pattern] + list(additionalPatterns)
 	mutexFiles = set()
@@ -881,31 +858,31 @@ def DoNotChunk(*files):
 	Prevents the listed files (or files matching the listed patterns) from ever being placed
 	in a chunk, ever.
 
-	@type files: arbitrary number of strings
-	@param files: filenames or patterns to exclude from chunking
+	:type files: arbitrary number of strings
+	:param files: filenames or patterns to exclude from chunking
 	"""
 
 	for pattern in list(files):
 		for filename in glob.glob(pattern):
-			projectSettings.currentProject.chunkExcludes.add(os.path.abspath(filename))
+			projectSettings.currentProject.AddToSet("chunkExcludes", os.path.abspath(filename))
 
 
 def SetStaticLinkMode(mode):
 	"""
 	Determines how static links are handled. With the msvc toolchain, iterative link times of a project with many libraries
-	can be significantly improved by setting this to L{StaticLinkMode.LinkIntermediateObjects}. This will cause the linker to link
+	can be significantly improved by setting this to :StaticLinkMode.LinkLibs:. This will cause the linker to link
 	the .obj files used to make a library directly into the dependent project. Link times for full builds may be slightly slower,
 	but this will allow incremental linking to function when libraries are being changed. (Usually, changing a .lib results
 	in a full link.)
 
-	On most toolchains, this defaults to L{StaticLinkMode.LinkLibs}. In debug mode only for the msvc toolchain, this defaults
-	to L{StaticLinkMode.LinkIntermediateObjects}.
+	On most toolchains, this defaults to :StaticLinkMode.LinkLibs:. In debug mode only for the msvc toolchain, this defaults
+	to :StaticLinkMode.LinkIntermediateObjects:.
 
-	@type mode: L{StaticLinkMode}
-	@param mode: The link mode to set
+	:type mode: :StaticLinkMode:
+	:param mode: The link mode to set
 	"""
-	projectSettings.currentProject.linkMode = mode
-	projectSettings.currentProject.linkModeSet = True
+	projectSettings.currentProject.SetValue("linkMode", mode)
+	projectSettings.currentProject.SetValue("linkModeSet", True)
 
 
 def SetUserData(key, value):
@@ -920,10 +897,13 @@ def SetUserData(key, value):
 
 	project.userData.someData
 
-	@type key: str
-	@param key: name of the variable to set
-	@type value: any
-	@param value: value to set to that variable
+	.. note:
+		This setting is not eligible for scope inheritance.
+
+	:type key: str
+	:param key: name of the variable to set
+	:type value: any
+	:param value: value to set to that variable
 	"""
 	projectSettings.currentProject.userData.dataDict[key] = value
 
@@ -934,7 +914,7 @@ def SupportedArchitectures(*architectures):
 	--all-architectures from building everything supported by the toolchain, if the project
 	is not set up to support all of the toolchain's architectures.
 	"""
-	projectSettings.currentProject.supportedArchitectures = set(architectures)
+	projectSettings.currentProject.SetValue("supportedArchitectures", set(architectures))
 
 
 def SupportedToolchains(*toolchains):
@@ -943,19 +923,19 @@ def SupportedToolchains(*toolchains):
 	--all-toolchains from building everything supported by csbuild, if the project
 	is not set up to support all of the toolchains.
 	"""
-	projectSettings.currentProject.supportedToolchains = set(toolchains)
+	projectSettings.currentProject.SetValue("supportedToolchains", set(toolchains))
 
 
 def RegisterToolchain( name, compiler, linker ):
 	"""
 	Register a new toolchain for use in the project.
 
-	@type name: str
-	@param name: The name of the toolchain being registered
-	@type compiler: class derived from L{csbuild.toolchain.compilerBase}
-	@param compiler: The compiler used in this toolchain
-	@type linker: class derived from L{csbuild.toolchain.linkerBase}
-	@param linker: The linker used in this toolchain
+	:type name: str
+	:param name: The name of the toolchain being registered
+	:type compiler: class derived from :class:`csbuild.toolchain.compilerBase`
+	:param compiler: The compiler used in this toolchain
+	:type linker: class derived from :class:`csbuild.toolchain.linkerBase`
+	:param linker: The linker used in this toolchain
 	"""
 	class registeredToolchain(toolchain.toolchain):
 		def __init__(self):
@@ -980,17 +960,20 @@ def RegisterToolchain( name, compiler, linker ):
 
 	_shared_globals.alltoolchains[name] = registeredToolchain
 	_shared_globals.allToolchainArchStrings[name] = (toolchainArchString + "-architecture", toolchainArchString + "-arch")
-	projectSettings.currentProject.toolchains[name] = registeredToolchain()
+
+	projectSettings.currentProject.toolchains.update( { name : registeredToolchain() } )
+	projectSettings.currentProject.intermediateToolchains.update( { name : registeredToolchain() } )
+	projectSettings.currentProject.finalToolchains.update( { name : registeredToolchain() } )
 
 
 def RegisterProjectGenerator( name, generator ):
 	"""
 	Register a new project generator for use in solution generation.
 
-	@type name: str
-	@param name: The name of the generator being registered
-	@type generator: csbuild.project_generator.project_generator
-	@param generator: The generator to associate with that name
+	:type name: str
+	:param name: The name of the generator being registered
+	:type generator: csbuild.project_generator.project_generator
+	:param generator: The generator to associate with that name
 	"""
 	_shared_globals.allgenerators[name] = generator
 	_shared_globals.project_generators[name] = generator
@@ -1003,14 +986,20 @@ def Toolchain( *args ):
 	csbuild.Toolchain("gcc").NoPrecompile()
 	csbuild.Toolchain("gcc", "msvc").EnableWarningsAsErrors()
 
-	@type args: arbitrary number of strings
-	@param args: The list of toolchains to act on
+	:type args: arbitrary number of strings
+	:param args: The list of toolchains to act on
 
-	@return: A proxy object that enables functions to be applied to one or more specific toolchains.
+	:return: A proxy object that enables functions to be applied to one or more specific toolchains.
 	"""
 	toolchains = []
 	for arg in list( args ):
-		toolchains.append( projectSettings.currentProject.toolchains[arg] )
+		scope = projectSettings.currentProject._currentScope
+		if scope & ScopeDef.Self:
+			toolchains.append( projectSettings.currentProject.toolchains[arg] )
+		if scope & ScopeDef.Intermediate:
+			toolchains.append( projectSettings.currentProject.intermediateToolchains[arg] )
+		if scope & ScopeDef.Final:
+			toolchains.append( projectSettings.currentProject.finalToolchains[arg] )
 	return toolchain.ClassCombiner( toolchains )
 
 
@@ -1023,11 +1012,11 @@ def SetActiveToolchain( name ):
 
 	This will be overridden if the script is executed with the --toolchain option.
 
-	@type name: str
-	@param name: The toolchain to use to build the project
+	:type name: str
+	:param name: The toolchain to use to build the project
 	"""
 	_shared_globals.selectedToolchains.add(name)
-	projectSettings.currentProject.activeToolchainName = name
+	projectSettings.currentProject.SetValue("activeToolchainName", name)
 
 #</editor-fold>
 
@@ -1053,17 +1042,27 @@ class Src(object):
 		self.excludeToolchains = excludeToolchains
 		self.excludeArchitectures = excludeArchitectures
 
+def scope( scope ):
+
+	def wrap( func ):
+		oldScope = projectSettings.currentProject._currentScope
+		projectSettings.currentProject._currentScope = scope
+		func()
+		projectSettings.currentProject._currentScope = oldScope
+
+	return wrap
+
 def project( name, workingDirectory, depends = None, priority = -1, ignoreDependencyOrdering = False ):
 	"""
 	Decorator used to declare a project. linkDepends and srcDepends here will be used to determine project build order.
 
-	@type name: str
-	@param name: A unique name to be used to refer to this project
-	@type workingDirectory: str
-	@param workingDirectory: The directory in which to perform build operations. This directory
+	:type name: str
+	:param name: A unique name to be used to refer to this project
+	:type workingDirectory: str
+	:param workingDirectory: The directory in which to perform build operations. This directory
 	(or a subdirectory) should contain the project's source files.
-	@type depends: list
-	@param linkDepends: A list of other projects. This project will not be linked until the dependent projects
+	:type depends: list
+	:param linkDepends: A list of other projects. This project will not be linked until the dependent projects
 	have completed their build process. These can be specified as either projName, Link(projName, scope), or Src(projName, scope).
 
 	projName will be converted to Link(projName, ScopeDef.Final)
@@ -1138,8 +1137,8 @@ def projectGroup( name ):
 	Specifies a grouping of projects. This will add scope to the global project settings, and will additionally be used
 	in solution generation to group the projects.
 
-	@type name: str
-	@param name: The name to identify this project group
+	:type name: str
+	:param name: The name to identify this project group
 	"""
 	def wrap( groupFunction ):
 		if name in projectSettings.currentGroup.subgroups:
@@ -1165,10 +1164,10 @@ def target( name, override = False ):
 	with this name, this function will be appended to a list of functions to be run for that target name, unless
 	override is True.
 
-	@type name: str
-	@param name: The name for the target; i.e., "debug", "release"
-	@type override: bool
-	@param override: If this is true, existing functionality for this target will be discarded for this project.
+	:type name: str
+	:param name: The name for the target; i.e., "debug", "release"
+	:type override: bool
+	:param override: If this is true, existing functionality for this target will be discarded for this project.
 	"""
 	def wrap( targetFunction ):
 		if override is True or name not in projectSettings.currentProject.targets:
@@ -1187,10 +1186,10 @@ def fileSettings( files, override = False ):
 	"""
 	Specifies settings that affect a single specific file
 
-	@type files: str or list[str]
-	@param files: The file or files to apply these settings to
-	@type override: bool
-	@param override: If this is true, existing functionality for this target will be discarded for this project.
+	:type files: str or list[str]
+	:param files: The file or files to apply these settings to
+	:type override: bool
+	:param override: If this is true, existing functionality for this target will be discarded for this project.
 	"""
 	def wrap( fileFunction ):
 		fileList = files
@@ -1230,14 +1229,14 @@ def prePrepareBuildStep( func ):
 	Decorator that creates a pre-build step for the containing project. Pre-PrepareBuild steps run just before the project
 	begins preparing its build tasks.
 
-	@param func: (Implicit) The function wrapped by this decorator
-	@type func: (Implicit) function
+	:param func: (Implicit) The function wrapped by this decorator
+	:type func: (Implicit) function
 
-	@note: The function this wraps should take a single argument, which will be of type
-	L{csbuild.projectSettings.projectSettings}.
+	.. note:: The function this wraps should take a single argument, which will be of type
+		:class:`csbuild.projectSettings.projectSettings`.
 	"""
 
-	projectSettings.currentProject.prePrepareBuildStep = func
+	projectSettings.currentProject.SetValue("prePrepareBuildStep", func)
 	return func
 
 
@@ -1247,14 +1246,14 @@ def postPrepareBuildStep( func ):
 	project completes its build preparation. This is the only place where running project.RediscoverFiles() has any
 	appreciable effect.
 
-	@param func: (Implicit) The function wrapped by this decorator
-	@type func: (Implicit) function
+	:param func: (Implicit) The function wrapped by this decorator
+	:type func: (Implicit) function
 
-	@note: The function this wraps should take a single argument, which will be of type
-	L{csbuild.projectSettings.projectSettings}.
+	.. note:: The function this wraps should take a single argument, which will be of type
+		:class:`csbuild.projectSettings.projectSettings`.
 	"""
 
-	projectSettings.currentProject.postPrepareBuildStep = func
+	projectSettings.currentProject.SetValue("postPrepareBuildStep", func)
 	return func
 
 
@@ -1263,14 +1262,14 @@ def preMakeStep( func ):
 	Decorator that creates a pre-make step for the containing project. Pre-make steps run after all projects' preparation
 	steps have completed and their final chunk sets have been collected, but before any compiling starts.
 
-	@param func: (Implicit) The function wrapped by this decorator
-	@type func: (Implicit) function
+	:param func: (Implicit) The function wrapped by this decorator
+	:type func: (Implicit) function
 
-	@note: The function this wraps should take a single argument, which will be of type
-	L{csbuild.projectSettings.projectSettings}.
+	.. note:: The function this wraps should take a single argument, which will be of type
+		:class:`csbuild.projectSettings.projectSettings`.
 	"""
 
-	projectSettings.currentProject.preMakeStep = func
+	projectSettings.currentProject.SetValue("preMakeStep", func)
 	return func
 
 
@@ -1279,14 +1278,14 @@ def postMakeStep( func ):
 	Decorator that creates a post-make step for the containing project. Post-make steps run after all projects have
 	finished building and linking. This step will only run if the entire build process was successful.
 
-	@param func: (Implicit) The function wrapped by this decorator
-	@type func: (Implicit) function
+	:param func: (Implicit) The function wrapped by this decorator
+	:type func: (Implicit) function
 
-	@note: The function this wraps should take a single argument, which will be of type
-	L{csbuild.projectSettings.projectSettings}.
+	.. note:: The function this wraps should take a single argument, which will be of type
+		:class:`csbuild.projectSettings.projectSettings`.
 	"""
 
-	projectSettings.currentProject.postMakeStep = func
+	projectSettings.currentProject.SetValue("postMakeStep", func)
 	return func
 
 
@@ -1295,30 +1294,30 @@ def preBuildStep( func ):
 	Decorator that creates a pre-build step for the containing project. Pre-build steps run just before the project
 	begins compiling.
 
-	@param func: (Implicit) The function wrapped by this decorator
-	@type func: (Implicit) function
+	:param func: (Implicit) The function wrapped by this decorator
+	:type func: (Implicit) function
 
-	@note: The function this wraps should take a single argument, which will be of type
-	L{csbuild.projectSettings.projectSettings}.
+	.. note:: The function this wraps should take a single argument, which will be of type
+		:class:`csbuild.projectSettings.projectSettings`.
 	"""
 
-	projectSettings.currentProject.preBuildStep = func
+	projectSettings.currentProject.SetValue("preBuildStep", func)
 	return func
 
 
 def postBuildStep( func ):
 	"""
 	Decorator that creates a post-build step for the containing project. Post-build steps run after the project has
-	B{successfully} compiled B{and} linked.
+	**successfully** compiled **and** linked.
 
-	@param func: (Implicit) The function wrapped by this decorator
-	@type func: (Implicit) function
+	:param func: (Implicit) The function wrapped by this decorator
+	:type func: (Implicit) function
 
-	@note: The function this wraps should take a single argument, which will be of type
-	L{csbuild.projectSettings.projectSettings}.
+	.. note:: The function this wraps should take a single argument, which will be of type
+		:class:`csbuild.projectSettings.projectSettings`.
 	"""
 
-	projectSettings.currentProject.postBuildStep = func
+	projectSettings.currentProject.SetValue("postBuildStep", func)
 	return func
 
 
@@ -1327,14 +1326,14 @@ def preLinkStep( func ):
 	Decorator that creates a pre-link step for the containing project. Pre-link steps run after a successful compile of
 	the project, but before the project links.
 
-	@param func: (Implicit) The function wrapped by this decorator
-	@type func: (Implicit) function
+	:param func: (Implicit) The function wrapped by this decorator
+	:type func: (Implicit) function
 
-	@note: The function this wraps should take a single argument, which will be of type
-	L{csbuild.projectSettings.projectSettings}.
+	.. note:: The function this wraps should take a single argument, which will be of type
+		:class:`csbuild.projectSettings.projectSettings`.
 	"""
 
-	projectSettings.currentProject.preLinkStep = func
+	projectSettings.currentProject.SetValue("preLinkStep", func)
 	return func
 
 
@@ -2102,15 +2101,15 @@ def AddScript( incFile ):
 	"""
 	Include the given makefile script as part of this build process.
 
-	@attention: The included file will be loaded in the B{current} file's namespace, not a new namespace.
+	.. attention:: The included file will be loaded in the **current** file's namespace, not a new namespace.
 	This doesn't work the same way as importing a module. Any functions or variables defined in the current module
 	will be available to the called script, and anything defined in the called script will be available to the
 	calling module after it's been called. As a result, this can be used much like #include in C++ to pull in
 	utility scripts in addition to calling makefiles. The result is essentially as if the called script were
 	copied and pasted directly into this one in the location of the AddScript() call.
 
-	@type incFile: str
-	@param incFile: path to an additional makefile script to call as part of this build
+	:type incFile: str
+	:param incFile: path to an additional makefile script to call as part of this build
 	"""
 	path = os.path.dirname( incFile )
 	incFile = os.path.abspath( incFile )
@@ -2191,8 +2190,8 @@ def Done( code = 0 ):
 	"""
 	Exit the build process early
 
-	@param code: Exit code to exit with
-	@type code: int
+	:param code: Exit code to exit with
+	:type code: int
 	"""
 	Exit( code )
 
@@ -2201,8 +2200,8 @@ def Exit( code = 0 ):
 	"""
 	Exit the build process early
 
-	@param code: Exit code to exit with
-	@type code: int
+	:param code: Exit code to exit with
+	:type code: int
 	"""
 	#global _guiModule
 	#if _guiModule:
@@ -2225,12 +2224,12 @@ def get_option( option ):
 	"""
 	Retrieve the given option from the parsed command line arguments.
 
-	@type option: str
-	@param option: The name of the option, without any preceding dashes.
+	:type option: str
+	:param option: The name of the option, without any preceding dashes.
 	ArgParse replaces dashes with underscores, but csbuild will accept dashes and automatically handle the conversion
 	internally.
 
-	@return: The given argument, if it exists. If the argument has never been specified, returns csbuild.ARG_NOT_SET.
+	:return: The given argument, if it exists. If the argument has never been specified, returns csbuild.ARG_NOT_SET.
 	If --help has been specified, this will ALWAYS return csbuild.ARG_NOT_SET for user-specified arguments.
 	Handle csbuild.ARG_NOT_SET to prevent code from being unintentionally run with --help.
 	"""
@@ -2256,7 +2255,7 @@ def add_option( *args, **kwargs ):
 	"""
 	Adds an option to the argument parser.
 	The syntax for this is identical to the ArgParse add_argument syntax; see
-	U{the ArgParse documentation<http://docs.python.org/3.4/library/argparse.html>}
+	the :argparse: documentation
 	"""
 	_options.append( [args, kwargs] )
 
@@ -2265,8 +2264,8 @@ def get_args( ):
 	"""
 	Gets all of the arguments parsed by the argument parser.
 
-	@return: an argparse.Namespace object
-	@rtype: argparse.Namespace
+	:return: an argparse.Namespace object
+	:rtype: argparse.Namespace
 	"""
 	global args
 	if not helpMode:
@@ -2285,8 +2284,8 @@ def get_default_arg( argname ):
 	"""
 	Gets the default argument for the requested option
 
-	@type argname: str
-	@param argname: the name of the option
+	:type argname: str
+	:param argname: the name of the option
 	"""
 	global parser
 	return parser.get_default( argname )
@@ -2298,8 +2297,8 @@ def GetTargetList():
 
 	If no target has been specified (the default is being used), this list is empty.
 
-	@return: The list of targets
-	@rtype: list[str]
+	:return: The list of targets
+	:rtype: list[str]
 	"""
 	return _shared_globals.target_list
 
@@ -2703,10 +2702,6 @@ def _run( ):
 						newproject.targetName ) )
 					return
 
-				if newproject.type == ProjectType.Application:
-					newproject.linkDepends += newproject.linkDependsFinal
-					newproject.linkDependsFinal = []
-
 				projectSettings.currentProject = newproject
 
 				OutputArchitecture(architecture)
@@ -2888,7 +2883,41 @@ def _run( ):
 	else:
 		_shared_globals.project_build_list = set(_shared_globals.projects.keys())
 
-	for projName in _shared_globals.project_build_list:
+	for projName in _shared_globals.projects:
+		project = _shared_globals.projects[projName]
+
+		flats_added = {projName}
+
+		def add_flats(deps):
+			for dep in deps:
+				if dep in flats_added:
+					continue
+				flats_added.add(dep)
+				project.flattenedDepends.add(dep)
+				proj = _shared_globals.projects[dep]
+				add_flats(proj.linkDepends)
+				add_flats(proj.linkDependsIntermediate)
+				add_flats(proj.linkDependsFinal)
+
+
+		depends = project.linkDepends + project.linkDependsIntermediate + project.linkDependsFinal
+		for dep in depends:
+			if dep not in _shared_globals.projects:
+				log.LOG_ERROR("Project {} references unknown dependency {}".format(project.name, dep.rsplit("@")[0]))
+				return
+			proj = _shared_globals.projects[dep]
+			project.flattenedDepends.add(dep)
+			add_flats(proj.linkDepends)
+			add_flats(proj.linkDependsFinal)
+			add_flats(proj.linkDependsIntermediate)
+
+		project.finalizeSettings()
+
+		if project.type == ProjectType.Application:
+			project.linkDepends += project.linkDependsFinal
+			project.linkDependsFinal = []
+
+	for projName in _shared_globals.projects:
 		project = _shared_globals.projects[projName]
 
 		intermediates_added = {projName}
@@ -2912,6 +2941,7 @@ def _run( ):
 				proj = _shared_globals.projects[dep]
 				add_finals(proj.linkDependsFinal)
 
+
 		depends = project.linkDepends
 		if args.dg:
 			depends = project.linkDepends + project.linkDependsIntermediate + project.linkDependsFinal
@@ -2929,6 +2959,8 @@ def _run( ):
 				add_finals(proj.linkDependsFinal)
 			else:
 				add_intermediates(proj.linkDependsIntermediate)
+
+		project.finalizeSettings2()
 
 	already_errored_link = { }
 	already_errored_source = { }
@@ -3131,8 +3163,9 @@ def _run( ):
 sys.exit = Exit
 
 try:
-	_run( )
-	Exit( 0 )
+	if not hasattr(sys, "runningSphinx"):
+		_run( )
+		Exit( 0 )
 except Exception as e:
 	if not imp.lock_held():
 		imp.acquire_lock()

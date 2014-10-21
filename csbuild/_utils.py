@@ -477,7 +477,7 @@ def get_base_name( name ):
 def check_version( ):
 	"""Checks the currently installed version against the latest version, and logs a warning if the current version
 	is out of date."""
-	if "-Dev-" in csbuild.__version__:
+	if "Dev-" in csbuild.__version__:
 		return
 
 	if not os.access(os.path.expanduser( "~/.csbuild/check" ) , os.F_OK):
@@ -703,10 +703,9 @@ def chunked_build( ):
 	if len(chunks_to_build) == 1 and not owningProject.unity:
 		chunkname = list(chunks_to_build)[0][1]
 
-		obj = os.path.join(owningProject.obj_dir, "{}_{}{}".format( chunkname,
-			owningProject.targetName, owningProject.activeToolchain.Compiler().get_obj_ext() ))
+		obj = GetSourceObjPath( owningProject, chunkname, sourceIsChunkPath=owningProject.ContainsChunk( chunkname ) )
 		for chunk in owningProject.chunks:
-			if get_chunk_name(owningProject.output_name, chunk ) == chunkname:
+			if get_chunk_name( owningProject.output_name, chunk ) == chunkname:
 				if os.access(obj , os.F_OK):
 					os.remove(obj)
 					log.LOG_WARN_NOPUSH(
@@ -783,9 +782,7 @@ def chunked_build( ):
 						f.write(
 							'#include "{0}" // {1} bytes\n'.format( os.path.abspath( source ),
 								os.path.getsize( source ) ) )
-						obj = os.path.join( project.obj_dir, "{}_{}{}".format(
-							os.path.basename( source ).split( '.' )[0],
-							project.targetName, project.activeToolchain.Compiler().get_obj_ext() ))
+						obj = GetSourceObjPath( project, source )
 						if os.access(obj , os.F_OK):
 							os.remove( obj )
 					f.write( "//Total size: {0} bytes".format( chunksize ) )
@@ -794,9 +791,8 @@ def chunked_build( ):
 				project.chunksByFile.update( { outFile : chunk } )
 			elif len( sources_in_this_chunk ) > 0:
 				chunkname = get_chunk_name( project.output_name, chunk )
-
-				obj = os.path.join( project.obj_dir, "{}_{}{}".format( chunkname,
-					project.targetName, project.activeToolchain.Compiler().get_obj_ext() ) )
+				
+				obj = GetSourceObjPath( project, chunkname, sourceIsChunkPath=project.ContainsChunk( chunkname ) )
 				if os.access(obj , os.F_OK):
 					#If the chunk object exists, the last build of these files was the full chunk.
 					#We're now splitting the chunk to speed things up for future incremental builds,
@@ -843,8 +839,10 @@ def get_chunk_name( projectName, chunk ):
 
 
 def GetChunkedObjPath(project, chunk):
+	if isinstance(chunk, list):
+		chunk = get_chunk_name(project.output_name, chunk)
 	return os.path.join(project.obj_dir, "{}_{}{}".format(
-		get_chunk_name( project.output_name, chunk),
+		chunk,
 		project.targetName,
 		project.activeToolchain.Compiler().get_obj_ext()
 	))

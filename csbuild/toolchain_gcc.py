@@ -233,6 +233,9 @@ class compiler_gcc( gccBase, toolchain.compilerBase ):
 		self.cppStandard = ""
 		self.cStandard = ""
 
+		#self.settingsOverrides["cxx"] = "g++"
+		#self.settingsOverrides["cc"] = "gcc"
+
 
 	def copy(self):
 		ret = toolchain.compilerBase.copy(self)
@@ -374,8 +377,8 @@ class compiler_gcc( gccBase, toolchain.compilerBase ):
 		"""
 		Sets warn flags to be passed to the compiler.
 
-		@param args: List of flags
-		@type args: an arbitrary number of strings
+		:param args: List of flags
+		:type args: an arbitrary number of strings
 		"""
 		self.warnFlags += list( args )
 
@@ -389,8 +392,8 @@ class compiler_gcc( gccBase, toolchain.compilerBase ):
 		"""
 		The C/C++ standard to be used when compiling. Possible values are C++03, C++-11, etc.
 
-		@param s: The standard to use
-		@type s: str
+		:param s: The standard to use
+		:type s: str
 		"""
 		self.cppStandard = s
 
@@ -399,8 +402,8 @@ class compiler_gcc( gccBase, toolchain.compilerBase ):
 		"""
 		The C/C++ standard to be used when compiling. Possible values are C99, C11, etc.
 
-		@param s: The standard to use
-		@type s: str
+		:param s: The standard to use
+		:type s: str
 		"""
 		self.cStandard = s
 
@@ -420,6 +423,9 @@ class linker_gcc( gccBase, toolchain.linkerBase ):
 
 		self._frameworks = set()
 		self._frameworkDirs = set()
+
+		#self.settingsOverrides["cxx"] = "g++"
+		#self.settingsOverrides["cc"] = "gcc"
 
 
 	def copy(self):
@@ -475,9 +481,15 @@ class linker_gcc( gccBase, toolchain.linkerBase ):
 				continue
 			dependLibName = dependProj.output_name
 			splitName = os.path.splitext(dependLibName)[0]
-			if ( splitName == lib or splitName == "lib{}".format( lib ) ):
-				return '-l:{} '.format( dependLibName )
-		return "-l:{} ".format( self._actual_library_names[lib] )
+			if splitName == lib or splitName == "lib{}".format( lib ):
+				if platform.system() == "Darwin":
+					return "{} ".format( os.path.join( dependProj.output_dir, dependLibName ) )
+				else:
+					return '-l:{} '.format( dependLibName )
+		if platform.system() == "Darwin":
+			return "{} ".format( self._actual_library_names[lib] )
+		else:
+			return "-l:{} ".format( self._actual_library_names[lib] )
 
 	def get_libraries( self, libraries ):
 		"""Returns a string containing all of the passed libraries, formatted to be passed to gcc/g++."""
@@ -508,15 +520,17 @@ class linker_gcc( gccBase, toolchain.linkerBase ):
 		ret = ""
 		for lib in libDirs:
 			ret += "-L{} ".format( lib )
-		ret += "-L/usr/lib -L/usr/local/lib "
-		if self._include_lib64:
-			ret += "-L/usr/lib64 -L/usr/local/lib64 "
-		if forLinker:
-			for lib in libDirs:
-				ret += "-Wl,-R{} ".format( os.path.abspath( lib ) )
-			ret += "-Wl,-R/usr/lib -Wl,-R/usr/local/lib "
+		# OSX doesn't require the /usr lib directories.
+		if platform.system() != "Darwin":
+			ret += "-L/usr/lib -L/usr/local/lib "
 			if self._include_lib64:
-				ret += "-Wl,-R/usr/lib64 -Wl,-R/usr/local/lib64 "
+				ret += "-L/usr/lib64 -L/usr/local/lib64 "
+			if forLinker:
+				for lib in libDirs:
+					ret += "-Wl,-R{} ".format( os.path.abspath( lib ) )
+				ret += "-Wl,-R/usr/lib -Wl,-R/usr/local/lib "
+				if self._include_lib64:
+					ret += "-Wl,-R/usr/lib64 -Wl,-R/usr/local/lib64 "
 		return ret
 
 
@@ -585,7 +599,7 @@ class linker_gcc( gccBase, toolchain.linkerBase ):
 			)
 
 
-	def find_library( self, project, library, library_dirs, force_static, force_shared ):
+	def findLibraryUnix( self, project, library, library_dirs, force_static, force_shared ):
 		success = True
 		out = ""
 		self.SetupForProject( project )
@@ -650,6 +664,49 @@ class linker_gcc( gccBase, toolchain.linkerBase ):
 						return lib
 					elif not success:
 						return None
+
+	def findLibraryDarwin( self, project, library, library_dirs, force_static, force_shared ):
+		self.SetupForProject(project)
+
+		for lib_dir in library_dirs:
+			log.LOG_INFO("Looking for library {} in directory {}...".format(library, lib_dir))
+			lib_file_path = os.path.join( lib_dir, library )
+			libFileStatic = "{}.a".format( lib_file_path )
+			libFileDynamic = "{}.dylib".format( lib_file_path )
+			# Check for a static lib.
+			if os.access(libFileStatic , os.F_OK):
+				self._actual_library_names.update( { library : libFileStatic } )
+				return libFileStatic
+			# Check for a dynamic lib.
+			if os.access(libFileDynamic , os.F_OK):
+				self._actual_library_names.update( { library : libFileDynamic } )
+				return libFileDynamic
+
+		for lib_dir in library_dirs:
+			# Compatibility with Linux's way of adding lib- to the front of its libraries
+			libfileCompat = "lib{}".format( library )
+			log.LOG_INFO("Looking for library {} in directory {}...".format(libfileCompat, lib_dir))
+			lib_file_path = os.path.join( lib_dir, libfileCompat )
+			libFileStatic = "{}.a".format( lib_file_path )
+			libFileDynamic = "{}.dylib".format( lib_file_path )
+			# Check for a static lib.
+			if os.access(libFileStatic , os.F_OK):
+				self._actual_library_names.update( { library : libFileStatic } )
+				return libFileStatic
+			# Check for a dynamic lib.
+			if os.access(libFileDynamic , os.F_OK):
+				self._actual_library_names.update( { library : libFileDynamic } )
+				return libFileDynamic
+
+		# The library wasn't found.
+		return None
+
+
+	def find_library( self, project, library, library_dirs, force_static, force_shared ):
+		if platform.system() == "Darwin":
+			return self.findLibraryDarwin( project, library, library_dirs, force_static, force_shared )
+		else:
+			return self.findLibraryUnix( project, library, library_dirs, force_static, force_shared )
 
 
 	def get_default_extension( self, projectType ):

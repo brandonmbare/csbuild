@@ -36,13 +36,6 @@ class project_generator_qtcreator( project_generator.project_generator ):
 	Generator used to generate QtCreator solutions.
 
 	Generator options: --qtpath: Path to QtCreator configuration (default ~/.config, should contain QtProject directory)
-
-	@undocumented: __init__
-	@undocumented: _writeProject
-	@undocumented: _writeSubdirsProject
-	@undocumented: _writeSharedFile
-	@undocumented: update_qtcreator_config
-	@undocumented: _printXml
 	"""
 	def __init__( self, path, solutionname, extraargs ):
 		project_generator.project_generator.__init__( self, path, solutionname, extraargs )

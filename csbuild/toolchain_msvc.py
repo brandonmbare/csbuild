@@ -20,11 +20,6 @@
 
 """
 Contains a plugin class for interfacing with MSVC
-
-@undocumented: X64
-@undocumented: X86
-@undocumented: HAS_SET_VC_VARS
-@undocumented: WINDOWS_SDK_DIR
 """
 
 import os
@@ -98,8 +93,8 @@ class MsvcBase( object ):
 		"""
 		Set the MSVC version
 
-		@param msvc_version: The version to compile with
-		@type msvc_version: int
+		:param msvc_version: The version to compile with
+		:type msvc_version: int
 		"""
 		self.msvc_version = msvc_version
 
@@ -729,8 +724,8 @@ class linker_msvc( MsvcBase, toolchain.linkerBase ):
 		"""
 		Sets the subsystem to compile against
 
-		@param subsystem: The subsystem to be used to compile
-		@type subsystem: A SubSystem enum value
+		:param subsystem: The subsystem to be used to compile
+		:type subsystem: A SubSystem enum value
 		"""
 		self._subsystem = subsystem
 
