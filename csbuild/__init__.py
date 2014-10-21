@@ -114,44 +114,36 @@ with open( os.path.dirname( __file__ ) + "/version", "r" ) as f:
 signal.signal( signal.SIGINT, signal.SIG_DFL )
 
 
-def NoBuiltinTargets( ):
+def NoBuiltInTargets( ):
 	"""
 	Disable the built-in "debug" and "release" targets.
 	"""
-	if debug in projectSettings.currentProject.targets["debug"]:
+	if _debug in projectSettings.currentProject.targets["debug"]:
 		arr = projectSettings.currentProject.targets["debug"]
-		del arr[arr.index( debug )]
-	if release in projectSettings.currentProject.targets["release"]:
+		del arr[arr.index( _debug )]
+	if _release in projectSettings.currentProject.targets["release"]:
 		arr = projectSettings.currentProject.targets["release"]
-		del arr[arr.index( release )]
+		del arr[arr.index( _release )]
 
 
-def InstallOutput( ):
+def EnableOutputInstall( ):
 	"""
 	Enables installation of the compiled output file.
-	Argument is a subdirectory of the libdir (by default, /usr/local/lib)
-
-	:type s: str
-	:param s: Install sdirectory - i.e., if you specify this as "libraries", the libraries will be installed
-	to *{libdir*}/libraries.
+	The default installation directory is /usr/local/lib.
 	"""
 	projectSettings.currentProject.SetValue("install_output", True)
 
 
-def InstallHeaders( ):
+def EnableHeaderInstall( ):
 	"""
-	Enables installation of the project's headers
+	Enables installation of the project's headers.
 	Default target is /usr/local/include, unless the --prefix option is specified.
 	If --prefix is specified, the target will be *{prefix*}/include
-
-	:type s: str
-	:param s: Override directory - i.e., if you specify this as "headers", the headers will be installed
-	to *{prefix*}/headers.
 	"""
 	projectSettings.currentProject.SetValue("install_headers", True)
 
 
-def InstallSubdir( s ):
+def SetHeaderInstallSubdirectory( s ):
 	"""
 	Specifies a subdirectory of *{prefix*}/include in which to install the headers.
 
@@ -162,7 +154,7 @@ def InstallSubdir( s ):
 	projectSettings.currentProject.SetValue("header_subdir", s)
 
 
-def ExcludeDirs( *args ):
+def AddExcludeDirectories( *args ):
 	"""
 	Exclude the given directories from the project. This may be called multiple times to add additional excludes.
 	Directories are relative to the location of the script itself, not the specified project working directory.
@@ -179,7 +171,7 @@ def ExcludeDirs( *args ):
 	projectSettings.currentProject.ExtendList("exclude_dirs", newargs)
 
 
-def ExcludeFiles( *args ):
+def AddExcludeFiles( *args ):
 	"""
 	Exclude the given files from the project. This may be called multiple times to add additional excludes.
 	Files are relative to the location of the script itself, not the specified project working directory.
@@ -196,7 +188,7 @@ def ExcludeFiles( *args ):
 	projectSettings.currentProject.ExtendList("exclude_files", newargs)
 
 
-def Libraries( *args ):
+def AddLibraries( *args ):
 	"""
 	When linking the project, link in the given libraries. This may be called multiple times to add additional libraries.
 
@@ -213,7 +205,7 @@ def Libraries( *args ):
 	projectSettings.currentProject.UnionSet("libraries", set( args ))
 
 
-def StaticLibraries( *args ):
+def AddStaticLibraries( *args ):
 	"""
 	Similar to csbuild.Libraries, but forces these libraries to be linked statically.
 
@@ -223,7 +215,7 @@ def StaticLibraries( *args ):
 	projectSettings.currentProject.UnionSet("static_libraries", set( args ))
 
 
-def SharedLibraries( *args ):
+def AddSharedLibraries( *args ):
 	"""
 	Similar to csbuild.Libraries, but forces these libraries to be linked dynamically.
 
@@ -243,7 +235,7 @@ def AddFrameworks( *args ):
 	projectSettings.currentProject.UnionSet("frameworks", set( args ))
 
 
-def IncludeDirs( *args ):
+def AddIncludeDirectories( *args ):
 	"""
 	Search the given directories for include headers. This may be called multiple times to add additional directories.
 	Directories are relative to the location of the script itself, not the specified project working directory.
@@ -259,7 +251,7 @@ def IncludeDirs( *args ):
 		projectSettings.currentProject.AppendList("include_dirs",  arg )
 
 
-def LibDirs( *args ):
+def AddLibraryDirectories( *args ):
 	"""
 	Search the given directories for libraries to link. This may be called multiple times to add additional directories.
 	Directories are relative to the location of the script itself, not the specified project working directory.
@@ -275,7 +267,7 @@ def LibDirs( *args ):
 		projectSettings.currentProject.AppendList("library_dirs",  arg )
 
 
-def AddFrameworkDirs( *args ):
+def AddFrameworkDirectories( *args ):
 	"""
 	Search the given directories for framworks to link. This may be called multiple times to add additional directories.
 	Directories are relative to the location of the script itself, not the specified project working directory.
@@ -303,17 +295,17 @@ def ClearSharedibraries( ):
 	projectSettings.currentProject.SetValue("shared_libraries", set())
 
 
-def ClearIncludeDirs( ):
+def ClearIncludeDirectories( ):
 	"""Clears the include directories"""
 	projectSettings.currentProject.SetValue("include_dirs", [])
 
 
-def ClearLibDirs( ):
+def ClearLibraryDirectories( ):
 	"""Clears the library directories"""
 	projectSettings.currentProject.SetValue("library_dirs", [])
 
 
-def Opt( i ):
+def SetOptimizationLevel( i ):
 	"""
 	Sets the optimization level. Due to toolchain differences, this should be called per-toolchain, usually.
 
@@ -324,7 +316,7 @@ def Opt( i ):
 	projectSettings.currentProject.SetValue("opt_set", True)
 
 
-def Debug( i ):
+def SetDebugLevel( i ):
 	"""
 	Sets the debug level. Due to toolchain differences, this should be called per-toolchain, usually.
 
@@ -335,7 +327,7 @@ def Debug( i ):
 	projectSettings.currentProject.SetValue("debug_set", True)
 
 
-def Define( *args ):
+def AddDefines( *args ):
 	"""
 	Add additionally defined preprocessor directives, as if each file had a #define directive at the very top.
 
@@ -350,7 +342,7 @@ def ClearDefines( ):
 	projectSettings.currentProject.SetValue("defines", [])
 
 
-def Undefine( *args ):
+def AddUndefines( *args ):
 	"""
 	Add explicitly undefined preprocessor directives, as if each file had a #undef directive at the very top.
 
@@ -365,7 +357,7 @@ def ClearUndefines( ):
 	projectSettings.currentProject.SetValue("undefines", [])
 
 
-def CppCompiler( s ):
+def SetCxxCmd( s ):
 	"""
 	Specify the compiler executable to be used for compiling C++ files. Ignored by the msvc toolchain.
 
@@ -375,7 +367,7 @@ def CppCompiler( s ):
 	projectSettings.currentProject.SetValue("cxx", s)
 
 
-def CCompiler( s ):
+def SetCcCmd( s ):
 	"""
 	Specify the compiler executable to be used for compiling C files. Ignored by the msvc toolchain.
 
@@ -385,7 +377,7 @@ def CCompiler( s ):
 	projectSettings.currentProject.SetValue("cc", s)
 
 
-def Output( name, projectType = ProjectType.Application ):
+def SetOutput( name, projectType = ProjectType.Application ):
 	"""
 	Sets the output options for this project.
 
@@ -405,7 +397,7 @@ def Output( name, projectType = ProjectType.Application ):
 	projectSettings.currentProject.SetValue("type", projectType)
 
 
-def Extension( name ):
+def SetOutputExtension( name ):
 	"""
 	This allows you to override the extension used for the output file.
 
@@ -415,7 +407,7 @@ def Extension( name ):
 	projectSettings.currentProject.SetValue("ext", name)
 
 
-def OutDir( s ):
+def SetOutputDirectory( s ):
 	"""
 	Specifies the directory in which to place the output file.
 
@@ -426,7 +418,7 @@ def OutDir( s ):
 	projectSettings.currentProject.SetValue("output_dir_set", True)
 
 
-def ObjDir( s ):
+def SetIntermediateDirectory( s ):
 	"""
 	Specifies the directory in which to place the intermediate .o or .obj files.
 
@@ -437,21 +429,21 @@ def ObjDir( s ):
 	projectSettings.currentProject.SetValue("obj_dir_set", True)
 
 
-def EnableProfile( ):
+def EnableProfiling( ):
 	"""
 	Optimize output for profiling
 	"""
 	projectSettings.currentProject.SetValue("profile", True)
 
 
-def DisableProfile( ):
+def DisableProfiling( ):
 	"""
 	Turns profiling optimizations back off
 	"""
 	projectSettings.currentProject.SetValue("profile", False)
 
 
-def CppCompilerFlags( *args ):
+def AddCxxCompilerFlags( *args ):
 	"""
 	Specifies a list of literal strings to be passed to the C++ compiler. As this is toolchain-specific, it should be
 	called on a per-toolchain basis.
@@ -462,14 +454,14 @@ def CppCompilerFlags( *args ):
 	projectSettings.currentProject.ExtendList("cpp_compiler_flags", list( args ))
 
 
-def ClearCppCompilerFlags( ):
+def ClearCxxCompilerFlags( ):
 	"""
 	Clears the list of literal C++ compiler flags.
 	"""
 	projectSettings.currentProject.SetValue("cpp_compiler_flags", [])
 
 
-def CCompilerFlags( *args ):
+def AddCcCompilerFlags( *args ):
 	"""
 	Specifies a list of literal strings to be passed to the C compiler. As this is toolchain-specific, it should be
 	called on a per-toolchain basis.
@@ -480,14 +472,14 @@ def CCompilerFlags( *args ):
 	projectSettings.currentProject.ExtendList("c_compiler_flags", list( args ))
 
 
-def ClearCCompilerFlags( ):
+def ClearCcCompilerFlags( ):
 	"""
 	Clears the list of literal C compiler flags.
 	"""
 	projectSettings.currentProject.SetValue("c_compiler_flags", [])
 
 
-def CompilerFlags( *args ):
+def AddCompilerFlags( *args ):
 	"""
 	Specifies a list of literal strings to be passed to the both the C compiler and the C++ compiler.
 	As this is toolchain-specific, it should be called on a per-toolchain basis.
@@ -495,19 +487,19 @@ def CompilerFlags( *args ):
 	:type args: an arbitrary number of strings
 	:param args: The list of flags to be passed
 	"""
-	CCompilerFlags( *args )
-	CppCompilerFlags( *args )
+	AddCcCompilerFlags( *args )
+	AddCxxCompilerFlags( *args )
 
 
 def ClearCompilerFlags( ):
 	"""
 	Clears the list of literal compiler flags.
 	"""
-	ClearCCompilerFlags( )
-	ClearCppCompilerFlags( )
+	ClearCcCompilerFlags( )
+	ClearCxxCompilerFlags( )
 
 
-def LinkerFlags( *args ):
+def AddLinkerFlags( *args ):
 	"""
 	Specifies a list of literal strings to be passed to the linker. As this is toolchain-specific, it should be
 	called on a per-toolchain basis.
@@ -542,7 +534,7 @@ def StopOnFirstError():
 	_shared_globals.stopOnError = True
 
 
-def ChunkNumFiles( i ):
+def SetNumFilesPerChunk( i ):
 	"""
 	Set the size of the chunks used in the chunked build. This indicates the number of files per compilation unit.
 	The default is 10.
@@ -558,7 +550,7 @@ def ChunkNumFiles( i ):
 	projectSettings.currentProject.SetValue("chunk_filesize", 0)
 
 
-def ChunkFilesize( i ):
+def SetMaxChunkFileSize( i ):
 	"""
 	Sets the maximum combined filesize for a chunk. The default is 500000, and this is the default behavior.
 
@@ -573,7 +565,7 @@ def ChunkFilesize( i ):
 	projectSettings.currentProject.SetValue("chunk_size", i)
 
 
-def ChunkTolerance( i ):
+def SetChunkTolerance( i ):
 	"""
 	Please see detailed description.
 
@@ -625,7 +617,7 @@ def ClearChunks( ):
 	projectSettings.currentProject.SetValue("forceChunks", [])
 
 
-def HeaderRecursionLevel( i ):
+def SetHeaderRecursionDepth( i ):
 	"""
 	Sets the depth to search for header files. If set to 0, it will search with unlimited recursion to find included
 	headers. Otherwise, it will travel to a depth of i to check headers. If set to 1, this will only check first-level
@@ -657,7 +649,7 @@ def DisableWarnings( ):
 	projectSettings.currentProject.SetValue("no_warnings", True)
 
 
-def DefaultTarget( s ):
+def SetDefaultTarget( s ):
 	"""
 	Sets the default target if none is specified. The default value for this is release.
 
@@ -692,14 +684,14 @@ def PrecompileAsC( *args ):
 		projectSettings.currentProject.AppendList("precompileAsC",  os.path.abspath( arg ) )
 
 
-def ChunkPrecompile( ):
+def EnableChunkedPrecompile( ):
 	"""
 	When this is enabled, all header files will be precompiled into a single "superheader" and included in all files.
 	"""
 	projectSettings.currentProject.SetValue("chunk_precompile", True)
 
 
-def NoPrecompile( *args ):
+def DisablePrecompile( *args ):
 	"""
 	Disables precompilation and handles headers as usual.
 
@@ -721,28 +713,28 @@ def NoPrecompile( *args ):
 		projectSettings.currentProject.SetValue("precompileAsC", [])
 
 
-def EnableUnity( ):
+def EnableUnityBuild( ):
 	"""
 	Turns on true unity builds, combining all files into only one compilation unit.
 	"""
 	projectSettings.currentProject.SetValue("unity", True)
 
 
-def StaticRuntime( ):
+def LinkStaticRuntime( ):
 	"""
 	Link against a static C/C++ runtime library.
 	"""
 	projectSettings.currentProject.SetValue("static_runtime", True)
 
 
-def SharedRuntime( ):
+def LinkSharedRuntime( ):
 	"""
 	Link against a dynamic C/C++ runtime library.
 	"""
 	projectSettings.currentProject.SetValue("static_runtime", False)
 
 
-def OutputArchitecture( arch ):
+def SetOutputArchitecture( arch ):
 	"""
 	Set the output architecture.
 
@@ -752,7 +744,7 @@ def OutputArchitecture( arch ):
 	projectSettings.currentProject.SetValue("outputArchitecture", arch)
 
 
-def ExtraFiles( *args ):
+def AddExtraFiles( *args ):
 	"""
 	Adds additional files to be compiled that are not in the project directory.
 
@@ -771,7 +763,7 @@ def ClearExtraFiles():
 	projectSettings.currentProject.SetValue("extraFiles", [])
 
 
-def ExtraDirs( *args ):
+def AddExtraDirectories( *args ):
 	"""
 	Adds additional directories to search for files in.
 
@@ -782,14 +774,14 @@ def ExtraDirs( *args ):
 		projectSettings.currentProject.AppendList("extraDirs",  os.path.abspath( arg ) )
 
 
-def ClearExtraDirs():
+def ClearExtraDirectories():
 	"""
 	Clear the list of external directories to search.
 	"""
 	projectSettings.currentProject.SetValue("extraDirs", [])
 
 
-def ExtraObjs( *args ):
+def AddExtraObjects( *args ):
 	"""
 	Adds additional objects to be passed to the linker that are not in the project directory.
 
@@ -801,7 +793,7 @@ def ExtraObjs( *args ):
 			projectSettings.currentProject.AppendList("extraObjs",  os.path.abspath( file ) )
 
 
-def ClearExtraObjs():
+def ClearExtraObjects():
 	"""
 	Clear the list of external objects to link.
 	"""
@@ -908,7 +900,7 @@ def SetUserData(key, value):
 	projectSettings.currentProject.userData.dataDict[key] = value
 
 
-def SupportedArchitectures(*architectures):
+def SetSupportedArchitectures(*architectures):
 	"""
 	Specifies the architectures that this project supports. This can be used to limit
 	--all-architectures from building everything supported by the toolchain, if the project
@@ -917,7 +909,7 @@ def SupportedArchitectures(*architectures):
 	projectSettings.currentProject.SetValue("supportedArchitectures", set(architectures))
 
 
-def SupportedToolchains(*toolchains):
+def SetSupportedToolchains(*toolchains):
 	"""
 	Specifies the toolchains that this project supports. This can be used to limit
 	--all-toolchains from building everything supported by csbuild, if the project
@@ -1022,9 +1014,9 @@ def SetActiveToolchain( name ):
 
 #<editor-fold desc="decorators">
 
-scriptfiles = []
+_scriptfiles = []
 
-class Link(object):
+class _Link(object):
 	def __init__(self, libName, scope = ScopeDef.Final, includeToolchains=None, includeArchitectures=None, excludeToolchains=None, excludeArchitectures=None):
 		self.libName = libName
 		self.scope = scope
@@ -1033,7 +1025,7 @@ class Link(object):
 		self.excludeToolchains = excludeToolchains
 		self.excludeArchitectures = excludeArchitectures
 
-class Src(object):
+class _Src(object):
 	def __init__(self, libName, scope = ScopeDef.Final, includeToolchains=None, includeArchitectures=None, excludeToolchains=None, excludeArchitectures=None):
 		self.libName = libName
 		self.scope = scope
@@ -1058,9 +1050,11 @@ def project( name, workingDirectory, depends = None, priority = -1, ignoreDepend
 
 	:type name: str
 	:param name: A unique name to be used to refer to this project
+
 	:type workingDirectory: str
 	:param workingDirectory: The directory in which to perform build operations. This directory
 	(or a subdirectory) should contain the project's source files.
+
 	:type depends: list
 	:param linkDepends: A list of other projects. This project will not be linked until the dependent projects
 	have completed their build process. These can be specified as either projName, Link(projName, scope), or Src(projName, scope).
@@ -1087,7 +1081,7 @@ def project( name, workingDirectory, depends = None, priority = -1, ignoreDepend
 		newProject.name = name
 		newProject.workingDirectory = os.path.abspath( workingDirectory )
 		newProject.scriptPath = os.getcwd( )
-		newProject.scriptFile = scriptfiles[-1]
+		newProject.scriptFile = _scriptfiles[-1]
 
 		newProject.libDepends = []
 		newProject.libDependsIntermediate = []
@@ -1099,16 +1093,16 @@ def project( name, workingDirectory, depends = None, priority = -1, ignoreDepend
 
 		for depend in depends:
 			if isinstance(depend, str):
-				depend = Link(depend)
+				depend = _Link(depend)
 
-			if isinstance(depend, Link):
+			if isinstance(depend, _Link):
 				if depend.scope & ScopeDef.Self:
 					newProject.linkDepends.append(depend)
 				if depend.scope & ScopeDef.Intermediate:
 					newProject.linkDependsIntermediate.append(depend)
 				if depend.scope & ScopeDef.Final:
 					newProject.linkDependsFinal.append(depend)
-			elif isinstance(depend, Src):
+			elif isinstance(depend, _Src):
 				if depend.scope & ScopeDef.Self:
 					newProject.srcDepends.append(depend)
 				if depend.scope & ScopeDef.Intermediate:
@@ -1343,9 +1337,9 @@ _shared_globals.starttime = time.time( )
 
 sys.stdout = log.stdoutWriter(sys.stdout)
 
-building = False
+_building = False
 
-class LinkStatus(object):
+class _LinkStatus(object):
 	"""
 	Defines the current link status of a project.
 	"""
@@ -1353,7 +1347,7 @@ class LinkStatus(object):
 	Success = 1
 	UpToDate = 2
 
-def build( ):
+def _build( ):
 	"""
 	Build the project.
 	This step handles:
@@ -1366,8 +1360,8 @@ def build( ):
 		_guiModule.run()
 
 	built = False
-	global building
-	building = True
+	global _building
+	_building = True
 
 	linker_threads_blocked = _shared_globals.max_linker_threads - 1
 	for i in range( linker_threads_blocked ):
@@ -1400,7 +1394,7 @@ def build( ):
 
 	_shared_globals.starttime = time.time( )
 
-	linkThread.start()
+	_linkThread.start()
 
 	def ReconcilePostBuild():
 		LinkedSomething = True
@@ -1438,7 +1432,7 @@ def build( ):
 								okToLink = False
 								break
 					if okToLink:
-						link( otherProj )
+						_link( otherProj )
 						LinkedSomething = True
 						projects_done.add( otherProj.key )
 					else:
@@ -1455,7 +1449,7 @@ def build( ):
 						okToLink = False
 						break
 				if okToLink:
-					link( otherProj )
+					_link( otherProj )
 					LinkedSomething = True
 					projects_done.add( otherProj.key )
 					pending_links.remove( otherProj )
@@ -1623,13 +1617,13 @@ def build( ):
 
 	if not built:
 		log.LOG_BUILD( "Nothing to build." )
-	building = False
-	global linkCond
-	global linkMutex
-	with linkMutex:
-		linkCond.notify()
+	_building = False
+	global _linkCond
+	global _linkMutex
+	with _linkMutex:
+		_linkCond.notify()
 	log.LOG_THREAD("Waiting for linker tasks to finish.")
-	linkThread.join()
+	_linkThread.join()
 
 	if not projects_in_flight and not pending_links:
 		for project in _shared_globals.sortedProjects:
@@ -1647,14 +1641,14 @@ def build( ):
 
 	return _shared_globals.build_success
 
-linkMutex = threading.Lock()
-linkCond = threading.Condition(linkMutex)
-linkQueue = []
-currentLinkThreads = set()
-linkThreadMutex = threading.Lock()
-recheckDeferredLinkTasks = False
+_linkMutex = threading.Lock()
+_linkCond = threading.Condition(_linkMutex)
+_linkQueue = []
+_currentLinkThreads = set()
+_linkThreadMutex = threading.Lock()
+_recheckDeferredLinkTasks = False
 
-def link( project, *objs ):
+def _link( project, *objs ):
 	"""
 	Linker:
 	Links all the built files.
@@ -1663,18 +1657,18 @@ def link( project, *objs ):
 	This function also checks (if nothing was built) the modified times of all the required libraries, to see if we need
 	to relink anyway, even though nothing was compiled.
 	"""
-	global linkQueue
-	global linkMutex
-	global linkCond
+	global _linkQueue
+	global _linkMutex
+	global _linkCond
 
 	project.state = _shared_globals.ProjectState.LINK_QUEUED
 	project.linkQueueStart = time.time()
-	with linkMutex:
-		linkQueue.append( (project, list(objs)) )
-		linkCond.notify()
+	with _linkMutex:
+		_linkQueue.append( (project, list(objs)) )
+		_linkCond.notify()
 
 
-def performLink(project, objs):
+def _performLink(project, objs):
 	project.linkStart = time.time()
 
 	project.activeToolchain.preLinkStep(project)
@@ -1706,17 +1700,17 @@ def performLink(project, objs):
 							objs.append( obj )
 						else:
 							log.LOG_ERROR( "Could not find {} for linking. Something went wrong here.".format(obj) )
-							return LinkStatus.Fail
+							return _LinkStatus.Fail
 				else:
 					obj = _utils.GetSourceObjPath(project, chunk)
 					if os.access(obj , os.F_OK):
 						objs.append( obj )
 					else:
 						log.LOG_ERROR( "Could not find {} for linking. Something went wrong here.".format(obj) )
-						return LinkStatus.Fail
+						return _LinkStatus.Fail
 
 	if not objs:
-		return LinkStatus.UpToDate
+		return _LinkStatus.UpToDate
 
 	for obj in project.extraObjs:
 		if not os.access(obj, os.F_OK):
@@ -1758,7 +1752,7 @@ def performLink(project, objs):
 			if not project.built_something:
 				if not _shared_globals.called_something:
 					log.LOG_LINKER( "Nothing to link." )
-				return LinkStatus.UpToDate
+				return _LinkStatus.UpToDate
 
 	if not os.access(project.output_dir , os.F_OK):
 		os.makedirs( project.output_dir )
@@ -1788,14 +1782,14 @@ def performLink(project, objs):
 								objs.append( obj )
 							else:
 								log.LOG_ERROR( "Could not find {} for linking. Something went wrong here.".format(obj) )
-								return LinkStatus.Fail
+								return _LinkStatus.Fail
 					else:
 						obj = _utils.GetSourceObjPath(proj, chunk)
 						if os.access(obj , os.F_OK):
 							objs.append( obj )
 						else:
 							log.LOG_ERROR( "Could not find {} for linking. Something went wrong here.".format(obj) )
-							return LinkStatus.Fail
+							return _LinkStatus.Fail
 			objs += proj.extraObjs
 
 	cmd = project.activeToolchain.Linker().get_link_command( project, output, objs )
@@ -1845,16 +1839,16 @@ def performLink(project, objs):
 
 	if ret != 0:
 		log.LOG_ERROR( "Linking failed." )
-		return LinkStatus.Fail
+		return _LinkStatus.Fail
 
 	totaltime = time.time( ) - starttime
 	totalmin = math.floor( totaltime / 60 )
 	totalsec = math.floor( totaltime % 60 )
 	log.LOG_LINKER( "Link time: {0}:{1:02}".format( int( totalmin ), int( totalsec ) ) )
 
-	return LinkStatus.Success
+	return _LinkStatus.Success
 
-class LinkThread(threading.Thread):
+class _LinkThread(threading.Thread):
 	def __init__(self, project, objs):
 		threading.Thread.__init__( self )
 		self._project = project
@@ -1865,19 +1859,19 @@ class LinkThread(threading.Thread):
 
 
 	def run( self ):
-		global linkThreadMutex
-		global currentLinkThreads
-		global linkCond
-		global recheckDeferredLinkTasks
+		global _linkThreadMutex
+		global _currentLinkThreads
+		global _linkCond
+		global _recheckDeferredLinkTasks
 		try:
 			project = self._project
 			project.state = _shared_globals.ProjectState.LINKING
-			ret = performLink(project, self._objs)
+			ret = _performLink(project, self._objs)
 
-			if ret == LinkStatus.Fail:
+			if ret == _LinkStatus.Fail:
 				_shared_globals.build_success = False
 				project.state = _shared_globals.ProjectState.LINK_FAILED
-			elif ret == LinkStatus.Success:
+			elif ret == _LinkStatus.Success:
 
 				try:
 					project.activeToolchain.postBuildStep(project)
@@ -1891,58 +1885,58 @@ class LinkThread(threading.Thread):
 					except Exception:
 						traceback.print_exc()
 				project.state = _shared_globals.ProjectState.FINISHED
-			elif ret == LinkStatus.UpToDate:
+			elif ret == _LinkStatus.UpToDate:
 				project.state = _shared_globals.ProjectState.UP_TO_DATE
 			project.endTime = time.time()
 			log.LOG_BUILD( "Finished {} ({} {}/{})".format( project.output_name, project.targetName, project.outputArchitecture, project.activeToolchainName ) )
 
 			_shared_globals.link_semaphore.release()
 
-			with linkThreadMutex:
-				currentLinkThreads.remove(project.key)
-			with linkMutex:
-				recheckDeferredLinkTasks = True
-				linkCond.notify()
+			with _linkThreadMutex:
+				_currentLinkThreads.remove(project.key)
+			with _linkMutex:
+				_recheckDeferredLinkTasks = True
+				_linkCond.notify()
 		except Exception:
 			traceback.print_exc()
 
 
-def linkThreadLoop():
-	global linkQueue
-	global linkMutex
-	global linkCond
-	global currentLinkThreads
-	global linkThreadMutex
-	global recheckDeferredLinkTasks
+def _linkThreadLoop():
+	global _linkQueue
+	global _linkMutex
+	global _linkCond
+	global _currentLinkThreads
+	global _linkThreadMutex
+	global _recheckDeferredLinkTasks
 
 	try:
-		global building
+		global _building
 		deferredLinks = []
 		while True:
 			projectsToLink = []
-			with linkMutex:
-				if recheckDeferredLinkTasks:
-					if linkQueue:
-						linkQueue += deferredLinks
+			with _linkMutex:
+				if _recheckDeferredLinkTasks:
+					if _linkQueue:
+						_linkQueue += deferredLinks
 					else:
-						linkQueue = deferredLinks
+						_linkQueue = deferredLinks
 					deferredLinks = []
-					recheckDeferredLinkTasks = False
-				if not linkQueue:
-					if not building and not deferredLinks and not currentLinkThreads:
+					_recheckDeferredLinkTasks = False
+				if not _linkQueue:
+					if not _building and not deferredLinks and not _currentLinkThreads:
 						return
-					linkQueue = deferredLinks
+					_linkQueue = deferredLinks
 					deferredLinks = []
-					linkCond.wait()
-				projectsToLink = linkQueue
-				linkQueue = []
+					_linkCond.wait()
+				projectsToLink = _linkQueue
+				_linkQueue = []
 
 
 			for ( project, objs ) in projectsToLink:
 				okToLink = True
-				with linkThreadMutex:
+				with _linkThreadMutex:
 					for depend in project.reconciledLinkDepends:
-						if depend in currentLinkThreads:
+						if depend in _currentLinkThreads:
 							okToLink = False
 							break
 
@@ -1954,18 +1948,18 @@ def linkThreadLoop():
 							break
 
 				if okToLink:
-					with linkThreadMutex:
-						currentLinkThreads.add(project.key)
+					with _linkThreadMutex:
+						_currentLinkThreads.add(project.key)
 					_shared_globals.link_semaphore.acquire(True)
-					LinkThread(project, objs).start()
+					_LinkThread(project, objs).start()
 				else:
 					deferredLinks.append( ( project, objs ) )
 	except Exception:
 		traceback.print_exc()
 
-linkThread = threading.Thread(target=linkThreadLoop)
+_linkThread = threading.Thread(target=_linkThreadLoop)
 
-def clean( silent = False ):
+def _clean( silent = False ):
 	"""
 	Cleans the project.
 	Invoked with --clean or --rebuild.
@@ -2023,7 +2017,7 @@ def clean( silent = False ):
 			os.remove( outpath )
 
 
-def install_headers( ):
+def _installHeaders( ):
 	log.LOG_INSTALL("Installing headers...")
 
 	for project in _shared_globals.sortedProjects:
@@ -2050,7 +2044,7 @@ def install_headers( ):
 				shutil.copy( header, install_dir )
 			install_something = True
 
-def install_output( ):
+def _installOutput( ):
 	log.LOG_INSTALL("Installing output...")
 
 	for project in _shared_globals.sortedProjects:
@@ -2074,23 +2068,23 @@ def install_output( ):
 			else:
 				log.LOG_ERROR( "Output file {0} does not exist! You must build without --install first.".format( output ) )
 
-def install( ):
+def _install( ):
 	"""
 	Installer.
 	Invoked with --install.
 	Installs the generated output file and/or header files to the specified directory.
 	Does nothing if neither InstallHeaders() nor InstallOutput() has been called in the make script.
 	"""
-	install_headers()
-	install_output()
+	_installHeaders()
+	_installOutput()
 
 
-def make( ):
+def _make( ):
 	"""
 	Performs both the build and link steps of the process.
 	Aborts if the build fails.
 	"""
-	if not build( ):
+	if not _build( ):
 		_shared_globals.build_success = False
 		log.LOG_ERROR( "Build failed." )
 	else:
@@ -2115,24 +2109,24 @@ def AddScript( incFile ):
 	incFile = os.path.abspath( incFile )
 	wd = os.getcwd( )
 	os.chdir( path )
-	scriptfiles.append(incFile)
+	_scriptfiles.append(incFile)
 	_execfile( incFile, _shared_globals.makefile_dict, _shared_globals.makefile_dict )
-	del scriptfiles[-1]
+	del _scriptfiles[-1]
 	os.chdir( wd )
 
 
-def debug( ):
+def _debug( ):
 	"""Default debug target."""
 	if not projectSettings.currentProject.opt_set:
-		Opt( OptimizationLevel.Disabled )
+		SetOptimizationLevel( OptimizationLevel.Disabled )
 	if not projectSettings.currentProject.debug_set:
-		Debug( DebugLevel.EmbeddedSymbols )
+		SetDebugLevel( DebugLevel.EmbeddedSymbols )
 		Toolchain("msvc").Debug( DebugLevel.ExternalSymbols )
 
 	if not projectSettings.currentProject.linkModeSet:
 		Toolchain("msvc").SetStaticLinkMode( StaticLinkMode.LinkIntermediateObjects )
 
-	Define("_DEBUG")
+	AddDefines("_DEBUG")
 
 	if not projectSettings.currentProject.output_dir_set:
 		projectSettings.currentProject.output_dir = "{project.activeToolchainName}-{project.outputArchitecture}-{project.targetName}"
@@ -2144,15 +2138,15 @@ def debug( ):
 		projectSettings.currentProject.toolchains["msvc"].Linker().debug_runtime = True
 
 
-def release( ):
+def _release( ):
 	"""Default release target."""
 	if not projectSettings.currentProject.opt_set:
-		Opt( OptimizationLevel.Max )
+		SetOptimizationLevel( OptimizationLevel.Max )
 	if not projectSettings.currentProject.debug_set:
-		Debug( DebugLevel.Disabled )
+		SetDebugLevel( DebugLevel.Disabled )
 		Toolchain("msvc").Debug( DebugLevel.ExternalSymbols )
 
-	Define("NDEBUG")
+	AddDefines("NDEBUG")
 
 	if not projectSettings.currentProject.output_dir_set:
 		projectSettings.currentProject.output_dir = "{project.activeToolchainName}-{project.outputArchitecture}-{project.targetName}"
@@ -2179,8 +2173,8 @@ def _setupdefaults( ):
 	else:
 		SetActiveToolchain( "gcc" )
 
-	target( "debug" )( debug )
-	target( "release" )( release )
+	target( "debug" )( _debug )
+	target( "release" )( _release )
 
 _guiModule = None
 
@@ -2220,7 +2214,7 @@ _options = []
 helpMode = False
 
 
-def get_option( option ):
+def GetOption( option ):
 	"""
 	Retrieve the given option from the parsed command line arguments.
 
@@ -2251,7 +2245,7 @@ def get_option( option ):
 		return ARG_NOT_SET
 
 
-def add_option( *args, **kwargs ):
+def AddOption( *args, **kwargs ):
 	"""
 	Adds an option to the argument parser.
 	The syntax for this is identical to the ArgParse add_argument syntax; see
@@ -2260,7 +2254,7 @@ def add_option( *args, **kwargs ):
 	_options.append( [args, kwargs] )
 
 
-def get_args( ):
+def GetArgs( ):
 	"""
 	Gets all of the arguments parsed by the argument parser.
 
@@ -2280,7 +2274,7 @@ def get_args( ):
 	return vars( args )
 
 
-def get_default_arg( argname ):
+def GetArgDefault( argname ):
 	"""
 	Gets the default argument for the requested option
 
@@ -2303,11 +2297,9 @@ def GetTargetList():
 	return _shared_globals.target_list
 
 
-class dummy( object ):
+class _dummy( object ):
 	def __setattr__( self, key, value ):
 		pass
-
-
 	def __getattribute__( self, item ):
 		return ""
 
@@ -2320,38 +2312,38 @@ def _execfile( file, glob, loc ):
 		execfile( file, glob, loc )
 
 
-mainfile = ""
-mainfileDir = ""
+_mainfile = ""
+_mainfileDir = ""
 
 def _run( ):
 
 	_setupdefaults( )
 
 	global args
-	args = dummy( )
+	args = _dummy( )
 
-	global mainfile
-	global mainfileDir
-	mainfile = sys.modules['__main__'].__file__
-	if mainfile is not None:
-		mainfileDir = os.path.abspath( os.path.dirname( mainfile ) )
-		if mainfileDir:
-			os.chdir( mainfileDir )
-			mainfile = os.path.basename( os.path.abspath( mainfile ) )
+	global _mainfile
+	global _mainfileDir
+	_mainfile = sys.modules['__main__'].__file__
+	if _mainfile is not None:
+		_mainfileDir = os.path.abspath( os.path.dirname( _mainfile ) )
+		if _mainfileDir:
+			os.chdir( _mainfileDir )
+			_mainfile = os.path.basename( os.path.abspath( _mainfile ) )
 		else:
-			mainfileDir = os.path.abspath( os.getcwd( ) )
-		scriptfiles.append(os.path.join(mainfileDir, mainfile))
+			_mainfileDir = os.path.abspath( os.getcwd( ) )
+		_scriptfiles.append(os.path.join(_mainfileDir, _mainfile))
 		if "-h" in sys.argv or "--help" in sys.argv:
 			global helpMode
 			helpMode = True
-			_execfile( mainfile, _shared_globals.makefile_dict, _shared_globals.makefile_dict )
+			_execfile( _mainfile, _shared_globals.makefile_dict, _shared_globals.makefile_dict )
 			_shared_globals.sortedProjects = _utils.sortProjects( _shared_globals.tempprojects )
 
 	else:
 		log.LOG_ERROR( "CSB cannot be run from the interactive console." )
 		Exit( 1 )
 
-	csbDir = os.path.join(mainfileDir, ".csbuild")
+	csbDir = os.path.join(_mainfileDir, ".csbuild")
 	if not os.path.exists(csbDir):
 		os.makedirs(csbDir)
 
@@ -2453,7 +2445,7 @@ def _run( ):
 
 	global parser
 	parser = argparse.ArgumentParser(
-		prog = mainfile, epilog = epilog, formatter_class = argparse.RawDescriptionHelpFormatter )
+		prog = _mainfile, epilog = epilog, formatter_class = argparse.RawDescriptionHelpFormatter )
 
 	group = parser.add_mutually_exclusive_group( )
 	group.add_argument( '-t', '--target', action='append', help = 'Target(s) for build', default=[])
@@ -2650,7 +2642,7 @@ def _run( ):
 		_shared_globals.target_list = args.target
 
 	#there's an execfile on this up above, but if we got this far we didn't pass --help or -h, so we need to do this here instead
-	_execfile( mainfile, _shared_globals.makefile_dict, _shared_globals.makefile_dict )
+	_execfile( _mainfile, _shared_globals.makefile_dict, _shared_globals.makefile_dict )
 
 	parser.parse_args(args.remainder)
 
@@ -2679,7 +2671,7 @@ def _run( ):
 
 				projectSettings.currentProject = newproject
 
-				OutputArchitecture(architecture)
+				SetOutputArchitecture(architecture)
 
 				for targetFunc in newproject.targets[newproject.targetName]:
 					targetFunc( )
@@ -2704,7 +2696,7 @@ def _run( ):
 
 				projectSettings.currentProject = newproject
 
-				OutputArchitecture(architecture)
+				SetOutputArchitecture(architecture)
 
 				for targetFunc in newproject.targets[newproject.targetName]:
 					targetFunc( )
@@ -2874,7 +2866,7 @@ def _run( ):
 	else:
 		BuildWithToolchain( None )
 
-	os.chdir( mainfileDir )
+	os.chdir( _mainfileDir )
 
 	if project_build_list:
 		for proj in _shared_globals.projects.keys( ):
@@ -3128,18 +3120,18 @@ def _run( ):
 		log.LOG_BUILD( "Done" )
 
 	elif _shared_globals.CleanBuild:
-		clean( )
+		_clean( )
 	elif args.install:
-		install( )
+		_install( )
 	elif args.install_headers:
-		install_headers()
+		_installHeaders()
 	elif args.install_output:
-		install_output()
+		_installOutput()
 	elif _shared_globals.rebuild:
-		clean( )
-		make( )
+		_clean( )
+		_make( )
 	else:
-		make( )
+		_make( )
 
 	#Print out any errors or warnings incurred so the user doesn't have to scroll to see what went wrong
 	if _shared_globals.warnings:
