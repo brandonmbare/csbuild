@@ -168,7 +168,7 @@ class stdoutWriter( object ):
 
 					totalCompletedCompiles = 0
 					for project in _shared_globals.sortedProjects:
-						totalCompletedCompiles += project.compiles_completed
+						totalCompletedCompiles += project.compilationCompleted
 
 					perc = 1 if _shared_globals.total_compiles == 0 else float(totalCompletedCompiles)/float(_shared_globals.total_compiles)
 					num = int( math.floor( perc * (_shared_globals.columns - 10) ) )

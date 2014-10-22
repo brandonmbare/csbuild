@@ -240,7 +240,7 @@ cacheDirectory = None
 forceProgressBar = ""
 
 class dummy_block( object ):
-	"""Some versions of python have a bug in threading where a dummy thread will try and use a value that it deleted.
+	"""Some versions of python have a bug in threading where a dummy thread will try to use a value that it deleted.
 	To keep that from erroring on systems with those versions of python, this is a dummy object with the required
 	methods in it, which can be recreated in __init__ for the thread object to prevent this bug from happening.
 	"""

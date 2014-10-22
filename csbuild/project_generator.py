@@ -53,7 +53,7 @@ class project_generator( object ):
 
 
 	@staticmethod
-	def additional_args( parser ):
+	def AdditionalArgs( parser ):
 		"""
 		Asks for additional command-line arguments to be added by the generator.
 
@@ -64,8 +64,8 @@ class project_generator( object ):
 
 
 	@abstractmethod
-	def write_solution( self ):
+	def WriteProjectFiles( self ):
 		"""
-		Actually performs the work of writing the solution
+		Actually performs the work of writing the project files to disk.
 		"""
 		pass

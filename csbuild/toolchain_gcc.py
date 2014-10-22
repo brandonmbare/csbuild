@@ -44,7 +44,7 @@ class gccBase( object ):
 		else:
 			self._sysroot = "/"
 
-	def copyTo(self, other):
+	def _copyTo(self, other):
 		other.isClang = self.isClang
 		other._objcAbiVersion = self._objcAbiVersion
 		other._sysroot = self._sysroot
@@ -68,7 +68,7 @@ class gccBase( object ):
 			log.LOG_ERROR("Architecture {} is not natively supported by GCC toolchain. Cross-compiling must be implemented by the makefile.")
 		return archArg
 
-	def parseClangOutput(self, outputStr):
+	def _parseClangOutput(self, outputStr):
 		command = re.compile("^clang(\\+\\+)?: +(fatal +)?(warning|error|note): (.*)$")
 		inLine = re.compile("^In (.*) included from (.*):(\\d+):$")
 		message = re.compile("^(<command line>|([A-Za-z]:)?[^:]+\\.[^:]+)(:(\\d+):(\\d+)|\\((\\d+)\\) *): +(fatal +)?(error|warning|note): (.*)$")
@@ -213,15 +213,15 @@ class gccBase( object ):
 
 
 
-	def parseGccOutput(self, outputStr):
+	def _parseGccOutput(self, outputStr):
 		return None
 
 
-	def parseOutput(self, outputStr):
+	def _parseOutput(self, outputStr):
 		if self.isClang:
-			return self.parseClangOutput(outputStr)
+			return self._parseClangOutput(outputStr)
 		else:
-			return self.parseGccOutput(outputStr)
+			return self._parseGccOutput(outputStr)
 
 
 class compiler_gcc( gccBase, toolchain.compilerBase ):
@@ -229,24 +229,24 @@ class compiler_gcc( gccBase, toolchain.compilerBase ):
 		gccBase.__init__(self)
 		toolchain.compilerBase.__init__( self )
 
-		self.warnFlags = []
+		self.warnFlags = set()
 		self.cppStandard = ""
 		self.cStandard = ""
 
-		#self.settingsOverrides["cxx"] = "g++"
-		#self.settingsOverrides["cc"] = "gcc"
+		#self._settingsOverrides["cxx"] = "g++"
+		#self._settingsOverrides["cc"] = "gcc"
 
 
 	def copy(self):
 		ret = toolchain.compilerBase.copy(self)
-		gccBase.copyTo(self, ret)
-		ret.warnFlags = list(self.warnFlags)
+		gccBase._copyTo(self, ret)
+		ret.warnFlags = set(self.warnFlags)
 		ret.cppStandard = self.cppStandard
 		ret.cStandard = self.cStandard
 		return ret
 
 
-	def get_warnings( self, warnFlags, noWarnings ):
+	def _getWarnings( self, warnFlags, noWarnings ):
 		"""Returns a string containing all of the passed warning flags, formatted to be passed to gcc/g++."""
 		if noWarnings:
 			return "-w "
@@ -256,7 +256,7 @@ class compiler_gcc( gccBase, toolchain.compilerBase ):
 		return ret
 
 
-	def get_defines( self, defines, undefines ):
+	def _getDefines( self, defines, undefines ):
 		"""Returns a string containing all of the passed defines and undefines, formatted to be passed to gcc/g++."""
 		ret = ""
 		for define in defines:
@@ -266,7 +266,7 @@ class compiler_gcc( gccBase, toolchain.compilerBase ):
 		return ret
 
 
-	def get_include_dirs( self, includeDirs ):
+	def _getIncludeDirs( self, includeDirs ):
 		"""Returns a string containing all of the passed include directories, formatted to be passed to gcc/g++."""
 		ret = ""
 		for inc in includeDirs:
@@ -286,7 +286,7 @@ class compiler_gcc( gccBase, toolchain.compilerBase ):
 			return "0"
 
 
-	def get_base_command( self, compiler, project, isCpp ):
+	def _getBaseCommand( self, compiler, project, isCpp ):
 		exitcodes = ""
 		if "clang" not in compiler:
 			exitcodes = "-pass-exit-codes"
@@ -306,89 +306,89 @@ class compiler_gcc( gccBase, toolchain.compilerBase ):
 			exitcodes,
 			self._sysroot,
 			self._getObjcAbiVersion(),
-			self.get_defines( project.defines, project.undefines ),
-			"-g" if project.debug_level != csbuild.DebugLevel.Disabled else "",
-			self._getOptFlag(project.opt_level),
+			self._getDefines( project.defines, project.undefines ),
+			"-g" if project.debugLevel != csbuild.DebugLevel.Disabled else "",
+			self._getOptFlag(project.optLevel),
 			"-fPIC " if project.type == csbuild.ProjectType.SharedLibrary else "",
 			"-pg " if project.profile else "",
 			"--std={0}".format( standard ) if standard != "" else "",
-			" ".join( project.cpp_compiler_flags ) if isCpp else " ".join( project.c_compiler_flags )
+			" ".join( project.cxxCompilerFlags ) if isCpp else " ".join( project.ccCompilerFlags )
 		)
 
 
-	def get_base_cxx_command( self, project ):
-		return self.get_base_command( project.cxx, project, True )
+	def GetBaseCxxCommand( self, project ):
+		return self._getBaseCommand( project.cxx, project, True )
 
 
-	def get_base_cc_command( self, project ):
-		return self.get_base_command( project.cc, project, False )
+	def GetBaseCcCommand( self, project ):
+		return self._getBaseCommand( project.cc, project, False )
 
 
-	def get_extended_command( self, baseCmd, project, forceIncludeFile, outObj, inFile ):
+	def GetExtendedCommand( self, baseCmd, project, forceIncludeFile, outObj, inFile ):
 		inc = ""
 		if forceIncludeFile:
 			inc = "-include {0}".format( forceIncludeFile )
 		return "{} {}{}{} -o\"{}\" \"{}\"".format( baseCmd,
-			self.get_warnings( self.warnFlags, project.no_warnings ),
-			self.get_include_dirs( project.include_dirs ), inc, outObj,
+			self._getWarnings( self.warnFlags, project.noWarnings ),
+			self._getIncludeDirs( project.includeDirs ), inc, outObj,
 			inFile )
 
 
-	def get_base_cxx_precompile_command( self, project ):
-		return self.get_base_cxx_command( project )
+	def GetBaseCxxPrecompileCommand( self, project ):
+		return self.GetBaseCxxCommand( project )
 
 
-	def get_base_cc_precompile_command( self, project ):
-		return self.get_base_cc_command( project )
+	def GetBaseCcPrecompileCommand( self, project ):
+		return self.GetBaseCcCommand( project )
 
 
-	def get_extended_precompile_command( self, baseCmd, project, forceIncludeFile, outObj, inFile ):
-		return self.get_extended_command( baseCmd, project, forceIncludeFile, outObj, inFile )
+	def GetExtendedPrecompileCommand( self, baseCmd, project, forceIncludeFile, outObj, inFile ):
+		return self.GetExtendedCommand( baseCmd, project, forceIncludeFile, outObj, inFile )
 
 
-	def interrupt_exit_code( self ):
+	def InterruptExitCode( self ):
 		return 2
 
 
-	def get_preprocess_command(self, baseCmd, project, inFile ):
-		return "\"{}\" -E {} \"{}\"".format(baseCmd, self.get_include_dirs( project.include_dirs ), inFile)
+	def GetPreprocessCommand(self, baseCmd, project, inFile ):
+		return "\"{}\" -E {} \"{}\"".format(baseCmd, self._getIncludeDirs( project.includeDirs ), inFile)
 
 
-	def pragma_message(self, message):
+	def PragmaMessage(self, message):
 		return "#pragma message \"{}\"".format(message)
 
 
-	def get_extra_post_preprocess_flags(self):
+	def GetExtraPostPreprocessorFlags(self):
 		return " -ftemplate-backtrace-limit=0 -fno-show-source-location -fno-caret-diagnostics -fno-diagnostics-fixit-info -W#pragma-messages"
 
-	def get_post_preprocess_sanitation_lines(self):
+	def GetPostPreprocessorSanitationLines(self):
 		return ["In included file:"]
 
 
-	def get_obj_ext(self):
+	def GetObjExt(self):
 		return ".o"
 
 
-	def get_pch_file( self, fileName ):
+	def GetPchFile( self, fileName ):
 		return fileName + ".gch"
 
 
-	def WarnFlags( self, *args ):
+	def AddWarnFlags( self, *args ):
 		"""
 		Sets warn flags to be passed to the compiler.
 
 		:param args: List of flags
 		:type args: an arbitrary number of strings
 		"""
-		self.warnFlags += list( args )
+		self.warnFlags |= set( args )
 
 
 	def ClearWarnFlags( self ):
 		"""Clears the list of warning flags"""
-		self.warnFlags = []
+		self.warnFlags = set()
 
 
-	def CppStandard( self, s ):
+	def SetCppStandard( self, s ):
 		"""
 		The C/C++ standard to be used when compiling. Possible values are C++03, C++-11, etc.
 
@@ -398,7 +398,7 @@ class compiler_gcc( gccBase, toolchain.compilerBase ):
 		self.cppStandard = s
 
 
-	def CStandard( self, s ):
+	def SetCStandard( self, s ):
 		"""
 		The C/C++ standard to be used when compiling. Possible values are C99, C11, etc.
 
@@ -424,27 +424,17 @@ class linker_gcc( gccBase, toolchain.linkerBase ):
 		self._frameworks = set()
 		self._frameworkDirs = set()
 
-		#self.settingsOverrides["cxx"] = "g++"
-		#self.settingsOverrides["cc"] = "gcc"
+		#self._settingsOverrides["cxx"] = "g++"
+		#self._settingsOverrides["cc"] = "gcc"
 
 
 	def copy(self):
 		ret = toolchain.linkerBase.copy(self)
-		gccBase.copyTo(self, ret)
+		gccBase._copyTo(self, ret)
 		ret.strictOrdering = self.strictOrdering
 		ret._actual_library_names = dict(self._actual_library_names)
 		ret._project_settings = self._project_settings
-		ret._frameworkDirs = self._frameworkDirs
-		ret._frameworks = self._frameworks
 		return ret
-
-
-	def AddFrameworkDirectory(self, directory):
-		self._frameworkDirs.add(directory)
-
-
-	def AddFramework(self, framework):
-		self._frameworks.add(framework)
 
 
 	def _getFrameworkDirectories(self, project):
@@ -461,11 +451,11 @@ class linker_gcc( gccBase, toolchain.linkerBase ):
 		return ret
 
 
-	def interrupt_exit_code( self ):
+	def InterruptExitCode( self ):
 		return 2
 
 
-	def SetupForProject( self, project ):
+	def _setupForProject( self, project ):
 		self._include_lib64 = False
 		self._project_settings = project
 
@@ -474,16 +464,16 @@ class linker_gcc( gccBase, toolchain.linkerBase ):
 		if project.outputArchitecture == "x64":
 			self._include_lib64 = True
 
-	def get_library_arg(self, lib):
+	def _getLibraryArg(self, lib):
 		for depend in self._project_settings.reconciledLinkDepends:
 			dependProj = _shared_globals.projects[depend]
 			if dependProj.type == csbuild.ProjectType.Application:
 				continue
-			dependLibName = dependProj.output_name
+			dependLibName = dependProj.outputName
 			splitName = os.path.splitext(dependLibName)[0]
 			if splitName == lib or splitName == "lib{}".format( lib ):
 				if platform.system() == "Darwin":
-					return "{} ".format( os.path.join( dependProj.output_dir, dependLibName ) )
+					return "{} ".format( os.path.join( dependProj.outputDir, dependLibName ) )
 				else:
 					return '-l:{} '.format( dependLibName )
 		if platform.system() == "Darwin":
@@ -491,31 +481,31 @@ class linker_gcc( gccBase, toolchain.linkerBase ):
 		else:
 			return "-l:{} ".format( self._actual_library_names[lib] )
 
-	def get_libraries( self, libraries ):
+	def _getLibraries( self, libraries ):
 		"""Returns a string containing all of the passed libraries, formatted to be passed to gcc/g++."""
 		ret = ""
 		for lib in libraries:
-			ret += self.get_library_arg(lib)
+			ret += self._getLibraryArg(lib)
 		return ret
 
 
-	def get_static_libraries( self, libraries ):
+	def _getStaticLibraries( self, libraries ):
 		"""Returns a string containing all of the passed libraries, formatted to be passed to gcc/g++."""
 		ret = ""
 		for lib in libraries:
-			ret += "-static {}".format( self.get_library_arg(lib) )
+			ret += "-static {}".format( self._getLibraryArg(lib) )
 		return ret
 
 
-	def get_shared_libraries( self, libraries ):
+	def _getSharedLibraries( self, libraries ):
 		"""Returns a string containing all of the passed libraries, formatted to be passed to gcc/g++."""
 		ret = ""
 		for lib in libraries:
-			ret += "-shared {}".format( self.get_library_arg(lib) )
+			ret += "-shared {}".format( self._getLibraryArg(lib) )
 		return ret
 
 
-	def get_library_dirs( self, libDirs, forLinker ):
+	def _getLibraryDirs( self, libDirs, forLinker ):
 		"""Returns a string containing all of the passed library dirs, formatted to be passed to gcc/g++."""
 		ret = ""
 		for lib in libDirs:
@@ -548,9 +538,9 @@ class linker_gcc( gccBase, toolchain.linkerBase ):
 		return "-Wl,--end-group"
 
 
-	def get_link_command( self, project, outputFile, objList ):
-		self.SetupForProject( project )
-		linkFile = os.path.join(self._project_settings.csbuild_dir, "{}.cmd".format(self._project_settings.name))
+	def GetLinkCommand( self, project, outputFile, objList ):
+		self._setupForProject( project )
+		linkFile = os.path.join(self._project_settings.csbuildDir, "{}.cmd".format(self._project_settings.name))
 
 		data = " ".join( objList )
 		if sys.version_info >= (3, 0):
@@ -585,34 +575,34 @@ class linker_gcc( gccBase, toolchain.linkerBase ):
 				"-pg " if project.profile else "",
 				outputFile,
 				"@{}".format(linkFile),
-				"-static-libgcc -static-libstdc++ " if project.static_runtime else "",
+				"-static-libgcc -static-libstdc++ " if project.useStaticRuntime else "",
 				"{}".format(self._getStartGroupFlags()) if not self.strictOrdering else "",
-				self.get_libraries( project.libraries ),
-				self.get_static_libraries( project.static_libraries ),
-				self.get_shared_libraries( project.shared_libraries ),
+				self._getLibraries( project.libraries ),
+				self._getStaticLibraries( project.staticLibraries ),
+				self._getSharedLibraries( project.sharedLibraries ),
 				"{}".format(self._getEndGroupFlags()) if not self.strictOrdering else "",
-				self.get_library_dirs( project.library_dirs, True ),
-				project.debug_level,
-				project.opt_level,
+				self._getLibraryDirs( project.libraryDirs, True ),
+				project.debugLevel,
+				project.optLevel,
 				"-shared" if project.type == csbuild.ProjectType.SharedLibrary else "",
-				" ".join( project.linker_flags )
+				" ".join( project.linkerFlags )
 			)
 
 
-	def findLibraryUnix( self, project, library, library_dirs, force_static, force_shared ):
+	def _findLibraryUnix( self, project, library, libraryDirs, force_static, force_shared ):
 		success = True
 		out = ""
-		self.SetupForProject( project )
+		self._setupForProject( project )
 		try:
 			if _shared_globals.show_commands:
 				print("{} -o /dev/null --verbose {} {} -l{}".format(
 					self._ld,
-					self.get_library_dirs( library_dirs, False ),
+					self._getLibraryDirs( libraryDirs, False ),
 					"-static" if force_static else "-shared" if force_shared else "",
 					library ))
 			cmd = [self._ld, "-o", "/dev/null", "--verbose",
 				   "-static" if force_static else "-shared" if force_shared else "", "-l{}".format( library )]
-			cmd += shlex.split( self.get_library_dirs( library_dirs, False ), posix=(platform.system() != "Windows") )
+			cmd += shlex.split( self._getLibraryDirs( libraryDirs, False ), posix=(platform.system() != "Windows") )
 			out = subprocess.check_output( cmd, stderr = subprocess.STDOUT )
 		except subprocess.CalledProcessError as e:
 			out = e.output
@@ -637,12 +627,12 @@ class linker_gcc( gccBase, toolchain.linkerBase ):
 					if _shared_globals.show_commands:
 						print("{} -o /dev/null --verbose {} {} -l:{}".format(
 							self._ld,
-							self.get_library_dirs( library_dirs, False ),
+							self._getLibraryDirs( libraryDirs, False ),
 							"-static" if force_static else "-shared" if force_shared else "",
 							library ))
 					cmd = [self._ld, "-o", "/dev/null", "--verbose",
 						   "-static" if force_static else "-shared" if force_shared else "", "-l{}".format( library )]
-					cmd += shlex.split( self.get_library_dirs( library_dirs, False ), posix=(platform.system() != "Windows") )
+					cmd += shlex.split( self._getLibraryDirs( libraryDirs, False ), posix=(platform.system() != "Windows") )
 					out = subprocess.check_output( cmd, stderr = subprocess.STDOUT )
 				except subprocess.CalledProcessError as e:
 					out = e.output
@@ -665,10 +655,10 @@ class linker_gcc( gccBase, toolchain.linkerBase ):
 					elif not success:
 						return None
 
-	def findLibraryDarwin( self, project, library, library_dirs, force_static, force_shared ):
-		self.SetupForProject(project)
+	def _findLibraryDarwin( self, project, library, libraryDirs ):
+		self._setupForProject(project)
 
-		for lib_dir in library_dirs:
+		for lib_dir in libraryDirs:
 			log.LOG_INFO("Looking for library {} in directory {}...".format(library, lib_dir))
 			lib_file_path = os.path.join( lib_dir, library )
 			libFileStatic = "{}.a".format( lib_file_path )
@@ -682,7 +672,7 @@ class linker_gcc( gccBase, toolchain.linkerBase ):
 				self._actual_library_names.update( { library : libFileDynamic } )
 				return libFileDynamic
 
-		for lib_dir in library_dirs:
+		for lib_dir in libraryDirs:
 			# Compatibility with Linux's way of adding lib- to the front of its libraries
 			libfileCompat = "lib{}".format( library )
 			log.LOG_INFO("Looking for library {} in directory {}...".format(libfileCompat, lib_dir))
@@ -702,18 +692,24 @@ class linker_gcc( gccBase, toolchain.linkerBase ):
 		return None
 
 
-	def find_library( self, project, library, library_dirs, force_static, force_shared ):
+	def FindLibrary( self, project, library, libraryDirs, force_static, force_shared ):
 		if platform.system() == "Darwin":
-			return self.findLibraryDarwin( project, library, library_dirs, force_static, force_shared )
+			return self._findLibraryDarwin( project, library, libraryDirs )
 		else:
-			return self.findLibraryUnix( project, library, library_dirs, force_static, force_shared )
+			return self._findLibraryUnix( project, library, libraryDirs, force_static, force_shared )
 
 
-	def get_default_extension( self, projectType ):
+	def GetDefaultOutputExtension( self, projectType ):
 		if projectType == csbuild.ProjectType.Application:
-			return ""
+			if platform.system() == "Windows":
+				return ".exe"
+			else:
+				return ""
 		elif projectType == csbuild.ProjectType.StaticLibrary:
-			return ".a"
+			if platform.system() == "Windows":
+				return ".lib"
+			else:
+				return ".a"
 		elif projectType == csbuild.ProjectType.SharedLibrary:
 			if platform.system() == "Darwin":
 				return ".dylib"

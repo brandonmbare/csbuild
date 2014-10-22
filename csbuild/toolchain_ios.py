@@ -46,11 +46,11 @@ class iOSArchitecture:
 
 class iOSBase(object):
 	def __init__(self):
-		self._targetDeviceVersion = "8.0"
-		self._targetSimulatorVersion = "8.0"
+		self._targetDeviceVersion = "8.1"
+		self._targetSimulatorVersion = "8.1"
 
 
-	def CopyTo(self, other):
+	def _copyTo(self, other):
 		other._targetDeviceVersion = self._targetDeviceVersion
 		other._targetSimulatorVersin = self._targetSimulatorVersion
 
@@ -125,7 +125,7 @@ class iOSCompiler(iOSBase, toolchain_gcc.compiler_gcc):
 
 	def copy(self):
 		ret = toolchain_gcc.compiler_gcc.copy(self)
-		iOSBase.CopyTo(self, ret)
+		iOSBase._copyTo(self, ret)
 		return ret
 
 
@@ -134,15 +134,15 @@ class iOSCompiler(iOSBase, toolchain_gcc.compiler_gcc):
 		return ""
 
 
-	def get_base_cc_command( self, project ):
+	def GetBaseCcCommand( self, project ):
 		self._setSysRoot(project.outputArchitecture)
-		originalCmd = toolchain_gcc.compiler_gcc.get_base_cc_command(self, project)
+		originalCmd = toolchain_gcc.compiler_gcc.GetBaseCcCommand(self, project)
 		return self._getAugmentedCommand(originalCmd, project)
 
 
-	def get_base_cxx_command( self, project ):
+	def GetBaseCxxCommand( self, project ):
 		self._setSysRoot(project.outputArchitecture)
-		originalCmd = toolchain_gcc.compiler_gcc.get_base_cxx_command(self, project)
+		originalCmd = toolchain_gcc.compiler_gcc.GetBaseCxxCommand(self, project)
 		return self._getAugmentedCommand(originalCmd, project)
 
 
@@ -155,7 +155,7 @@ class iOSLinker(iOSBase, toolchain_gcc.linker_gcc):
 
 	def copy(self):
 		ret = toolchain_gcc.linker_gcc.copy(self)
-		iOSBase.CopyTo(self, ret)
+		iOSBase._copyTo(self, ret)
 		return ret
 
 
@@ -172,9 +172,9 @@ class iOSLinker(iOSBase, toolchain_gcc.linker_gcc):
 		return ""
 
 
-	def get_link_command( self, project, outputFile, objList ):
+	def GetLinkCommand( self, project, outputFile, objList ):
 		self._setSysRoot(project.outputArchitecture)
-		originalCmd = toolchain_gcc.linker_gcc.get_link_command(self, project, outputFile, objList)
+		originalCmd = toolchain_gcc.linker_gcc.GetLinkCommand(self, project, outputFile, objList)
 		if not project.type == csbuild.ProjectType.StaticLibrary:
 			return self._getAugmentedCommand(originalCmd, project)
 		else:

@@ -143,7 +143,7 @@ class CachedFileData:
 		canWriteOutputFile = True
 		if os.access(self._outputFilePath, os.F_OK):
 			# Any user files that already exist will be ignored to preserve user debug settings.
-			if self._isUserFile and not csbuild.get_option("do-not-ignore-user-files"):
+			if self._isUserFile and not csbuild.GetOption("do-not-ignore-user-files"):
 				log.LOG_BUILD("Ignoring: {}".format(self._outputFilePath))
 				return
 
@@ -185,9 +185,9 @@ class project_generator_visual_studio(project_generator.project_generator):
 	def __init__(self, path, solutionName, extraArgs):
 		project_generator.project_generator.__init__(self, path, solutionName, extraArgs)
 
-		versionNumber = csbuild.get_option("visual-studio-version")
+		versionNumber = csbuild.GetOption("visual-studio-version")
 
-		self._createNativeProject = False # csbuild.get_option("create-native-project")
+		self._createNativeProject = False # csbuild.GetOption("create-native-project")
 		self._visualStudioVersion = versionNumber
 		self._projectMap = {}
 		self._configList = []
@@ -225,7 +225,7 @@ class project_generator_visual_studio(project_generator.project_generator):
 
 
 	@staticmethod
-	def additional_args(parser):
+	def AdditionalArgs(parser):
 		parser.add_argument("--visual-studio-version",
 			help = "Select the version of Visual Studio the generated solution will be compatible with.",
 			choices = VisualStudioVersion.All,
@@ -242,7 +242,7 @@ class project_generator_visual_studio(project_generator.project_generator):
 		#)
 
 
-	def write_solution(self):
+	def WriteProjectFiles(self):
 
 		def recurseGroups(projectMap_out, parentFilter_out, projectOutputPath, projectGroup):
 			# Setup the projects first.
@@ -269,7 +269,7 @@ class project_generator_visual_studio(project_generator.project_generator):
 							projectData.platformConfigList.append((configName, platformName, toolchainName, settings))
 							projectData.fullSourceFileList.update(set(settings.allsources))
 							projectData.fullHeaderFileList.update(set(settings.allheaders))
-							projectData.fullIncludePathList.update(set(settings.include_dirs))
+							projectData.fullIncludePathList.update(set(settings.includeDirs))
 
 				projectData.fullSourceFileList = sorted(projectData.fullSourceFileList)
 				projectData.fullHeaderFileList = sorted(projectData.fullHeaderFileList)
@@ -340,7 +340,7 @@ class project_generator_visual_studio(project_generator.project_generator):
 			buildAllProjectData = Project(buildAllProjectName, self._projectUuidList) # Create a new object to contain project data.
 			buildAllProjectData.outputPath = self.rootpath
 			buildAllProjectData.isBuildAllProject = True
-			buildAllProjectData.makefilePath = csbuild.scriptfiles[0] # Reference the main makefile.
+			buildAllProjectData.makefilePath = csbuild.scriptFiles[0] # Reference the main makefile.
 
 			# The Build All project doesn't have any project settings, but it still needs all of the platforms and configurations.
 			for platformName in self._platformList:
@@ -657,7 +657,7 @@ class project_generator_visual_studio(project_generator.project_generator):
 
 						archName = self._archMap[platformName]
 						projectArg = " --project={}".format(projectData.name) if not projectData.isBuildAllProject else ""
-						mainMakefile = os.path.relpath(os.path.join(os.getcwd(), csbuild.mainfile), projectData.outputPath)
+						mainMakefile = os.path.relpath(os.path.join(os.getcwd(), csbuild.mainFile), projectData.outputPath)
 						properConfigName = self._reverseConfigMap[configName]
 
 						buildCommandNode.text = "{} {} --target={} --architecture={}{} {}".format(sys.executable, mainMakefile, properConfigName, archName, projectArg, self._extraBuildArgs)
@@ -668,9 +668,9 @@ class project_generator_visual_studio(project_generator.project_generator):
 						if not projectData.isBuildAllProject:
 							outputNode = AddNode(propertyGroupNode, "NMakeOutput")
 
-							outDirNode.text = os.path.relpath(settings.output_dir, projectData.outputPath)
-							intDirNode.text = os.path.relpath(settings.obj_dir, projectData.outputPath)
-							outputNode.text = os.path.relpath(os.path.join(settings.output_dir, settings.output_name), projectData.outputPath)
+							outDirNode.text = os.path.relpath(settings.outputDir, projectData.outputPath)
+							intDirNode.text = os.path.relpath(settings.objDir, projectData.outputPath)
+							outputNode.text = os.path.relpath(os.path.join(settings.outputDir, settings.outputName), projectData.outputPath)
 						else:
 							# Gotta put this stuff somewhere for the Build All project.
 							outDirNode.text = projectData.name + "_log"
