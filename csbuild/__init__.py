@@ -1203,15 +1203,20 @@ def fileSettings( files, override = False ):
 	return wrap
 
 
-def architecture( arch, override = False ):
+def architecture( archs, override = False ):
 	"""
-	Specifies settings for a specific architecture.
+	Specifies settings for a specific list of architectures.
 	"""
 	def wrap( archFunction ):
-		if override is True or arch not in projectSettings.currentProject.archFuncs:
-			projectSettings.currentProject.archFuncs.update( { arch: [archFunction] } )
-		else:
-			projectSettings.currentProject.archFuncs[arch].append( archFunction )
+		archList = archs
+		if not isinstance(archList, list):
+			archList = [archList]
+
+		for arch in archList:
+			if override is True or arch not in projectSettings.currentProject.archFuncs:
+				projectSettings.currentProject.archFuncs.update( { arch: [archFunction] } )
+			else:
+				projectSettings.currentProject.archFuncs[arch].append( archFunction )
 
 		return archFunction
 
