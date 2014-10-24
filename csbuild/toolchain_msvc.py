@@ -59,6 +59,16 @@ class SubSystem:
 	EFI_ROM = 9
 	EFI_RUNTIME_DRIVER = 10
 
+
+class VisualStudioPackage:
+	"""
+	Helper enum for filling in the MSVC version based on specific versions of Visual Studio.
+	"""
+	Vs2010 = 100
+	Vs2012 = 110
+	Vs2013 = 120
+
+
 class MsvcBase( object ):
 
 	def __init__(self):
