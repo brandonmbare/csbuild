@@ -669,6 +669,7 @@ class project_generator_visual_studio(project_generator.project_generator):
 						outDirNode = AddNode(propertyGroupNode, "OutDir")
 						intDirNode = AddNode(propertyGroupNode, "IntDir")
 
+						pythonExePath = os.path.normcase(sys.executable)
 						mainMakefile = os.path.relpath(os.path.join(os.getcwd(), csbuild.mainFile), projectData.outputPath)
 
 						if not projectData.isRegenProject:
@@ -676,12 +677,12 @@ class project_generator_visual_studio(project_generator.project_generator):
 							projectArg = " --project={}".format(projectData.name) if not projectData.isBuildAllProject else ""
 							properConfigName = self._reverseConfigMap[configName]
 
-							buildCommandNode.text = "{} {} --target={} --architecture={}{} {}".format(sys.executable, mainMakefile, properConfigName, archName, projectArg, self._extraBuildArgs)
-							cleanCommandNode.text = "{} {} --clean --target={} --architecture={}{} {}".format(sys.executable, mainMakefile, properConfigName, archName, projectArg, self._extraBuildArgs)
-							rebuildCommandNode.text = "{} {} --rebuild --target={} --architecture={}{} {}".format(sys.executable, mainMakefile, properConfigName, archName, projectArg, self._extraBuildArgs)
+							buildCommandNode.text = "{} {} --target={} --architecture={}{} {}".format(pythonExePath, mainMakefile, properConfigName, archName, projectArg, self._extraBuildArgs)
+							cleanCommandNode.text = "{} {} --clean --target={} --architecture={}{} {}".format(pythonExePath, mainMakefile, properConfigName, archName, projectArg, self._extraBuildArgs)
+							rebuildCommandNode.text = "{} {} --rebuild --target={} --architecture={}{} {}".format(pythonExePath, mainMakefile, properConfigName, archName, projectArg, self._extraBuildArgs)
 							includePathNode.text = ";".join(self._fullIncludePathList)
 						else:
-							buildCommandNode.text = "{} {} {}".format(sys.executable, mainMakefile, " ".join(sys.argv[1:]))
+							buildCommandNode.text = "{} {} {}".format(pythonExePath, mainMakefile, " ".join(sys.argv[1:]))
 							rebuildCommandNode.text = buildCommandNode.text
 							cleanCommandNode.text = buildCommandNode.text
 
