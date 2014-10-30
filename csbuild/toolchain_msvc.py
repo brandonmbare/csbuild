@@ -27,6 +27,7 @@ import platform
 import re
 import subprocess
 import sys
+import glob
 
 from . import toolchain
 from . import _shared_globals
@@ -191,10 +192,16 @@ class MsvcBase( object ):
 			self._include_path.append(includeWinRT)
 
 		libPath = os.path.join( WINDOWS_SDK_DIR, "lib", "x64" if self._build_64_bit else "" )
-		sdk8path = os.path.join( WINDOWS_SDK_DIR, "lib", "win8", "um", "x64" if self._build_64_bit else "x86" )
+		#sdk8path = os.path.join( WINDOWS_SDK_DIR, "lib", "win8", "um", "x64" if self._build_64_bit else "x86" )
+		sdkLibPath = os.path.join( WINDOWS_SDK_DIR, "lib", "win*" )
+		sdkLibPathList = glob.glob( sdkLibPath )
 
-		if os.access(sdk8path, os.F_OK):
-			self._lib_path.append( sdk8path )
+		# Use the first globbed path and use that to construct the rest of the path.
+		if sdkLibPathList and len(sdkLibPathList) > 0:
+			sdkLibPath = os.path.join( sdkLibPathList[0], "um", "x64" if self._build_64_bit else "x86" )
+
+		if os.access(sdkLibPath, os.F_OK):
+			self._lib_path.append( sdkLibPath )
 		else:
 			self._lib_path.append( libPath )
 
