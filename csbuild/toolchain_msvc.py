@@ -310,7 +310,7 @@ class MsvcBase( object ):
 
 
 
-class compiler_msvc( MsvcBase, toolchain.compilerBase ):
+class MsvcCompiler( MsvcBase, toolchain.compilerBase ):
 	def __init__( self ):
 		MsvcBase.__init__( self )
 		toolchain.compilerBase.__init__( self )
@@ -507,7 +507,7 @@ class compiler_msvc( MsvcBase, toolchain.compilerBase ):
 		return fileName.rsplit( ".", 1 )[0] + ".pch"
 
 
-class linker_msvc( MsvcBase, toolchain.linkerBase ):
+class MsvcLinker( MsvcBase, toolchain.linkerBase ):
 	def __init__( self ):
 		MsvcBase.__init__( self )
 		toolchain.linkerBase.__init__( self )
@@ -538,12 +538,17 @@ class linker_msvc( MsvcBase, toolchain.linkerBase ):
 
 
 	def _getNonStaticLibraryLinkerArgs( self ):
+		if self._project_settings.type == csbuild.ProjectType.SharedLibrary or self._project_settings.type == csbuild.ProjectType.LoadableModule:
+			dllFlag = "/DLL "
+		else:
+			dllFlag = ""
+
 		# The following arguments should only be specified for dynamic libraries and executables (being used with link.exe, not lib.exe).
 		return "" if self._project_settings.type == csbuild.ProjectType.StaticLibrary else "{}{}{}{}".format(
 			self._getRuntimeLibraryArg( ),
 			"/PROFILE " if self._project_settings.profile else "",
 			"/DEBUG " if self._project_settings.profile or self._project_settings.debugLevel != csbuild.DebugLevel.Disabled else "",
-			"/DLL " if self._project_settings.type == csbuild.ProjectType.SharedLibrary else "" )
+			dllFlag )
 
 
 	def _getLinkerArgs( self, output_file, obj_list ):
@@ -572,7 +577,7 @@ class linker_msvc( MsvcBase, toolchain.linkerBase ):
 
 
 	def _getImportLibraryArg(self, output_file):
-		if self._project_settings.type == csbuild.ProjectType.SharedLibrary:
+		if self._project_settings.type == csbuild.ProjectType.SharedLibrary or self._project_settings.type == csbuild.ProjectType.LoadableModule:
 			return '/IMPLIB:"{}" '.format(os.path.splitext(output_file)[0] + ".lib")
 		else:
 			return ''
@@ -720,7 +725,7 @@ class linker_msvc( MsvcBase, toolchain.linkerBase ):
 			return ".exe"
 		elif projectType == csbuild.ProjectType.StaticLibrary:
 			return ".lib"
-		elif projectType == csbuild.ProjectType.SharedLibrary:
+		elif projectType == csbuild.ProjectType.SharedLibrary or projectType == csbuild.ProjectType.LoadableModule:
 			return ".dll"
 
 

@@ -58,6 +58,7 @@ class ProjectType( object ):
 	Application = 0
 	SharedLibrary = 1
 	StaticLibrary = 2
+	LoadableModule = 3 # Only matters for Apple platforms; every other platform will interpret this as SharedLibrary.
 
 class DebugLevel( object ):
 	Disabled = 0
@@ -87,6 +88,7 @@ from . import _utils
 from . import toolchain
 from . import toolchain_msvc
 from . import toolchain_gcc
+from . import toolchain_gcc_darwin
 from . import toolchain_android
 from . import toolchain_ios
 from . import log
@@ -357,9 +359,26 @@ def ClearUndefines( ):
 	projectSettings.currentProject.SetValue("undefines", [])
 
 
+def EnableHiddenVisibility():
+	"""
+	Enable the use of hidden symbol visibility. Ignored by all but the gcc toolchain (and derived toolchains).
+	"""
+	projectSettings.currentProject.SetValue( "useHiddenVisibility", True )
+
+
+def SetCppStandardLibrary( s ):
+	"""
+	The standard C++ library to be used when compiling. Possible values are "libstdc++" and "libc++". Ignored by all but the gcc toolchain (and derived toolchains).
+
+	:param s: Library to use.
+	:type s: str
+	"""
+	projectSettings.currentProject.SetValue( "stdLib", s )
+
+
 def SetCxxCommand( s ):
 	"""
-	Specify the compiler executable to be used for compiling C++ files. Ignored by the msvc toolchain.
+	Specify the compiler executable to be used for compiling C++ files. Ignored by all but the gcc toolchain (and derived toolchains).
 
 	:type s: str
 	:param s: Path to the executable to use for compilation
@@ -2164,14 +2183,21 @@ def SetupReleaseTarget( ):
 
 
 def _setupdefaults( ):
-	RegisterToolchain( "gcc", toolchain_gcc.compiler_gcc, toolchain_gcc.linker_gcc )
-	RegisterToolchain( "msvc", toolchain_msvc.compiler_msvc, toolchain_msvc.linker_msvc )
+	if platform.system() == "Darwin":
+		gccCompiler, gccLinker = toolchain_gcc_darwin.GccCompilerDarwin, toolchain_gcc_darwin.GccLinkerDarwin
+	else:
+		gccCompiler, gccLinker = toolchain_gcc.GccCompiler, toolchain_gcc.GccLinker
+
+	RegisterToolchain( "gcc", gccCompiler, gccLinker )
+	RegisterToolchain( "msvc", toolchain_msvc.MsvcCompiler, toolchain_msvc.MsvcLinker )
 	RegisterToolchain( "android", toolchain_android.AndroidCompiler, toolchain_android.AndroidLinker )
 	RegisterToolchain( "ios", toolchain_ios.iOSCompiler, toolchain_ios.iOSLinker )
 
 	RegisterProjectGenerator( "qtcreator", project_generator_qtcreator.project_generator_qtcreator )
-	RegisterProjectGenerator( "slickedit", project_generator_slickedit.project_generator_slickedit )
 	RegisterProjectGenerator( "visualstudio", project_generator_visual_studio.project_generator_visual_studio )
+
+	#TODO: SlickEdit project generation is disabled until we get it fixed up.
+	#RegisterProjectGenerator( "slickedit", project_generator_slickedit.project_generator_slickedit )
 
 	if platform.system( ) == "Windows":
 		SetActiveToolchain( "msvc" )

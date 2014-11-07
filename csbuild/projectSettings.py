@@ -104,6 +104,12 @@ class projectSettings( object ):
 	:ivar undefines: #undef declarations for this project
 	:type undefines: list[str]
 
+	:ivar useHiddenVisibility: Use hidden symbol visibility for this project.
+	:type useHiddenVisibility: bool
+
+	:ivar stdLib: C++ standard library to build against for this project.
+	:type stdLib: str
+
 	:ivar cxx: C++ compiler executable for this project
 	:type cxx: str
 
@@ -387,6 +393,8 @@ class projectSettings( object ):
 		self.debugLevel = csbuild.DebugLevel.Disabled
 		self.defines = []
 		self.undefines = []
+		self.useHiddenVisibility = False
+		self.stdLib = "libstdc++"
 		self.cxx = ""
 		self.cc = ""
 		self.hasCppFiles = False
@@ -1001,6 +1009,8 @@ class projectSettings( object ):
 			"debugLevel": self.debugLevel,
 			"defines": list( self.defines ),
 			"undefines": list( self.undefines ),
+			"useHiddenVisibility": self.useHiddenVisibility,
+			"stdLib": self.stdLib,
 			"cxx": self.cxx,
 			"cc": self.cc,
 			"hasCppFiles": self.hasCppFiles,

@@ -368,9 +368,26 @@ class SettingsOverrider( object ):
 		self._settingsOverrides["undefines"] = []
 
 
+	def EnableHiddenVisibility( self ):
+		"""
+		Enable the use of hidden symbol visibility. Ignored by all but the gcc toolchain (and derived toolchains).
+		"""
+		self._settingsOverrides["useHiddenVisibility"] = True
+
+
+	def SetCppStandardLibrary( self, s ):
+		"""
+		The standard C++ library to be used when compiling. Possible values are "libstdc++" and "libc++". Ignored by all but the gcc toolchain (and derived toolchains).
+
+		:param s: Library to use.
+		:type s: str
+		"""
+		self._settingsOverrides["stdLib"] = s
+
+
 	def SetCxxCommand( self, s ):
 		"""
-		Specify the compiler executable to be used for compiling C++ files. Ignored by the msvc toolchain.
+		Specify the compiler executable to be used for compiling C++ files. Ignored by all but the gcc toolchain (and derived toolchains).
 
 		:type s: str
 		:param s: Path to the executable to use for compilation
@@ -380,7 +397,7 @@ class SettingsOverrider( object ):
 
 	def SetCcCommand( self, s ):
 		"""
-		Specify the compiler executable to be used for compiling C files. Ignored by the msvc toolchain.
+		Specify the compiler executable to be used for compiling C files. Ignored by all but the gcc toolchain (and derived toolchains).
 
 		:type s: str
 		:param s: Path to the executable to use for compilation
@@ -400,9 +417,11 @@ class SettingsOverrider( object ):
 		:param projectType: The type of project to compile. The options are:
 			- ProjectType.Application - on Windows, this will be built with a .exe extension. On Linux, there is no extension.
 			- ProjectType.SharedLibrary - on Windows, this will generate a .lib and a .dll.
-			On Linux, this will generate a .so and prefix "lib" to the output name.
+			On Linux, this will generate a .so (.dylib for MacOSX) and prefix "lib" to the output name.
 			- ProjectType.StaticLibrary - on Windows, this will generate a .lib. On Linux, this will generate a .a and prefix
 			"lib" to the output name.
+			- ProjectType.LoadableModule - On MacOSX, this will generate a .bundle file. On every other platform, it will be
+			treated exactly the same as ProjectType.SharedLibrary.
 		"""
 		self._settingsOverrides["outputName"] = name
 		self._settingsOverrides["type"] = projectType

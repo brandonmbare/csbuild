@@ -241,16 +241,16 @@ class AndroidBase( object ):
 		return cmd1Result, cmd2Result
 
 
-class AndroidCompiler(AndroidBase, toolchain_gcc.compiler_gcc):
+class AndroidCompiler(AndroidBase, toolchain_gcc.GccCompiler):
 	def __init__(self):
 		AndroidBase.__init__(self)
-		toolchain_gcc.compiler_gcc.__init__(self)
+		toolchain_gcc.GccCompiler.__init__(self)
 
 		self._toolchainPath = ""
 		self._setupCompleted = False
 
 	def copy(self):
-		ret = toolchain_gcc.compiler_gcc.copy(self)
+		ret = toolchain_gcc.GccCompiler.copy(self)
 		AndroidBase._copyTo(self, ret)
 		ret._toolchainPath = self._toolchainPath
 		ret._setupCompleted = self._setupCompleted
@@ -340,13 +340,18 @@ class AndroidCompiler(AndroidBase, toolchain_gcc.compiler_gcc):
 		else:
 			standard = self.cStandard
 
+		if project.type == csbuild.ProjectType.SharedLibrary or project.type == csbuild.ProjectType.LoadableModule:
+			picFlag = "-fPIC "
+		else:
+			picFlag = ""
+
 		return "\"{}\" {} -Winvalid-pch -c {}-g{} -O{} {}{}{} {} {} {}".format(
 			compiler,
 			exitcodes,
 			self._getDefines( project.defines, project.undefines ),
 			project.debugLevel,
 			project.optLevel,
-			"-fPIC " if project.type == csbuild.ProjectType.SharedLibrary else "",
+			picFlag,
 			"-pg " if project.profile else "",
 			"--std={0}".format( standard ) if standard != "" else "",
 			" ".join( project.cxxCompilerFlags ) if isCpp else " ".join( project.ccCompilerFlags ),
@@ -362,14 +367,14 @@ class AndroidCompiler(AndroidBase, toolchain_gcc.compiler_gcc):
 		return ret
 
 
-class AndroidLinker(AndroidBase, toolchain_gcc.linker_gcc):
+class AndroidLinker(AndroidBase, toolchain_gcc.GccLinker):
 	def __init__(self):
 		AndroidBase.__init__(self)
-		toolchain_gcc.linker_gcc.__init__(self)
+		toolchain_gcc.GccLinker.__init__(self)
 		self._setupCompleted = False
 
 	def copy(self):
-		ret = toolchain_gcc.linker_gcc.copy(self)
+		ret = toolchain_gcc.GccLinker.copy(self)
 		AndroidBase._copyTo(self, ret)
 		ret._setupCompleted = self._setupCompleted
 		return ret
@@ -391,7 +396,7 @@ class AndroidLinker(AndroidBase, toolchain_gcc.linker_gcc):
 		self._ld, self._ar = self._getCommands(project, "ld", "ar")
 
 	def _setupForProject( self, project ):
-		toolchain_gcc.linker_gcc._setupForProject(self, project)
+		toolchain_gcc.GccLinker._setupForProject(self, project)
 		if not self._setupCompleted:
 			if "clang" in project.cc or "clang" in project.cxx:
 				self.isClang = True
@@ -525,6 +530,11 @@ class AndroidLinker(AndroidBase, toolchain_gcc.linker_gcc):
 				if not os.access(crtend, os.F_OK):
 					symlink(os.path.join(libDir, "crtend_so.o"), crtend)
 
+			if project.type == csbuild.ProjectType.SharedLibrary or project.type == csbuild.ProjectType.LoadableModule:
+				sharedFlag = "-shared "
+			else:
+				sharedFlag = ""
+
 			return "\"{}\" {}-o{} {} {} {}{}{} {} {}-g{} -O{} {} {} {} {} -L\"{}\"".format(
 				cmd,
 				"-pg " if project.profile else "",
@@ -538,7 +548,7 @@ class AndroidLinker(AndroidBase, toolchain_gcc.linker_gcc):
 				self._getLibraryDirs( project.libraryDirs, True ),
 				project.debugLevel,
 				project.optLevel,
-				"-shared" if project.type == csbuild.ProjectType.SharedLibrary else "",
+				sharedFlag,
 				" ".join( project.linkerFlags ),
 				self._getSystemLibDirs(project),
 				self._getTargetTriple(project),
