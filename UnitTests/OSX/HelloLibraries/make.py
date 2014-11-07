@@ -1,9 +1,5 @@
 #!/usr/bin/python
 
-import os
-import sys
-sys.path = [os.path.normpath("../../../")] + sys.path
-
 import csbuild
 
 csbuild.Toolchain("gcc", "ios").Compiler().SetCppStandard("c++11")
