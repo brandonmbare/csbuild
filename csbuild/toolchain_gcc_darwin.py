@@ -24,11 +24,18 @@ Contains a plugin class for interfacing with GCC/Clang on MacOSX.
 
 import os
 import platform
+import tempfile
+import subprocess
+import shutil
 import csbuild
+
+import xml.etree.ElementTree as ET
+import xml.dom.minidom as minidom
 
 from . import _shared_globals
 from . import toolchain_gcc
 from . import log
+from .plugin_plist_generator import *
 
 
 class GccDarwinBase( object ):
@@ -241,3 +248,146 @@ class GccLinkerDarwin( GccDarwinBase, toolchain_gcc.GccLinker ):
 			return ".dylib"
 		elif projectType == csbuild.ProjectType.LoadableModule:
 			return ".bundle"
+
+
+	def _convertPlistToBinary( self, project, inputFilePath ):
+		tempAppDir = os.path.join( project.csbuildDir, project.activeToolchainName, "{}.app".format( project.name ) )
+		finalAppDir = os.path.join( project.outputDir, "{}.app".format( project.name ) )
+
+		# Remove the temporary .app directory if it already exists.
+		if os.access(tempAppDir, os.F_OK):
+			shutil.rmtree(tempAppDir)
+
+		# Recreate the temp .app directory.
+		os.makedirs(tempAppDir)
+
+		# Run plutil to convert the XML plist file to binary.
+		fd = subprocess.Popen(
+			[
+				"plutil",
+				"-convert", "binary1",
+				"-o", "Info.plist",
+				inputFilePath
+			],
+			stderr = subprocess.STDOUT,
+			stdout = subprocess.PIPE,
+			cwd = tempAppDir
+		)
+
+		output, errors = fd.communicate()
+		if fd.returncode != 0:
+			log.LOG_ERROR( "Could not create binary property list for {}!\n{}".format( project.name, output ) )
+			return
+
+		log.LOG_BUILD( "Generating {}.app...".format( project.name ) )
+
+		# Move this project's just-built application file into the temp .app directory.
+		shutil.move( os.path.join( project.outputDir, project.outputName ), tempAppDir )
+
+		# If an existing .app directory exists in the project's output path, remove it.
+		if os.access( finalAppDir, os.F_OK ):
+			shutil.rmtree( finalAppDir )
+
+		# Move the .app directory into the project's output path.
+		shutil.move( tempAppDir, finalAppDir )
+
+
+	def _processPlistGenerator( self, project, generator ):
+		CreateRootNode = ET.Element
+		AddNode = ET.SubElement
+
+		def ProcessPlistNode( plistNode, parentXmlNode ):
+			if not plistNode.parent or plistNode.parent.nodeType != PListNodeType.Array:
+				keyNode = AddNode( parentXmlNode, "key" )
+				keyNode.text = plistNode.key
+
+			valueNode = None
+
+			# Determine the tag for the value node since it differs between node types.
+			if plistNode.nodeType == PListNodeType.Array:
+				valueNode = AddNode( parentXmlNode, "array" )
+			elif plistNode.nodeType == PListNodeType.Dictionary:
+				valueNode = AddNode( parentXmlNode, "dict" )
+			elif plistNode.nodeType == PListNodeType.Boolean:
+				valueNode = AddNode( parentXmlNode, "true" if plistNode.value else "false" )
+			elif plistNode.nodeType == PListNodeType.Data:
+				valueNode = AddNode( parentXmlNode, "data")
+				if sys.version_info() >= (3, 0):
+					valueNode.text = plistNode.value.decode("utf-8")
+				else:
+					valueNode.text = plistNode.value
+			elif plistNode.nodeType == PListNodeType.Date:
+				valueNode = AddNode( parentXmlNode, "date")
+				valueNode.text = plistNode.value
+			elif plistNode.nodeType == PListNodeType.Number:
+				valueNode = AddNode( parentXmlNode, "integer" )
+				valueNode.text = str( plistNode.value )
+			elif plistNode.nodeType == PListNodeType.String:
+				valueNode = AddNode( parentXmlNode, "string" )
+				valueNode.text = plistNode.value
+
+			# Save the children only if the the current node is an array or a dictionary.
+			if plistNode.nodeType == PListNodeType.Array or plistNode.nodeType == PListNodeType.Dictionary:
+				for child in sorted( plistNode.children, key=lambda x: x.key ):
+					ProcessPlistNode( child, valueNode )
+
+		rootNode = CreateRootNode( "plist", attrib={ "version": "1.0" } )
+		topLevelDict = AddNode( rootNode, "dict" )
+
+		# Recursively process each node to build the XML node tree.
+		for node in sorted( generator._rootNodes, key=lambda x: x.key ):
+			ProcessPlistNode( node, topLevelDict )
+
+		# Grab a string of the XML document we've created and save it.
+		xmlString = ET.tostring( rootNode )
+
+		# Convert to the original XML to a string on Python3.
+		if sys.version_info >= ( 3, 0 ):
+			xmlString = xmlString.decode( "utf-8" )
+
+		# Use minidom to reformat the XML since ElementTree doesn't do it for us.
+		formattedXmlString = minidom.parseString( xmlString ).toprettyxml( "\t", "\n", encoding = "utf-8" )
+		if sys.version_info >= ( 3, 0 ):
+			formattedXmlString = formattedXmlString.decode( "utf-8" )
+
+		inputLines = formattedXmlString.split( "\n" )
+		outputLines = []
+
+		# Copy each line of the XML to a list of strings.
+		for line in inputLines:
+			outputLines.append( line )
+
+		# Concatenate each string with a newline.
+		finalXmlString = "\n".join( outputLines )
+		if sys.version_info >= ( 3, 0 ):
+			finalXmlString = finalXmlString.encode( "utf-8" )
+
+		# Plists require the DOCTYPE, but neither elementtree nor minidom will add that for us.
+		# The easiest way to add it manually is to split each line of the XML into a list, then
+		# reformat it with the DOCTYPE inserted as the 2nd line in the string.
+		xmlLineList = finalXmlString.split( "\n" )
+		finalXmlString = '{}\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n{}'.format( xmlLineList[0], "\n".join( xmlLineList[1:] ) )
+
+		# Output the XML plist to a temporary location so we can convert it to binary in its final location.
+		# After we have the binary plist file, we can delete the original.
+		tempFileHandle, tempFilePath = tempfile.mkstemp()
+		try:
+			os.write( tempFileHandle, finalXmlString )
+			os.close( tempFileHandle )
+			self._convertPlistToBinary( project, tempFilePath )
+		finally:
+			os.unlink( tempFilePath )
+
+
+	def postBuildStep( self, project ):
+		if project.type != csbuild.ProjectType.Application:
+			return
+
+		if project.plistFile:
+			log.LOG_BUILD( "Building property list for {}...".format( project.name ) )
+			if isinstance( project.plistFile, str ):
+				self._convertPlistToBinary( project, project.plistFile )
+			elif isinstance( project.plistFile, PListGenerator ):
+				self._processPlistGenerator( project, project.plistFile )
+			else:
+				log.LOG_ERROR( "Invalid type of the {} property list! (plistFile = {})".format( project.name, str( type( project.plistFile ) ) ) )

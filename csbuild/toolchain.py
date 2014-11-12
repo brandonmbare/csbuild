@@ -25,12 +25,16 @@ Defines the base class for creating custom toolchains
 """
 
 from abc import abstractmethod, ABCMeta
+
 import glob
 import os
 import platform
+import copy
+import csbuild
+
 from . import log
 from . import _shared_globals
-import csbuild
+from . import plugin_plist_generator
 
 
 class ClassCombiner( object ):
@@ -938,6 +942,16 @@ class SettingsOverrider( object ):
 			self._settingsOverrides["userData"] = csbuild.projectSettings.projectSettings.UserData()
 
 		self._settingsOverrides["userData"].dataDict[key] = value
+
+
+	def SetApplePropertyList( self, plistFile ):
+		"""
+		Set the property list for a project.  This only applies to builds on Apple platforms.
+
+		:param plistFile:
+		:type plistFile: str or class:`csbuild.plugin_plist_generator.PListGenerator`
+		"""
+		self._settingsOverrides["plistFile"] = copy.deepcopy( plistFile ) if isinstance( plistFile, plugin_plist_generator.PListGenerator ) else plistFile
 
 
 	def SetSupportedArchitectures(self, *architectures):

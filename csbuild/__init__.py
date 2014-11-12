@@ -45,6 +45,9 @@ import platform
 import imp
 import re
 import traceback
+import copy
+
+from . import plugin_plist_generator
 
 if sys.version_info < (3,0):
 	import cPickle as pickle
@@ -917,6 +920,16 @@ def SetUserData(key, value):
 	:param value: value to set to that variable
 	"""
 	projectSettings.currentProject.userData.dataDict[key] = value
+
+
+def SetApplePropertyList( plistFile ):
+	"""
+	Set the property list for a project.  This only applies to builds on Apple platforms.
+
+	:param plistFile:
+	:type plistFile: str or class:`csbuild.plugin_plist_generator.PListGenerator`
+	"""
+	projectSettings.currentProject.SetValue( "plistFile", copy.deepcopy( plistFile ) if isinstance( plistFile, plugin_plist_generator.PListGenerator ) else plistFile )
 
 
 def SetSupportedArchitectures(*architectures):

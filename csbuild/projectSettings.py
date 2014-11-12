@@ -49,11 +49,14 @@ import glob
 import itertools
 import threading
 import types
+import copy
 
 from . import log
 from . import _shared_globals
 from . import _utils
 from . import toolchain
+from . import plugin_plist_generator
+
 
 class projectSettings( object ):
 	"""
@@ -548,6 +551,7 @@ class projectSettings( object ):
 		self.splitChunks = {}
 
 		self.userData = projectSettings.UserData()
+		self.plistFile = None
 
 		self._intermediateScopeSettings = {}
 		self._finalScopeSettings = {}
@@ -1145,6 +1149,7 @@ class projectSettings( object ):
 			"linkCommand" : self.linkCommand,
 			"compileCommands" : dict(self.compileCommands),
 			"userData" : self.userData.copy(),
+			"plistFile" : copy.deepcopy( self.plistFile ) if isinstance( self.plistFile, plugin_plist_generator.PListGenerator ) else self.plistFile,
 		}
 
 		for name in self.targets:

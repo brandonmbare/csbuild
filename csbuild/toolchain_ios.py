@@ -28,10 +28,11 @@ from . import toolchain_gcc
 from . import toolchain_gcc_darwin
 
 
-class iOSArchitecture:
-	DEVICE_ARMV7 = "device-armv7"
-	DEVICE_ARM64 = "device-arm64"
-	SIMULATOR_X64 = "simulator-x64"
+class iOSArchitecture( object ):
+	DEVICE_ARMV7 =   "device-armv7"
+	DEVICE_ARM64 =   "device-arm64"
+	SIMULATOR_I386 = "simulator-i386"
+	SIMULATOR_X64 =  "simulator-x64"
 
 
 class iOSBase( object ):
@@ -50,7 +51,7 @@ class iOSBase( object ):
 
 
 	def GetValidArchitectures( self ):
-		return [iOSArchitecture.DEVICE_ARMV7, iOSArchitecture.DEVICE_ARM64, iOSArchitecture.SIMULATOR_X64]
+		return [iOSArchitecture.DEVICE_ARMV7, iOSArchitecture.DEVICE_ARM64, iOSArchitecture.SIMULATOR_I386, iOSArchitecture.SIMULATOR_X64]
 
 
 	def SetTargetDeviceVersion( self, version ):
@@ -83,18 +84,20 @@ class iOSBase( object ):
 
 	def _getMinVersionArg( self, arch ):
 		argumentMap = {
-			iOSArchitecture.DEVICE_ARMV7: "-miphoneos-version-min={} ".format( self._targetDeviceVersion ),
-			iOSArchitecture.DEVICE_ARM64: "-miphoneos-version-min={} ".format( self._targetDeviceVersion ),
-			iOSArchitecture.SIMULATOR_X64: "-mios-simulator-version-min={} ".format( self._targetSimulatorVersion ),
+			iOSArchitecture.DEVICE_ARMV7:   "-miphoneos-version-min={} ".format( self._targetDeviceVersion ),
+			iOSArchitecture.DEVICE_ARM64:   "-miphoneos-version-min={} ".format( self._targetDeviceVersion ),
+			iOSArchitecture.SIMULATOR_I386: "-mios-simulator-version-min={} ".format( self._targetSimulatorVersion ),
+			iOSArchitecture.SIMULATOR_X64:  "-mios-simulator-version-min={} ".format( self._targetSimulatorVersion ),
 		}
 		return argumentMap[arch]
 
 
 	def _getArchitectureArg( self, arch ):
 		argumentMap = {
-			iOSArchitecture.DEVICE_ARMV7: "armv7",
-			iOSArchitecture.DEVICE_ARM64: "arm64",
-			iOSArchitecture.SIMULATOR_X64: "x86_64",
+			iOSArchitecture.DEVICE_ARMV7:   "armv7",
+			iOSArchitecture.DEVICE_ARM64:   "arm64",
+			iOSArchitecture.SIMULATOR_I386: "i386",
+			iOSArchitecture.SIMULATOR_X64:  "x86_64",
 		}
 		return "-arch {} ".format( argumentMap[arch] )
 
@@ -109,9 +112,10 @@ class iOSBase( object ):
 
 	def _setSysRoot( self, arch ):
 		sysRootMap = {
-			iOSArchitecture.DEVICE_ARMV7: "/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS{}.sdk".format( self._targetDeviceVersion ),
-			iOSArchitecture.DEVICE_ARM64: "/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS{}.sdk".format( self._targetDeviceVersion ),
-			iOSArchitecture.SIMULATOR_X64: "/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator{}.sdk".format( self._targetSimulatorVersion ),
+			iOSArchitecture.DEVICE_ARMV7:   "/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS{}.sdk".format( self._targetDeviceVersion ),
+			iOSArchitecture.DEVICE_ARM64:   "/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS{}.sdk".format( self._targetDeviceVersion ),
+			iOSArchitecture.SIMULATOR_I386: "/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator{}.sdk".format( self._targetSimulatorVersion ),
+			iOSArchitecture.SIMULATOR_X64:  "/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator{}.sdk".format( self._targetSimulatorVersion ),
 		}
 		self._sysroot = sysRootMap[arch]
 

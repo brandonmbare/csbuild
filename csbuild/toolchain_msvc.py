@@ -44,7 +44,7 @@ HAS_SET_VC_VARS = False
 WINDOWS_SDK_DIR = ""
 
 
-class SubSystem:
+class SubSystem( object ):
 	"""
 	Enum to define the subsystem to compile against.
 	"""
@@ -61,7 +61,7 @@ class SubSystem:
 	EFI_RUNTIME_DRIVER = 10
 
 
-class VisualStudioPackage:
+class VisualStudioPackage( object ):
 	"""
 	Helper enum for filling in the MSVC version based on specific versions of Visual Studio.
 	"""
