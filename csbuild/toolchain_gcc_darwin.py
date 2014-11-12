@@ -28,6 +28,7 @@ import tempfile
 import subprocess
 import shutil
 import csbuild
+import sys
 
 import xml.etree.ElementTree as ET
 import xml.dom.minidom as minidom
@@ -100,7 +101,7 @@ class GccCompilerDarwin( GccDarwinBase, toolchain_gcc.GccCompiler ):
 
 	def _getBaseCommand( self, compiler, project, isCpp ):
 		ret = toolchain_gcc.GccCompiler._getBaseCommand( self, compiler, project, isCpp )
-		ret = "{}{}{} ".format(
+		ret = "{}{}{} -fobjc-arc ".format(
 			ret,
 			self._getSysRoot(),
 			self._getNoCommonFlag( project ),
@@ -250,17 +251,30 @@ class GccLinkerDarwin( GccDarwinBase, toolchain_gcc.GccLinker ):
 			return ".bundle"
 
 
-	def _convertPlistToBinary( self, project, inputFilePath ):
-		tempAppDir = os.path.join( project.csbuildDir, project.activeToolchainName, "{}.app".format( project.name ) )
-		finalAppDir = os.path.join( project.outputDir, "{}.app".format( project.name ) )
-
+	def _cleanupOldAppBundle(self, project):
 		# Remove the temporary .app directory if it already exists.
-		if os.access(tempAppDir, os.F_OK):
-			shutil.rmtree(tempAppDir)
+		if os.access(project.tempAppDir, os.F_OK):
+			shutil.rmtree(project.tempAppDir)
 
 		# Recreate the temp .app directory.
-		os.makedirs(tempAppDir)
+		os.makedirs(project.tempAppDir)
 
+
+	def _copyNewAppBundle( self, project ):
+		log.LOG_BUILD( "Generating {}.app...".format( project.name ) )
+
+		# Move this project's just-built application file into the temp .app directory.
+		shutil.move( os.path.join( project.outputDir, project.outputName ), project.tempAppDir )
+
+		# If an existing .app directory exists in the project's output path, remove it.
+		if os.access( project.finalAppDir, os.F_OK ):
+			shutil.rmtree( project.finalAppDir )
+
+		# Move the .app directory into the project's output path.
+		shutil.move( project.tempAppDir, project.finalAppDir )
+
+
+	def _convertPlistToBinary( self, project, inputFilePath ):
 		# Run plutil to convert the XML plist file to binary.
 		fd = subprocess.Popen(
 			[
@@ -271,7 +285,7 @@ class GccLinkerDarwin( GccDarwinBase, toolchain_gcc.GccLinker ):
 			],
 			stderr = subprocess.STDOUT,
 			stdout = subprocess.PIPE,
-			cwd = tempAppDir
+			cwd = project.tempAppDir
 		)
 
 		output, errors = fd.communicate()
@@ -279,22 +293,13 @@ class GccLinkerDarwin( GccDarwinBase, toolchain_gcc.GccLinker ):
 			log.LOG_ERROR( "Could not create binary property list for {}!\n{}".format( project.name, output ) )
 			return
 
-		log.LOG_BUILD( "Generating {}.app...".format( project.name ) )
-
-		# Move this project's just-built application file into the temp .app directory.
-		shutil.move( os.path.join( project.outputDir, project.outputName ), tempAppDir )
-
-		# If an existing .app directory exists in the project's output path, remove it.
-		if os.access( finalAppDir, os.F_OK ):
-			shutil.rmtree( finalAppDir )
-
-		# Move the .app directory into the project's output path.
-		shutil.move( tempAppDir, finalAppDir )
-
 
 	def _processPlistGenerator( self, project, generator ):
 		CreateRootNode = ET.Element
 		AddNode = ET.SubElement
+
+		# Add build-specific nodes to the plist generator.
+		self._addPlistNodes( project, generator )
 
 		def ProcessPlistNode( plistNode, parentXmlNode ):
 			if not plistNode.parent or plistNode.parent.nodeType != PListNodeType.Array:
@@ -379,11 +384,23 @@ class GccLinkerDarwin( GccDarwinBase, toolchain_gcc.GccLinker ):
 			os.unlink( tempFilePath )
 
 
+	def _addPlistNodes( self, project, generator ):
+		#TODO: Add build-specific plist nodes.
+		pass
+
+
 	def postBuildStep( self, project ):
-		if project.type != csbuild.ProjectType.Application:
+		if project.type != csbuild.ProjectType.Application or not project.plistFile:
 			return
 
 		if project.plistFile:
+
+			project.tempAppDir = os.path.join( project.csbuildDir, project.activeToolchainName, "{}.app".format( project.name ) )
+			project.finalAppDir = os.path.join( project.outputDir, "{}.app".format( project.name ) )
+
+			self._cleanupOldAppBundle( project )
+
+			# Build the project plist.
 			log.LOG_BUILD( "Building property list for {}...".format( project.name ) )
 			if isinstance( project.plistFile, str ):
 				self._convertPlistToBinary( project, project.plistFile )
@@ -391,3 +408,5 @@ class GccLinkerDarwin( GccDarwinBase, toolchain_gcc.GccLinker ):
 				self._processPlistGenerator( project, project.plistFile )
 			else:
 				log.LOG_ERROR( "Invalid type of the {} property list! (plistFile = {})".format( project.name, str( type( project.plistFile ) ) ) )
+
+			self._copyNewAppBundle( project )

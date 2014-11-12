@@ -25,7 +25,6 @@ Contains a plugin class for generating property list data on OSX/iOS.
 # Reference:
 #   https://developer.apple.com/library/ios/documentation/general/Reference/InfoPlistKeyReference/Introduction/Introduction.html
 
-import sys
 import time
 
 from . import log
@@ -113,7 +112,7 @@ class PListGenerator( object ):
 		if parent:
 			# Don't allow adding children to nodes that won't support them.
 			if parent.nodeType != PListNodeType.Array and parent.nodeType != PListNodeType.Dictionary:
-				log.LOG_WARN( 'PListNode "{}" is not an array or dictionary, cannot add "{}" as its child!'.format( parent.key, key ) )
+				log.LOG_WARN( 'PListNode "{}" is not an array or dictionary; cannot add "{}" as its child!'.format( parent.key, key ) )
 				return None
 
 			parent.children.add( newNode )
