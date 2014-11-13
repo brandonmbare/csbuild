@@ -279,7 +279,7 @@ class SettingsOverrider( object ):
 			self._settingsOverrides["frameworkDirs"].append( arg )
 
 
-	def AddAppleStoryboardFiels( self, *args ):
+	def AddAppleStoryboardFiles( self, *args ):
 		"""
 		Add a list of storyboard files to be compiled. Only applies to builds for Apple platforms.
 
