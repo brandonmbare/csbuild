@@ -392,6 +392,10 @@ class projectSettings( object ):
 		self.libraryDirs = []
 		self.frameworkDirs = set()
 
+		self.storyboardFiles = set()
+		self.interfaceFiles = set()
+		self.assetCatalogs = set()
+
 		self.optLevel = csbuild.OptimizationLevel.Disabled
 		self.debugLevel = csbuild.DebugLevel.Disabled
 		self.defines = []
@@ -1009,6 +1013,9 @@ class projectSettings( object ):
 			"includeDirs": list( self.includeDirs ),
 			"libraryDirs": list( self.libraryDirs ),
 			"frameworkDirs": set( self.frameworkDirs ),
+			"storyboardFiles": set( self.storyboardFiles ),
+			"interfaceFiles": set( self.interfaceFiles ),
+			"assetCatalogs": set( self.assetCatalogs ),
 			"optLevel": self.optLevel,
 			"debugLevel": self.debugLevel,
 			"defines": list( self.defines ),

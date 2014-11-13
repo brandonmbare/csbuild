@@ -279,6 +279,45 @@ class SettingsOverrider( object ):
 			self._settingsOverrides["frameworkDirs"].append( arg )
 
 
+	def AddAppleStoryboardFiels( self, *args ):
+		"""
+		Add a list of storyboard files to be compiled. Only applies to builds for Apple platforms.
+
+		:param args: List of storyboard files.
+		:type args: And arbitrary number of strings.
+		"""
+		if "storyboardFiles" not in self._settingsOverrides:
+			self._settingsOverrides["storyboardFiles"] = set()
+
+		self._settingsOverrides["storyboardFiles"] |= set( args )
+
+
+	def AddAppleInterfaceFiles( self, *args ):
+		"""
+		Add a list of interface files to be compiled. Only applies to builds for Apple platforms.
+
+		:param args: List of interface files.
+		:type args: And arbitrary number of strings.
+		"""
+		if "interfaceFiles" not in self._settingsOverrides:
+			self._settingsOverrides["interfaceFiles"] = set()
+
+		self._settingsOverrides["interfaceFiles"] |= set( args )
+
+
+	def AddAppleAssetCatalogs( self, *args ):
+		"""
+		Add a list of asset catalogs to be compiled. Only applies to builds for Apple platforms.
+
+		:param args: List of asset catalogs.
+		:type args: And arbitrary number of strings.
+		"""
+		if "assetCatalogs" not in self._settingsOverrides:
+			self._settingsOverrides["assetCatalogs"] = set()
+
+		self._settingsOverrides["assetCatalogs"] |= set( args )
+
+
 	def ClearLibraries( self ):
 		"""Clears the list of libraries"""
 		self._settingsOverrides["libraries"] = set()
@@ -312,6 +351,21 @@ class SettingsOverrider( object ):
 	def ClearFrameworkDirectories( self ):
 		"""Clears the framework directories, including the defaults."""
 		self._settingsOverrides["frameworkDirs"] = []
+
+
+	def ClearAppleStoryboardFiles(self ):
+		"""Clears the list of storyboard files."""
+		self._settingsOverrides["storyboardFiles"] = set()
+
+
+	def ClearAppleInterfaceFiles(self ):
+		"""Clears the list of interface files."""
+		self._settingsOverrides["interfaceFiles"] = set()
+
+
+	def ClearAppleAssetCatalogs(self ):
+		"""Clears the list of asset catalogs."""
+		self._settingsOverrides["assetCatalogs"] = set()
 
 
 	def SetOptimizationLevel( self, i ):

@@ -285,6 +285,36 @@ def AddFrameworkDirectories( *args ):
 		projectSettings.currentProject.AddToSet("frameworkDirs",  arg )
 
 
+def AddAppleStoryboardFiles( *args ):
+	"""
+	Add a list of storyboard files to be compiled. Only applies to builds for Apple platforms.
+
+	:param args: List of storyboard files.
+	:type args: And arbitrary number of strings.
+	"""
+	projectSettings.currentProject.UnionSet( "storyboardFiles", set( args ) )
+
+
+def AddAppleInterfaceFiles( *args ):
+	"""
+	Add a list of interface files to be compiled. Only applies to builds for Apple platforms.
+
+	:param args: List of interface files.
+	:type args: And arbitrary number of strings.
+	"""
+	projectSettings.currentProject.UnionSet( "interfaceFiles", set( args ) )
+
+
+def AddAppleAssetCatalogs( *args ):
+	"""
+	Add a list of asset catalogs to be compiled. Only applies to builds for Apple platforms.
+
+	:param args: List of asset catalogs.
+	:type args: And arbitrary number of strings.
+	"""
+	projectSettings.currentProject.UnionSet( "assetCatalogs", set( args ) )
+
+
 def ClearLibraries( ):
 	"""Clears the list of libraries"""
 	projectSettings.currentProject.SetValue("libraries", set())
@@ -308,6 +338,18 @@ def ClearIncludeDirectories( ):
 def ClearLibraryDirectories( ):
 	"""Clears the library directories"""
 	projectSettings.currentProject.SetValue("libraryDirs", [])
+
+
+def ClearAppleStoryboardFiles():
+	projectSettings.currentProject.SetValue( "storyboardFiles", set() )
+
+
+def ClearAppleInterfaceFiles():
+	projectSettings.currentProject.SetValue( "interfaceFiles", set() )
+
+
+def ClearAppleAssetCatalogs():
+	projectSettings.currentProject.SetValue( "assetCatalogs", set() )
 
 
 def SetOptimizationLevel( i ):
