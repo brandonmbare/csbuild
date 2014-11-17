@@ -109,6 +109,15 @@ class MsvcBase( object ):
 		"""
 		self.msvc_version = msvc_version
 
+	def GetMsvcVersion( self ):
+		"""
+		Get the MSVC version that's been set.
+
+		:return: int
+		"""
+		return self.msvc_version
+
+
 	def GetValidArchitectures(self):
 		return ['x86', 'x64']
 
