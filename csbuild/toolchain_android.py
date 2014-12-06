@@ -336,8 +336,12 @@ class AndroidCompiler(AndroidBase, toolchain_gcc.GccCompiler):
 			exitcodes = ""
 
 		if isCpp:
+			if self._settingsOverrides["cxx"]:
+				compiler = self._settingsOverrides["cxx"]
 			standard = self.cppStandard
 		else:
+			if self._settingsOverrides["cc"]:
+				compiler = self._settingsOverrides["cc"]
 			standard = self.cStandard
 
 		if project.type == csbuild.ProjectType.SharedLibrary or project.type == csbuild.ProjectType.LoadableModule:
@@ -360,7 +364,7 @@ class AndroidCompiler(AndroidBase, toolchain_gcc.GccCompiler):
 		)
 
 	def _getIncludeDirs( self, includeDirs ):
-		"""Returns a string containing all of the passed include directories, formatted to be passed to gcc/g++.""" 
+		"""Returns a string containing all of the passed include directories, formatted to be passed to gcc/g++."""
 		ret = ""
 		for inc in includeDirs:
 			ret += "-I{} ".format( os.path.abspath( inc ) )
@@ -405,7 +409,7 @@ class AndroidLinker(AndroidBase, toolchain_gcc.GccLinker):
 			self._setupCompleted = True
 
 			if not self._keystoreLocation:
-				self._keystoreLocation = os.path.join(csbuild.mainfileDir, project.name+".keystore")
+				self._keystoreLocation = os.path.join(csbuild.mainFileDir, project.name+".keystore")
 
 			if not self._keystoreAlias:
 				self._keystoreAlias = project.name
@@ -416,10 +420,10 @@ class AndroidLinker(AndroidBase, toolchain_gcc.GccLinker):
 				self._keystoreAlias = alias
 
 			if not self._keystorePwFile:
-				self._keystorePwFile = os.path.join(csbuild.mainfileDir, self._keystoreLocation+".pass")
+				self._keystorePwFile = os.path.join(csbuild.mainFileDir, self._keystoreLocation+".pass")
 
 			if not self._keyPwFile:
-				self._keyPwFile = os.path.join(csbuild.mainfileDir, self._keystoreAlias + ".keystore." + project.name + ".pass")
+				self._keyPwFile = os.path.join(csbuild.mainFileDir, self._keystoreAlias + ".keystore." + project.name + ".pass")
 
 
 			ndkHome = csbuild.GetOption("ndk_home")
@@ -623,6 +627,14 @@ class AndroidLinker(AndroidBase, toolchain_gcc.GccLinker):
 						return lib
 					elif not success:
 						return None
+
+	def GetDefaultOutputExtension( self, projectType ):
+		if projectType == csbuild.ProjectType.Application:
+			return ""
+		elif projectType == csbuild.ProjectType.StaticLibrary:
+			return ".a"
+		elif projectType == csbuild.ProjectType.SharedLibrary or projectType == csbuild.ProjectType.LoadableModule:
+			return ".so"
 
 	def prePrepareBuildStep(self, project):
 		#Everything on Android has to build as a shared library
