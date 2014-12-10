@@ -854,7 +854,7 @@ def AddExtraObjects( *args ):
 	"""
 	for arg in list( args ):
 		for file in glob.glob( arg ):
-			projectSettings.currentProject.UnionSet("extraObjs",  os.path.abspath( file ) )
+			projectSettings.currentProject.AddToSet("extraObjs", os.path.abspath( file ) )
 
 
 def ClearExtraObjects():
@@ -1792,6 +1792,7 @@ def _performLink(project, objs):
 		return _LinkStatus.UpToDate
 
 	for obj in project.extraObjs:
+		log.LOG_INFO("Adding extra link object {} to link queue".format(obj))
 		if not os.access(obj, os.F_OK):
 			log.LOG_ERROR("Could not find extra object {}".format(obj))
 
@@ -2774,33 +2775,6 @@ def _run( ):
 						func()
 
 					newproject.fileOverrideSettings[file] = projCopy
-
-				if newproject.targetName not in newproject.targets:
-					log.LOG_INFO( "Project {} has no rules specified for target {}. Skipping.".format( newproject.name,
-						newproject.targetName ) )
-					return
-
-				projectSettings.currentProject = newproject
-
-				SetOutputArchitecture(architecture)
-
-				for targetFunc in newproject.targets[newproject.targetName]:
-					targetFunc( )
-
-				if newproject.outputArchitecture in newproject.archFuncs:
-					for archFunc in newproject.archFuncs[newproject.outputArchitecture]:
-						archFunc()
-
-				for file in newproject.fileOverrides:
-					projCopy = newproject.copy()
-					projectSettings.currentProject = projCopy
-
-					for func in newproject.fileOverrides[file]:
-						func()
-
-					newproject.fileOverrideSettings[file] = projCopy
-
-				projectSettings.currentProject = newproject
 
 				alteredLinkDepends = []
 				alteredLinkDependsIntermediate = []

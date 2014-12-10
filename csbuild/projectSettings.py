@@ -894,12 +894,16 @@ class projectSettings( object ):
 			return
 
 		if isinstance( newObj, dict ):
+			baseObj["obj"] = dict(baseObj["obj"])
 			baseObj["obj"].update( newObj )
 		elif isinstance( newObj, list ):
+			baseObj["obj"] = list(baseObj["obj"])
 			baseObj["obj"] += newObj
 		elif isinstance( newObj, set ):
+			baseObj["obj"] = set(baseObj["obj"])
 			baseObj["obj"] |= newObj
 		elif isinstance( newObj, csbuild.projectSettings.projectSettings.UserData ):
+			baseObj["obj"] = baseObj["obj"].copy()
 			baseObj["obj"].dataDict.update( newObj.dataDict )
 		else:
 			baseObj["obj"] = newObj
@@ -934,6 +938,7 @@ class projectSettings( object ):
 				projectSettings._processToolchain(base, self.activeToolchain, name)
 
 				self._finalizedSettings[tool][name] = base["obj"]
+
 		self.activeToolchain.SetActiveTool("linker")
 		if sys.version_info >= (3,0):
 			self.GetAttr = types.MethodType(projectSettings.GetAttrNext, self)
