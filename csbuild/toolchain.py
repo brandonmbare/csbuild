@@ -272,11 +272,11 @@ class SettingsOverrider( object ):
 		:param args: The list of directories to be searched.
 		"""
 		if "frameworkDirs" not in self._settingsOverrides:
-			self._settingsOverrides["frameworkDirs"] = []
+			self._settingsOverrides["frameworkDirs"] = set()
 
 		for arg in args:
 			arg = os.path.abspath( arg )
-			self._settingsOverrides["frameworkDirs"].append( arg )
+			self._settingsOverrides["frameworkDirs"].add( arg )
 
 
 	def AddAppleStoryboardFiles( self, *args ):
@@ -350,7 +350,7 @@ class SettingsOverrider( object ):
 
 	def ClearFrameworkDirectories( self ):
 		"""Clears the framework directories, including the defaults."""
-		self._settingsOverrides["frameworkDirs"] = []
+		self._settingsOverrides["frameworkDirs"] = set()
 
 
 	def ClearAppleStoryboardFiles(self ):

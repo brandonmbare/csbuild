@@ -84,6 +84,7 @@ class GccCompilerDarwin( GccDarwinBase, toolchain_gcc.GccCompiler ):
 		# Force the use of clang for now since that's what is typically used on Mac.
 		self._settingsOverrides["cxx"] = "clang++"
 		self._settingsOverrides["cc"] = "clang"
+		self._settingsOverrides["stdLib"] = "libc++"
 
 
 	def copy(self):
@@ -97,6 +98,15 @@ class GccCompilerDarwin( GccDarwinBase, toolchain_gcc.GccCompiler ):
 			return "-fno-common "
 		else:
 			return ""
+
+
+	def _getIncludeDirs( self, includeDirs ):
+		"""Returns a string containing all of the passed include directories, formatted to be passed to gcc/g++."""
+		ret = ""
+		for inc in includeDirs:
+			ret += "-I{} ".format( os.path.abspath( inc ) )
+		ret += "-I/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include "
+		return ret
 
 
 	def _getBaseCommand( self, compiler, project, isCpp ):
