@@ -28,7 +28,8 @@ class PlatformTegraAndroid( PlatformBase ):
 		PlatformBase.__init__( self )
 
 
-	def GetEntryName( self ):
+	@staticmethod
+	def GetEntryName():
 		"""
 		Retrieve the name value that will show up in Visual Studio as a buildable platform for a generated project.  Must be a name that Visual Studio recognizes.
 

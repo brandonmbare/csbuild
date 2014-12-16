@@ -18,11 +18,12 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-import csbuild
+import argparse
 import hashlib
 import os
 import uuid
 
+import csbuild
 from . import project_generator
 from . import projectSettings
 from . import log
@@ -150,6 +151,13 @@ class project_generator_visual_studio( project_generator.project_generator ):
 
 	@staticmethod
 	def AdditionalArgs( parser ):
+		class ListExtendAction(argparse.Action):
+			def __call__(self, _parser, namespace, values, option_string = None):
+				if getattr(namespace, self.dest, None) is None:
+					setattr(namespace, self.dest, [])
+
+				getattr(namespace, self.dest).extend(values)
+
 		parser.add_argument(
 			"--vs-gen-version",
 			help = "Select the version of Visual Studio the generated solution will be compatible with.",
@@ -161,6 +169,13 @@ class project_generator_visual_studio( project_generator.project_generator ):
 			"--vs-gen-replace-user-files",
 			help = "When generating project files, do not ignore existing .vcxproj.user files.",
 			action = "store_true",
+		)
+		parser.add_argument(
+			"--vs-gen-platform",
+		    help = "Desired platform to include in the generated project files. May be specified multiple times, once per platform.",
+		    action = ListExtendAction,
+		    default = PlatformWindowsX64.GetEntryName(),
+		    type = str,
 		)
 
 

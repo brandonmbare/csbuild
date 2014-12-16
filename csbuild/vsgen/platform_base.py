@@ -26,7 +26,8 @@ class PlatformBase( object ):
 		pass
 
 
-	def GetEntryName( self ):
+	@staticmethod
+	def GetEntryName():
 		"""
 		Retrieve the name value that will be show up in Visual Studio for a platform.  Must be a name that Visual Studio recognizes.
 
