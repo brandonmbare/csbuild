@@ -29,9 +29,20 @@ class PlatformWindowsX86( PlatformBase ):
 
 
 	@staticmethod
-	def GetEntryName():
+	def GetToolchainName():
 		"""
-		Retrieve the name value that will show up in Visual Studio as a buildable platform for a generated project.  Must be a name that Visual Studio recognizes.
+		Retrieve the toolchain-architecture name combination that this platform will apply to.
+
+		:return: str
+		"""
+		return "msvc-x86"
+
+
+	@staticmethod
+	def GetVisualStudioName():
+		"""
+		Retrieve the name value that will show up in Visual Studio as a buildable platform for a generated project.
+		Must be a name that Visual Studio recognizes.
 
 		:return: str
 		"""
@@ -41,12 +52,23 @@ class PlatformWindowsX86( PlatformBase ):
 class PlatformWindowsX64( PlatformBase ):
 	def __init__( self ):
 		PlatformBase.__init__( self )
+
+
+	@staticmethod
+	def GetToolchainName():
+		"""
+		Retrieve the toolchain-architecture name combination that this platform will apply to.
+
+		:return: str
+		"""
+		return "msvc-x64"
 	
 
 	@staticmethod
-	def GetEntryName():
+	def GetVisualStudioName():
 		"""
-		Retrieve the name value that will show up in Visual Studio as a buildable platform for a generated project.  Must be a name that Visual Studio recognizes.
+		Retrieve the name value that will show up in Visual Studio as a buildable platform for a generated project.
+		Must be a name that Visual Studio recognizes.
 		
 		:return: str
 		"""

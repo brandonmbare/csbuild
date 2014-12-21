@@ -40,6 +40,50 @@ class VisualStudioVersion:
 	All = [v2010, v2012, v2013]
 
 
+class PlatformManager:
+	def __init__( self ):
+		self._availablePlatformMap = dict() # Maps the visual studio names to the classes (not class instances).
+		self._toolchainLookupMap = dict() # Maps the toolchain names to the visual studio names.
+		self._registeredPlatformMap = dict() # Maps the visual studio names to the class instances.
+
+		self._makePlatformAvailable( PlatformWindowsX86 )
+		self._makePlatformAvailable( PlatformWindowsX64 )
+		self._makePlatformAvailable( PlatformTegraAndroid )
+
+
+	@staticmethod
+	def Get():
+		global instance
+		if not instance:
+			instance = PlatformManager()
+		return instance
+
+
+	def _makePlatformAvailable(self, cls):
+		self._availablePlatformMap.update( { cls.GetVisualStudioName(): cls } )
+		self._toolchainLookupMap.update( { cls.GetToolchainName(): cls.GetVisualStudioName() } )
+
+
+	def GetAvailableNameList( self ):
+		return sorted( list( self._availablePlatformMap ) )
+
+
+	def RegisterPlatform(self, name):
+		if not name in self._availablePlatformMap:
+			log.LOG_ERROR( "Unknown vsgen platform: {}".format( name ) )
+			return
+		self._registeredPlatformMap.update( { name, self._availablePlatformMap[name] } )
+
+
+	def GetPlatformFromToolchainName( self, name ):
+		if not name in self._toolchainLookupMap:
+			return None
+		visualStudioName = self._toolchainLookupMap[name]
+		if not visualStudioName in self._registeredPlatformMap:
+			return None
+		return self._registeredPlatformMap[visualStudioName]
+
+
 def GetImpliedVisualStudioVersion():
 	msvcVersion = csbuild.Toolchain( "msvc" ).Compiler().GetMsvcVersion()
 	msvcToVisualStudioMap = {
@@ -76,15 +120,6 @@ def CorrectConfigName( configName ):
 	return configName.capitalize()
 
 
-class Platform( object ):
-	"""
-	Container for a project's platform.
-	"""
-	def __init__( self, toolchain, arch ):
-		self.toolchain = toolchain
-		self.arch = arch
-
-
 class Project( object ):
 	"""
 	Container class for Visual Studio projects.
@@ -98,7 +133,6 @@ class Project( object ):
 		self.isFilter = False
 		self.isBuildAllProject = False
 		self.isRegenProject = False
-		self.platformConfigList = []
 		self.fullSourceFileList = set()
 		self.fullHeaderFileList = set()
 		self.fullIncludePathList = set()
@@ -148,6 +182,29 @@ class project_generator_visual_studio( project_generator.project_generator ):
 	def __init__( self, path, solutionName, extraArgs ):
 		project_generator.project_generator.__init__( self, path, solutionName, extraArgs )
 
+		versionNumber = csbuild.GetOption("vs-gen-version")
+		platformList = csbuild.GetOption("vs-gen-platform")
+
+		# If the user did not specify any target platforms, add a default.
+		if not platformList:
+			defaultName = PlatformWindowsX64.GetVisualStudioName()
+			platformList.append( defaultName )
+			log.LOG_BUILD( "No platforms selected; defaulting to {}.".format( defaultName ) )
+
+		# Register the selected platforms.
+		platformManager = PlatformManager.Get()
+		for platform in platformList:
+			platformManager.RegisterPlatform(platform)
+
+		self._visualStudioVersion = versionNumber
+		self._projectMap = {}
+		self._configList = []
+		self._reverseConfigMap = {} # A reverse look-up map for the configuration names.
+		self._extraBuildArgs = self.extraargs.replace(",", " ")
+		self._fullIncludePathList = set() # Should be a set starting out so duplicates are eliminated.
+		self._projectUuidList = set()
+		self._orderedProjectList = []
+
 
 	@staticmethod
 	def AdditionalArgs( parser ):
@@ -174,16 +231,22 @@ class project_generator_visual_studio( project_generator.project_generator ):
 			"--vs-gen-platform",
 		    help = "Desired platform to include in the generated project files. May be specified multiple times, once per platform.",
 		    action = ListExtendAction,
-		    default = PlatformWindowsX64.GetEntryName(),
+		    default = [],
 		    type = str,
+		    choices = PlatformManager.Get().GetAvailableNameList(),
 		)
 
 
 	def WriteProjectFiles( self ):
+		if not self._registeredPlatformMap:
+			log.LOG_ERROR( "Cannot generate Visual Studio project unless valid platforms are provided using the --vs-gen-platform command!" )
+			return
+
 		self._collectProjects()
 
 
 	def _collectProjects( self ):
+		platformManager = PlatformManager.Get()
 
 		def recurseGroups( projectMap_out, parentFilter_out, projectOutputPath, projectGroup ):
 			# Setup the projects first.
@@ -200,13 +263,14 @@ class project_generator_visual_studio( project_generator.project_generator ):
 					parentFilter_out.dependencyList.add( projectName )
 
 				# Because the list of sources and headers can differ between configurations and architectures,
-				# we need to generate a complete list so the project can reference them all. Also, keep track
-				# of the project settings per configuration and supported architecture.
+				# we need to generate a complete list so the project can reference them all.
 				for toolchainName, configMap in projectSettingsMap.items():
 					for configName, archMap in configMap.items():
 						for archName, settings in archMap.items():
 							configName = CorrectConfigName( configName )
-							projectData.platformConfigList.append( ( configName, Platform( toolchainName, archName ), toolchainName, settings ) )
+							toolchainArchName = "{}-{}".format( toolchainName, archName )
+							generatorPlatform = platformManager.GetPlatformFromToolchainName( toolchainArchName )
+							generatorPlatform.AddDefines( configName, projectName, settings.defines )
 							projectData.fullSourceFileList.update( set( settings.allsources ) )
 							projectData.fullHeaderFileList.update( set( settings.allheaders ) )
 							projectData.fullIncludePathList.update( set( settings.includeDirs ) )
@@ -217,7 +281,6 @@ class project_generator_visual_studio( project_generator.project_generator ):
 
 				projectData.fullSourceFileList = sorted( projectData.fullSourceFileList )
 				projectData.fullHeaderFileList = sorted( projectData.fullHeaderFileList )
-				projectData.platformConfigList = sorted( projectData.platformConfigList )
 
 				# Grab the projectSettings for the first key in the config map and fill in a set of names for dependent projects.
 				# We only need the names for now. We can handle resolving them after we have all of the projects mapped.
@@ -280,23 +343,15 @@ class project_generator_visual_studio( project_generator.project_generator ):
 		# since Visual Studio doesn't give us a way to override the behavior of the "Build Solution" command.
 		if not self._createNativeProject:
 			# Fill in the project data.
-			buildAllProjectName = "(BUILD_ALL)"
-			buildAllProjectData = Project( buildAllProjectName, self._projectUuidList ) # Create a new object to contain project data.
+			buildAllProjectData = Project( "(BUILD_ALL)", self._projectUuidList ) # Create a new object to contain project data.
 			buildAllProjectData.outputPath = self.rootpath
 			buildAllProjectData.isBuildAllProject = True
 			buildAllProjectData.makefilePath = csbuild.scriptFiles[0] # Reference the main makefile.
 
-			regenProjectName = "(REGENERATE_SOLUTION)"
-			regenProjectData = Project( regenProjectName, self._projectUuidList ) # Create a new object to contain project data.
+			regenProjectData = Project( "(REGENERATE_SOLUTION)", self._projectUuidList ) # Create a new object to contain project data.
 			regenProjectData.outputPath = self.rootpath
 			regenProjectData.isRegenProject = True
 			regenProjectData.makefilePath = csbuild.scriptFiles[0] # Reference the main makefile.
-
-			# The Build All project doesn't have any project settings, but it still needs all of the platforms and configurations.
-			for platformName in self._platformList:
-				for configName in self._configList:
-					buildAllProjectData.platformConfigList.append( ( configName, platformName, "", None ) )
-					regenProjectData.platformConfigList.append( ( configName, platformName, "", None ) )
 
 			# Add the Build All and Regen projects to the project map.
 			self._projectMap[buildAllProjectData.name] = buildAllProjectData

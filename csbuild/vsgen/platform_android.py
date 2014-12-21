@@ -29,9 +29,20 @@ class PlatformTegraAndroid( PlatformBase ):
 
 
 	@staticmethod
-	def GetEntryName():
+	def GetToolchainName():
 		"""
-		Retrieve the name value that will show up in Visual Studio as a buildable platform for a generated project.  Must be a name that Visual Studio recognizes.
+		Retrieve the toolchain-architecture name combination that this platform will apply to.
+
+		:return: str
+		"""
+		return "android-armeabi-v7a"
+
+
+	@staticmethod
+	def GetVisualStudioName():
+		"""
+		Retrieve the name value that will show up in Visual Studio as a buildable platform for a generated project.
+		Must be a name that Visual Studio recognizes.
 
 		:return: str
 		"""

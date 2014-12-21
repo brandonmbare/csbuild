@@ -23,14 +23,46 @@
 
 class PlatformBase( object ):
 	def __init__( self ):
+		self._definesMap = {}
+
+
+	@staticmethod
+	def GetToolchainName():
+		"""
+		Retrieve the toolchain-architecture name combination that this platform will apply to.
+
+		:return: str
+		"""
 		pass
 
 
 	@staticmethod
-	def GetEntryName():
+	def GetVisualStudioName():
 		"""
 		Retrieve the name value that will be show up in Visual Studio for a platform.  Must be a name that Visual Studio recognizes.
 
 		:return: str
 		"""
 		pass
+
+	def AddDefines( self, targetName, projectName, defines ):
+		"""
+		Map a list of preprocessor defines to a project and target.
+
+		:param targetName: Output target.
+		:type targetName: str
+
+		:param projectName: Name of the project associated with the defines.
+		:type projectName: str
+
+		:param defines: Defines to add.
+		:type defines: list
+		"""
+		assert isinstance( defines, list )
+
+		mapKey = ( targetName, projectName )
+
+		if not projectName in self._definesMap:
+			self._definesMap.update( { mapKey: defines } )
+		else:
+			self._definesMap[mapKey].append( defines )
