@@ -45,6 +45,7 @@ class PlatformBase( object ):
 		"""
 		pass
 
+
 	def AddDefines( self, targetName, projectName, defines ):
 		"""
 		Map a list of preprocessor defines to a project and target.

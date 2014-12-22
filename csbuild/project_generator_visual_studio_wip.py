@@ -19,8 +19,10 @@
 # SOFTWARE.
 
 import argparse
+import codecs
 import hashlib
 import os
+import tempfile
 import uuid
 
 import csbuild
@@ -53,10 +55,9 @@ class PlatformManager:
 
 	@staticmethod
 	def Get():
-		global instance
-		if not instance:
-			instance = PlatformManager()
-		return instance
+		if not hasattr(PlatformManager.Get, "instance"):
+			PlatformManager.Get.instance = PlatformManager()
+		return PlatformManager.Get.instance
 
 
 	def _makePlatformAvailable(self, cls):
@@ -68,11 +69,16 @@ class PlatformManager:
 		return sorted( list( self._availablePlatformMap ) )
 
 
+	def GetRegisteredNameList( self ):
+		return sorted( list( self._registeredPlatformMap ) )
+
+
 	def RegisterPlatform(self, name):
 		if not name in self._availablePlatformMap:
 			log.LOG_ERROR( "Unknown vsgen platform: {}".format( name ) )
 			return
-		self._registeredPlatformMap.update( { name, self._availablePlatformMap[name] } )
+		platformClass = self._availablePlatformMap[name]
+		self._registeredPlatformMap.update( { name: platformClass() } )
 
 
 	def GetPlatformFromToolchainName( self, name ):
@@ -175,15 +181,17 @@ class CachedFileData:
 
 
 class project_generator_visual_studio( project_generator.project_generator ):
-	"""
-	Generator used to create Visual Studio project files.
-	"""
+	"""Generator used to create Visual Studio project files."""
 
 	def __init__( self, path, solutionName, extraArgs ):
 		project_generator.project_generator.__init__( self, path, solutionName, extraArgs )
 
 		versionNumber = csbuild.GetOption("vs-gen-version")
 		platformList = csbuild.GetOption("vs-gen-platform")
+
+		if not versionNumber:
+			versionNumber = GetImpliedVisualStudioVersion()
+			log.LOG_BUILD( "No Visual Studio version selected; defaulting to {}.".format( versionNumber ) )
 
 		# If the user did not specify any target platforms, add a default.
 		if not platformList:
@@ -196,6 +204,7 @@ class project_generator_visual_studio( project_generator.project_generator ):
 		for platform in platformList:
 			platformManager.RegisterPlatform(platform)
 
+		self._createNativeProject = False #TODO: Implement support for native projects.
 		self._visualStudioVersion = versionNumber
 		self._projectMap = {}
 		self._configList = []
@@ -204,6 +213,12 @@ class project_generator_visual_studio( project_generator.project_generator ):
 		self._fullIncludePathList = set() # Should be a set starting out so duplicates are eliminated.
 		self._projectUuidList = set()
 		self._orderedProjectList = []
+
+		# Compile a list of the targets and a reverse-lookup list.
+		for configName in _shared_globals.alltargets:
+			correctedConfigName = CorrectConfigName(configName)
+			self._configList.append(correctedConfigName)
+			self._reverseConfigMap[correctedConfigName] = configName
 
 
 	@staticmethod
@@ -215,11 +230,16 @@ class project_generator_visual_studio( project_generator.project_generator ):
 
 				getattr(namespace, self.dest).extend(values)
 
+		#parser.add_argument(
+		#	"--vs-gen-native",
+		#    help = "Generate native Visual Studio projects.",
+		#    action = "store_true",
+		#)
 		parser.add_argument(
 			"--vs-gen-version",
 			help = "Select the version of Visual Studio the generated solution will be compatible with.",
 			choices = VisualStudioVersion.All,
-			default = GetImpliedVisualStudioVersion(),
+			default = None,
 			type = int,
 		)
 		parser.add_argument(
@@ -238,11 +258,8 @@ class project_generator_visual_studio( project_generator.project_generator ):
 
 
 	def WriteProjectFiles( self ):
-		if not self._registeredPlatformMap:
-			log.LOG_ERROR( "Cannot generate Visual Studio project unless valid platforms are provided using the --vs-gen-platform command!" )
-			return
-
 		self._collectProjects()
+		self._WriteSolutionFile()
 
 
 	def _collectProjects( self ):
@@ -254,7 +271,6 @@ class project_generator_visual_studio( project_generator.project_generator ):
 
 				# Fill in the project data.
 				projectData = Project( projectName, self._projectUuidList ) # Create a new object to contain project data.
-				projectData.name = projectName
 				projectData.outputPath = os.path.join( self.rootpath, projectOutputPath )
 
 				# Add the current project to the parent filter dependency list. In the case of filters,
@@ -267,13 +283,20 @@ class project_generator_visual_studio( project_generator.project_generator ):
 				for toolchainName, configMap in projectSettingsMap.items():
 					for configName, archMap in configMap.items():
 						for archName, settings in archMap.items():
+
 							configName = CorrectConfigName( configName )
 							toolchainArchName = "{}-{}".format( toolchainName, archName )
 							generatorPlatform = platformManager.GetPlatformFromToolchainName( toolchainArchName )
-							generatorPlatform.AddDefines( configName, projectName, settings.defines )
+
+							# Only add the defines if the current toolchain is associated with a registered platform.
+							if generatorPlatform:
+								generatorPlatform.AddDefines( configName, projectName, settings.defines )
+
 							projectData.fullSourceFileList.update( set( settings.allsources ) )
 							projectData.fullHeaderFileList.update( set( settings.allheaders ) )
 							projectData.fullIncludePathList.update( set( settings.includeDirs ) )
+
+							# Construct the path that the files will show under in the Solution Explorer.
 							for source in projectData.fullSourceFileList:
 								projectData.fileFilterMap[source] = os.path.join( "Source Files", os.path.dirname( os.path.relpath( source, settings.workingDirectory ) ).replace( ".." + os.path.sep, "" ) ).rstrip( os.path.sep )
 							for header in projectData.fullHeaderFileList:
@@ -361,11 +384,11 @@ class project_generator_visual_studio( project_generator.project_generator ):
 		resolveDependencies( self._projectMap )
 
 		# Copy the project names into a list.
-		for projectName, projectData in self._projectMap.items():
-			self._orderedProjectList.append( projectName )
+		#for projectName, projectData in self._projectMap.items():
+		#	self._orderedProjectList.append( projectName )
 
 		# Sort the list of project names.
-		self._orderedProjectList = sorted( self._orderedProjectList )
+		self._orderedProjectList = sorted( list( self._projectMap ) )
 
 		# Replace the list of names in the project list with the actual project data.
 		for i in range( 0, len( self._orderedProjectList ) ):
@@ -377,3 +400,115 @@ class project_generator_visual_studio( project_generator.project_generator ):
 			self._fullIncludePathList.update( projectData.fullIncludePathList )
 
 		self._fullIncludePathList = sorted( self._fullIncludePathList )
+
+
+	def _WriteSolutionFile( self ):
+
+		def writeLineToFile( indentLevel, fileHandle, stringToWrite ):
+			fileHandle.write( "{}{}\r\n".format( "\t" * indentLevel, stringToWrite ) )
+
+		platformManager = PlatformManager.Get()
+		registeredPlatformList = platformManager.GetRegisteredNameList()
+
+		fileFormatVersionNumber = {
+			2010: "11.00",
+			2012: "12.00",
+			2013: "12.00",
+		}
+
+		tempRootPath = tempfile.mkdtemp()
+		finalSolutionPath = "{}.sln".format( os.path.join( self.rootpath, self.solutionname ) )
+		tempSolutionPath = "{}.sln".format( tempRootPath, self.solutionname )
+
+		# Create the temporary root path.
+		if not os.access( tempRootPath, os.F_OK ):
+			os.makedirs( tempRootPath )
+
+		# Visual Studio solution files need to be UTF-8 with the byte order marker because Visual Studio is VERY picky about these files.
+		# If ANYTHING is missing or not formatted properly, the Visual Studio version selector may not open the right version or Visual
+		# Studio itself may refuse to even attempt to load the file.
+		with codecs.open( tempSolutionPath, "w", "utf-8-sig" ) as fileHandle:
+			writeLineToFile( 0, fileHandle, "" ) # Required empty line.
+			writeLineToFile( 0, fileHandle, "Microsoft Visual Studio Solution File, Format Version {}".format( fileFormatVersionNumber[self._visualStudioVersion] ) )
+			writeLineToFile( 0, fileHandle, "# Visual Studio {}".format( self._visualStudioVersion ) )
+
+			projectFilterList = []
+
+			for projectData in self._orderedProjectList:
+				if not projectData.isFilter:
+					relativeProjectPath = os.path.relpath( projectData.outputPath, self.rootpath )
+					projectFilePath = os.path.join( relativeProjectPath, "{}.vcxproj".format( projectData.name ) )
+					nodeId = "{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}"
+				else:
+					projectFilePath = projectData.name
+					nodeId = "{2150E333-8FDC-42A3-9474-1A3956D46DE8}"
+
+					# Keep track of the filters because we need to record those after the projects.
+					projectFilterList.append( projectData )
+
+				beginProject = 'Project("{}") = "{}", "{}", "{}"'.format( nodeId, projectData.name, projectFilePath, projectData.id )
+
+				writeLineToFile( 0, fileHandle, beginProject )
+
+				# Only write out project dependency information if the current project has any dependencies and if we're creating a native project.
+				# If we're not creating a native project, it doesn't matter since csbuild will take care of all that for us behind the scenes.
+				# Also, don't list any dependencies for filters. Those will be written out under NestedProjects.
+				if self._createNativeProject and not projectData.isFilter and len( projectData.dependencyList ) > 0:
+					writeLineToFile( 1, fileHandle, "ProjectSection(ProjectDependencies) = postProject" )
+
+					# Write out the IDs for each dependent project.
+					for dependentProjectData in projectData.dependencyList:
+						writeLineToFile( 2, fileHandle, "{0} = {0}".format( dependentProjectData.id ) )
+
+					writeLineToFile( 1, fileHandle, "EndProjectSection" )
+
+				writeLineToFile( 0, fileHandle, "EndProject" )
+
+			writeLineToFile( 0, fileHandle, "Global" )
+
+			# Write all of the supported configurations and platforms.
+			writeLineToFile( 1, fileHandle, "GlobalSection(SolutionConfigurationPlatforms) = preSolution" )
+			for buildTarget in self._configList:
+				for platformName in registeredPlatformList:
+					writeLineToFile( 2, fileHandle, "{0}|{1} = {0}|{1}".format(buildTarget, platformName ) )
+			writeLineToFile( 1, fileHandle, "EndGlobalSection" )
+
+			writeLineToFile( 1, fileHandle, "GlobalSection(ProjectConfigurationPlatforms) = postSolution" )
+			for projectData in self._orderedProjectList:
+				if not projectData.isFilter:
+					for buildTarget in self._configList:
+						for platformName in registeredPlatformList:
+							writeLineToFile( 2, fileHandle, "{0}.{1}|{2}.ActiveCfg = {1}|{2}".format( projectData.id, buildTarget, platformName ) )
+							# A project is only enabled for a given platform if it's the Build All project (only applies to non-native solutions)
+							# or if the project is listed under the current configuration and platform.
+							if projectData.isBuildAllProject or ( self._createNativeProject and projectData.HasConfigAndPlatform( buildTarget, platformName ) ):
+								writeLineToFile( 2, fileHandle, "{0}.{1}|{2}.Build.0 = {1}|{2}".format( projectData.id, buildTarget, platformName ) )
+			writeLineToFile( 1, fileHandle, "EndGlobalSection" )
+
+			writeLineToFile( 1, fileHandle, "GlobalSection(SolutionProperties) = preSolution" )
+			writeLineToFile( 2, fileHandle, "HideSolutionNode = FALSE" )
+			writeLineToFile( 1, fileHandle, "EndGlobalSection" )
+
+			# Write out any information about nested projects.
+			if len( projectFilterList ) > 0:
+				writeLineToFile( 1, fileHandle, "GlobalSection(NestedProjects) = preSolution" )
+				for filterData in projectFilterList:
+					for nestedProjectData in filterData.dependencyList:
+						writeLineToFile( 2, fileHandle, "{} = {}".format( nestedProjectData.id, filterData.id ) )
+				writeLineToFile( 1, fileHandle, "EndGlobalSection" )
+
+			writeLineToFile( 0, fileHandle, "EndGlobal" )
+
+		with open( tempSolutionPath, "rb" ) as fileHandle:
+			fileData = fileHandle.read()
+			cachedFile = CachedFileData( finalSolutionPath, fileData, False )
+			cachedFile.SaveFile()
+
+		if os.access( tempSolutionPath, os.F_OK ):
+			os.remove( tempSolutionPath )
+			try:
+				# Attempt to remove the temp directory.  This will only fail if the directory already existed with files in it.
+				# In that case, just catch the exception and move on.
+				os.rmdir( tempRootPath )
+			except:
+				pass

@@ -2,8 +2,12 @@
 
 import csbuild
 
+from csbuild.toolchain_msvc import VisualStudioPackage
+
 csbuild.Toolchain("gcc", "ios").Compiler().SetCppStandard("c++11")
 csbuild.Toolchain("gcc", "ios").SetCppStandardLibrary("libc++")
+
+csbuild.Toolchain("msvc").SetMsvcVersion(VisualStudioPackage.Vs2012)
 
 csbuild.DisablePrecompile()
 csbuild.DisableChunkedBuild()
@@ -24,7 +28,7 @@ def sharedLibrary():
 
 
 @csbuild.project("staticLibrary", "src/staticLibrary")
-def sharedLibrary():
+def staticLibrary():
 	csbuild.SetOutput("staticLibrary", csbuild.ProjectType.StaticLibrary)
 
 
