@@ -20,6 +20,8 @@
 
 """Contains the vsgen platform for Tegra-Android."""
 
+import xml.etree.ElementTree as ET
+
 from .platform_base import PlatformBase
 
 
@@ -47,3 +49,76 @@ class PlatformTegraAndroid( PlatformBase ):
 		:return: str
 		"""
 		return "Tegra-Android"
+
+
+	def WriteProjectConfiguration( self, parentXmlNode, vsConfigName ):
+		"""
+		Write the project configuration nodes for this platform.
+
+		:param parentXmlNode: Parent XML node.
+		:type parentXmlNode: class`xml.etree.ElementTree.SubElement`
+
+		:param vsConfigName: Visual Studio configuration name.
+		:type vsConfigName: str
+		"""
+		AddNode = ET.SubElement
+
+		platformName = self.GetVisualStudioName()
+		includeString = "{}|{}".format( vsConfigName, platformName )
+
+		projectConfigNode = AddNode(parentXmlNode, "ProjectConfiguration")
+		configNode = AddNode(projectConfigNode, "Configuration")
+		platformNode = AddNode(projectConfigNode, "Platform")
+
+		projectConfigNode.set( "Include", includeString )
+		configNode.text = vsConfigName
+		platformNode.text = platformName
+
+
+	def WritePropertyGroup( self, parentXmlNode, vsConfigName, vsPlatformToolsetName, isNative ):
+		"""
+		Write the project's property group nodes for this platform.
+
+		:param parentXmlNode: Parent XML node.
+		:type parentXmlNode: class`xml.etree.ElementTree.SubElement`
+
+		:param vsConfigName: Visual Studio configuration name.
+		:type vsConfigName: str
+
+		:param vsPlatformToolsetName: Name of the platform toolset for the selected version of Visual Studio.
+		:type vsPlatformToolsetName: str
+
+		:param isNative: Is this a native project?
+		:type isNative: bool
+		"""
+		AddNode = ET.SubElement
+
+		platformName = self.GetVisualStudioName()
+
+		propertyGroupNode = AddNode( parentXmlNode, "PropertyGroup" )
+		propertyGroupNode.set( "Label", "Configuration")
+		propertyGroupNode.set( "Condition", "'$(Configuration)|$(Platform)'=='{}|{}'".format( vsConfigName, platformName ) )
+
+		if isNative:
+			#TODO: Add properties for native projects.
+			assert False
+		else:
+			configTypeNode = AddNode(propertyGroupNode, "ConfigurationType")
+			configTypeNode.text = "ExternalBuildSystem"
+
+
+	def WriteImportProperties( self, parentXmlNode, vsConfigName, isNative ):
+		"""
+		Write any special import properties for this platform.
+
+		:param parentXmlNode: Parent XML node.
+		:type parentXmlNode: class`xml.etree.ElementTree.SubElement'
+
+		:param vsConfigName: Visual Studio configuration name.
+		:type vsConfigName: str
+
+		:param isNative: Is this a native project?
+		:type isNative: bool
+		"""
+		# Nothing to do for Tegra.
+		pass

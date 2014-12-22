@@ -23,7 +23,10 @@
 
 class PlatformBase( object ):
 	def __init__( self ):
-		self._definesMap = {}
+		self._outputNameMap = dict()
+		self._outDirMap = dict()
+		self._intDirMap = dict()
+		self._definesMap = dict()
 
 
 	@staticmethod
@@ -46,12 +49,72 @@ class PlatformBase( object ):
 		pass
 
 
-	def AddDefines( self, targetName, projectName, defines ):
+	def AddOutputName( self, vsConfigName, projectName, outputName ):
 		"""
-		Map a list of preprocessor defines to a project and target.
+		Map an output name to a project and configuration.
 
-		:param targetName: Output target.
-		:type targetName: str
+		:param vsConfigName: Output configuration name.
+		:type vsConfigName: str
+
+		:param projectName: Name of the project associated with the defines.
+		:type projectName: str
+
+		:param outputName: Output directory to add.
+		:type outputName: str
+		"""
+		mapKey = ( vsConfigName, projectName )
+		if not mapKey in self._outputNameMap:
+			self._outputNameMap.update( { mapKey: outputName } )
+		else:
+			self._outputNameMap[mapKey] = outputName
+
+
+	def AddOutputDirectory( self, vsConfigName, projectName, outDir ):
+		"""
+		Map an output directory to a project and configuration.
+
+		:param vsConfigName: Output configuration name.
+		:type vsConfigName: str
+
+		:param projectName: Name of the project associated with the defines.
+		:type projectName: str
+
+		:param outDir: Output directory to add.
+		:type outDir: str
+		"""
+		mapKey = ( vsConfigName, projectName )
+		if not mapKey in self._outDirMap:
+			self._outDirMap.update( { mapKey: outDir } )
+		else:
+			self._outDirMap[mapKey] = outDir
+
+
+	def AddIntermediateDirectory( self, vsConfigName, projectName, intDir ):
+		"""
+		Map an output directory to a project and configuration.
+
+		:param vsConfigName: Output configuration name.
+		:type vsConfigName: str
+
+		:param projectName: Name of the project associated with the defines.
+		:type projectName: str
+
+		:param intDir: Intermediate directory to add.
+		:type intDir: str
+		"""
+		mapKey = ( vsConfigName, projectName )
+		if not mapKey in self._intDirMap:
+			self._intDirMap.update( { mapKey: intDir } )
+		else:
+			self._intDirMap[mapKey] = intDir
+
+
+	def AddDefines( self, vsConfigName, projectName, defines ):
+		"""
+		Map a list of preprocessor defines to a project and configuration.
+
+		:param vsConfigName: Output configuration name.
+		:type vsConfigName: str
 
 		:param projectName: Name of the project associated with the defines.
 		:type projectName: str
@@ -59,11 +122,124 @@ class PlatformBase( object ):
 		:param defines: Defines to add.
 		:type defines: list
 		"""
-		assert isinstance( defines, list )
-
-		mapKey = ( targetName, projectName )
-
-		if not projectName in self._definesMap:
+		mapKey = ( vsConfigName, projectName )
+		if not mapKey in self._definesMap:
 			self._definesMap.update( { mapKey: defines } )
 		else:
 			self._definesMap[mapKey].append( defines )
+
+
+	def GetOutputName( self, vsConfigName, projectName ):
+		"""
+		Retrieve an output name from a project and configuration.
+
+		:param vsConfigName: Output configuration name.
+		:type vsConfigName: str
+
+		:param projectName: Name of the project associated with the defines.
+		:type projectName: str
+
+		:return: str
+		"""
+		mapKey = ( vsConfigName, projectName )
+		assert mapKey in self._outputNameMap
+		return self._outputNameMap[mapKey]
+
+
+	def GetOutputDirectory( self, vsConfigName, projectName ):
+		"""
+		Retrieve an output directory from a project and configuration.
+
+		:param vsConfigName: Output configuration name.
+		:type vsConfigName: str
+
+		:param projectName: Name of the project associated with the defines.
+		:type projectName: str
+
+		:return: str
+		"""
+		mapKey = ( vsConfigName, projectName )
+		assert mapKey in self._outDirMap
+		return self._outDirMap[mapKey]
+
+
+	def GetIntermediateDirectory( self, vsConfigName, projectName ):
+		"""
+		Retrieve an intermediate from a project and configuration.
+
+		:param vsConfigName: Output configuration name.
+		:type vsConfigName: str
+
+		:param projectName: Name of the project associated with the defines.
+		:type projectName: str
+
+		:return: str
+		"""
+		mapKey = ( vsConfigName, projectName )
+		assert mapKey in self._intDirMap
+		return self._intDirMap[mapKey]
+
+
+	def GetDefines( self, vsConfigName, projectName ):
+		"""
+		Retrieve an list of preprocessor defines from a project and configuration.
+
+		:param vsConfigName: Output configuration name.
+		:type vsConfigName: str
+
+		:param projectName: Name of the project associated with the defines.
+		:type projectName: str
+
+		:return: list
+		"""
+		mapKey = ( vsConfigName, projectName )
+		assert mapKey in self._definesMap
+		return self._definesMap[mapKey]
+
+
+	def WriteProjectConfiguration( self, parentXmlNode, vsConfigName ):
+		"""
+		Write the project configuration nodes for this platform.
+
+		:param parentXmlNode: Parent XML node.
+		:type parentXmlNode: class`_elementtree.SubElement`
+
+		:param vsConfigName: Visual Studio configuration name.
+		:type vsConfigName: str
+		"""
+		pass
+
+
+	def WritePropertyGroup( self, parentXmlNode, vsConfigName, vsPlatformToolsetName, isNative ):
+		"""
+		Write the project's property group nodes for this platform.
+
+		:param parentXmlNode: Parent XML node.
+		:type parentXmlNode: class`_elementtree.SubElement`
+
+		:param vsConfigName: Visual Studio configuration name.
+		:type vsConfigName: str
+
+		:param vsPlatformToolsetName: Name of the platform toolset for the selected version of Visual Studio.
+		:type vsPlatformToolsetName: str
+
+		:param isNative: Is this a native project?
+		:type isNative: bool
+		"""
+		pass
+
+
+	def WriteImportProperties( self, parentXmlNode, vsConfigName, isNative ):
+		"""
+		Write any special import properties for this platform.
+
+		:param parentXmlNode: Parent XML node.
+		:type parentXmlNode: class`_elementtree.SubElement'
+
+		:param vsConfigName: Visual Studio configuration name.
+		:type vsConfigName: str
+
+		:param isNative: Is this a native project?
+		:type isNative: bool
+		"""
+		pass

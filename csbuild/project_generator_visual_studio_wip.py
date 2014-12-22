@@ -22,8 +22,12 @@ import argparse
 import codecs
 import hashlib
 import os
+import sys
 import tempfile
 import uuid
+
+import xml.etree.ElementTree as ET
+import xml.dom.minidom as minidom
 
 import csbuild
 from . import project_generator
@@ -88,6 +92,12 @@ class PlatformManager:
 		if not visualStudioName in self._registeredPlatformMap:
 			return None
 		return self._registeredPlatformMap[visualStudioName]
+
+
+	def GetRegisteredPlatformFromVisualStudioName( self, name ):
+		if not name in self._registeredPlatformMap:
+			return None
+		return self._registeredPlatformMap[name]
 
 
 def GetImpliedVisualStudioVersion():
@@ -288,8 +298,11 @@ class project_generator_visual_studio( project_generator.project_generator ):
 							toolchainArchName = "{}-{}".format( toolchainName, archName )
 							generatorPlatform = platformManager.GetPlatformFromToolchainName( toolchainArchName )
 
-							# Only add the defines if the current toolchain is associated with a registered platform.
+							# Only configuration-specific project data if the current toolchain is associated with a registered platform.
 							if generatorPlatform:
+								generatorPlatform.AddOutputName( configName, projectName, settings.outputName )
+								generatorPlatform.AddOutputDirectory( configName, projectName, settings.outputDir )
+								generatorPlatform.AddIntermediateDirectory( configName, projectName, settings.objDir )
 								generatorPlatform.AddDefines( configName, projectName, settings.defines )
 
 							projectData.fullSourceFileList.update( set( settings.allsources ) )
@@ -414,7 +427,7 @@ class project_generator_visual_studio( project_generator.project_generator ):
 			2010: "11.00",
 			2012: "12.00",
 			2013: "12.00",
-		}
+		}[self._visualStudioVersion]
 
 		tempRootPath = tempfile.mkdtemp()
 		finalSolutionPath = "{}.sln".format( os.path.join( self.rootpath, self.solutionname ) )
@@ -429,7 +442,7 @@ class project_generator_visual_studio( project_generator.project_generator ):
 		# Studio itself may refuse to even attempt to load the file.
 		with codecs.open( tempSolutionPath, "w", "utf-8-sig" ) as fileHandle:
 			writeLineToFile( 0, fileHandle, "" ) # Required empty line.
-			writeLineToFile( 0, fileHandle, "Microsoft Visual Studio Solution File, Format Version {}".format( fileFormatVersionNumber[self._visualStudioVersion] ) )
+			writeLineToFile( 0, fileHandle, "Microsoft Visual Studio Solution File, Format Version {}".format( fileFormatVersionNumber ) )
 			writeLineToFile( 0, fileHandle, "# Visual Studio {}".format( self._visualStudioVersion ) )
 
 			projectFilterList = []
@@ -490,7 +503,7 @@ class project_generator_visual_studio( project_generator.project_generator ):
 			writeLineToFile( 1, fileHandle, "EndGlobalSection" )
 
 			# Write out any information about nested projects.
-			if len( projectFilterList ) > 0:
+			if projectFilterList:
 				writeLineToFile( 1, fileHandle, "GlobalSection(NestedProjects) = preSolution" )
 				for filterData in projectFilterList:
 					for nestedProjectData in filterData.dependencyList:
@@ -512,3 +525,189 @@ class project_generator_visual_studio( project_generator.project_generator ):
 				os.rmdir( tempRootPath )
 			except:
 				pass
+
+
+	def _WriteVcxprojFiles(self):
+		CreateRootNode = ET.Element
+		AddNode = ET.SubElement
+
+		platformToolsetName = {
+			2010: "vc100",
+			2012: "vc110",
+			2013: "vc120",
+		}[self._visualStudioVersion]
+
+		platformManager = PlatformManager.Get()
+		registeredPlatformList = platformManager.GetRegisteredNameList()
+
+		for projectData in self._orderedProjectList:
+			if not projectData.isFilter:
+				rootNode = CreateRootNode( "Project" )
+				rootNode.set( "DefaultTargets", "Build" )
+				rootNode.set( "ToolsVersion", "4.0" )
+				rootNode.set( "xmlns", "http://schemas.microsoft.com/developer/msbuild/2003" )
+
+				itemGroupNode = AddNode( rootNode, "ItemGroup" )
+				itemGroupNode.set( "Label", "ProjectConfigurations" )
+
+				# Add the project configurations
+				for configName in self._configList:
+					for platformName in registeredPlatformList:
+						generatorPlatform = platformManager.GetRegisteredPlatformFromVisualStudioName( platformName )
+						generatorPlatform.WriteProjectConfiguration( itemGroupNode, configName )
+
+				# Add the project's source files.
+				if projectData.fullSourceFileList:
+					itemGroupNode = AddNode( rootNode, "ItemGroup" )
+					for sourceFilePath in projectData.fullSourceFileList:
+						sourceFileNode = AddNode( itemGroupNode, "ClCompile" )
+						sourceFileNode.set( "Include", os.path.relpath( sourceFilePath, projectData.outputPath ) )
+						#TODO: Handle any configuration or platform excludes for the current file.
+
+				# Add the project's header files.
+				if projectData.fullHeaderFileList:
+					itemGroupNode = AddNode( rootNode, "ItemGroup" )
+					for sourceFilePath in projectData.fullHeaderFileList:
+						sourceFileNode = AddNode( itemGroupNode, "ClInclude" )
+						sourceFileNode.set( "Include", os.path.relpath( sourceFilePath, projectData.outputPath ) )
+						#TODO: Handle any configuration or platform excludes for the current file.
+
+				# Add the makefile to the project's list of files.
+				if not self._createNativeProject:
+					itemGroupNode = AddNode( rootNode, "ItemGroup" )
+					makefileNode = AddNode( itemGroupNode, "None" )
+
+					makefileNode.set( "Include", os.path.relpath( projectData.makefilePath, projectData.outputPath ) )
+
+				# Add the global property group.
+				propertyGroupNode = AddNode( rootNode, "PropertyGroup" )
+				importNode = AddNode( rootNode, "Import" )
+				projectGuidNode = AddNode( propertyGroupNode, "ProjectGuid" )
+				namespaceNode = AddNode( propertyGroupNode, "RootNamespace" )
+
+				propertyGroupNode.set( "Label", "Globals" )
+				importNode.set( "Project", r"$(VCTargetsPath)\Microsoft.Cpp.Default.props" )
+				projectGuidNode.text = projectData.id
+				namespaceNode.text = projectData.name
+
+				# If we're not creating a native project, Visual Studio needs to know this is a makefile project.
+				if not self._createNativeProject:
+					keywordNode = AddNode( propertyGroupNode, "Keyword" )
+					keywordNode.text = "MakeFileProj"
+
+				# Write the property groups for each platform.
+				for configName in self._configList:
+					for platformName in registeredPlatformList:
+						generatorPlatform = platformManager.GetRegisteredPlatformFromVisualStudioName( platformName )
+						generatorPlatform.WritePropertyGroup( rootNode, configName, platformToolsetName, self._createNativeProject )
+
+				importNode = AddNode(rootNode, "Import")
+				importNode.set("Project", r"$(VCTargetsPath)\Microsoft.Cpp.props")
+
+				# Write the import properties for each platform.
+				for configName in self._configList:
+					for platformName in registeredPlatformList:
+						generatorPlatform = platformManager.GetRegisteredPlatformFromVisualStudioName( platformName )
+						generatorPlatform.WriteImportProperties( rootNode, configName, self._createNativeProject )
+
+				# Write the build commands for each platform.
+				for configName in self._configList:
+					for platformName in registeredPlatformList:
+						generatorPlatform = platformManager.GetRegisteredPlatformFromVisualStudioName( platformName )
+
+						propertyGroupNode = AddNode( rootNode, "PropertyGroup" )
+						propertyGroupNode.set( "Condition", "'$(Configuration)|$(Platform)'=='{}|{}'".format( configName, platformName ) )
+
+						if self._createNativeProject:
+							# TODO: Add properties for non-native projects.
+							pass
+						else:
+							(toolchainName, archName) = generatorPlatform.GetToolchainName().split( "-", 1 )
+
+							buildCommandNode = AddNode( propertyGroupNode, "NMakeBuildCommandLine" )
+							cleanCommandNode = AddNode( propertyGroupNode, "NMakeCleanCommandLine" )
+							rebuildCommandNode = AddNode( propertyGroupNode, "NMakeReBuildCommandLine" )
+							includePathNode = AddNode( propertyGroupNode, "NMakeIncludeSearchPath" )
+							outDirNode = AddNode( propertyGroupNode, "OutDir" )
+							intDirNode = AddNode( propertyGroupNode, "IntDir" )
+
+							pythonExePath = os.path.normcase( sys.executable )
+							mainMakefile = os.path.relpath( os.path.join( os.getcwd(), csbuild.mainFile ), projectData.outputPath )
+
+							if not projectData.isRegenProject:
+								archName = self._archMap[platformName]
+								projectArg = " --project={}".format( projectData.name ) if not projectData.isBuildAllProject else ""
+								properConfigName = self._reverseConfigMap[configName]
+
+								buildCommandNode.text = '"{}" "{}" --target={} --toolchain={} --architecture={}{} {}'.format( pythonExePath, mainMakefile, properConfigName, toolchainName, archName, projectArg, self._extraBuildArgs )
+								cleanCommandNode.text = '"{}" "{}" --clean --target={} --toolchain={} --architecture={}{} {}'.format( pythonExePath, mainMakefile, properConfigName, toolchainName, archName, projectArg, self._extraBuildArgs )
+								rebuildCommandNode.text = '"{}" "{}" --rebuild --target={} --toolchain={} --architecture={}{} {}'.format( pythonExePath, mainMakefile, properConfigName, toolchainName, archName, projectArg, self._extraBuildArgs )
+								includePathNode.text = ";".join( self._fullIncludePathList )
+							else:
+								argList = []
+								# The Windows command line likes to remove any quotes around arguments, so we need to re-add them.
+								# And because we can't know which args need quotes, we'll just add them to all of the arguments.
+								for arg in sys.argv[1:]:
+									argPair = arg.split( "=", 2 )
+									for element in argPair:
+										argList.append( '"{}"'.format( element ) )
+								buildCommandNode.text = '"{}" "{}" {}'.format( pythonExePath, mainMakefile, " ".join( argList ) )
+								rebuildCommandNode.text = buildCommandNode.text
+								cleanCommandNode.text = buildCommandNode.text
+
+							outputName = generatorPlatform.GetOutputName( configName, projectData.name )
+							outDir = generatorPlatform.GetOutputDirectory( configName, projectData.name )
+							intDir = generatorPlatform.GetIntermediateDirectory( configName, projectData.name )
+							defines = generatorPlatform.GetDefines( configName, projectData.name )
+
+							if defines:
+								preprocessorNode = AddNode( propertyGroupNode, "NMakePreprocessorDefinitions" )
+								preprocessorNode.text = ""
+								for define in defines:
+									preprocessorNode.text += "{};".format( define )
+								preprocessorNode.text += "$(NMakePreprocessorDefinitions)"
+
+							if not projectData.isBuildAllProject and not projectData.isRegenProject:
+								outputNode = AddNode( propertyGroupNode, "NMakeOutput" )
+
+								outDirNode.text = os.path.relpath( outDir, projectData.outputPath )
+								intDirNode.text = os.path.relpath( intDir, projectData.outputPath)
+								outputNode.text = os.path.relpath( os.path.join( outDir, outputName ), projectData.outputPath )
+							else:
+								# Gotta put this stuff somewhere for the Build All project.
+								outDirNode.text = projectData.name + "_log"
+								intDirNode.text = "$(OutDir)"
+
+				importNode = AddNode( rootNode, "Import" )
+				importNode.set( "Project", r"$(VCTargetsPath)\Microsoft.Cpp.targets" )
+
+				self._SaveXmlFile( rootNode, os.path.join( projectData.outputPath, "{}.{}".format( projectData.name, self._projectFileType ) ) , False )
+
+
+	def _SaveXmlFile( self, rootNode, xmlFilename, isUserFile ):
+		# Grab a string of the XML document we've created and save it.
+		xmlString = ET.tostring( rootNode )
+
+		# Convert to the original XML to a string on Python3.
+		if sys.version_info >= ( 3, 0 ):
+			xmlString = xmlString.decode( "utf-8" )
+
+		# Use minidom to reformat the XML since ElementTree doesn't do it for us.
+		formattedXmlString = minidom.parseString(xmlString).toprettyxml( "\t", "\n", encoding = "utf-8" )
+		if sys.version_info >= ( 3, 0 ):
+			formattedXmlString = formattedXmlString.decode( "utf-8" )
+
+		inputLines = formattedXmlString.split( "\n" )
+		outputLines = []
+
+		# Copy each line of the XML to a list of strings.
+		for line in inputLines:
+			outputLines.append( line )
+
+		# Concatenate each string with a newline.
+		finalXmlString = "\n".join( outputLines )
+		if sys.version_info >= ( 3, 0 ):
+			finalXmlString = finalXmlString.encode( "utf-8" )
+
+		cachedFile = CachedFileData( xmlFilename, finalXmlString, isUserFile )
+		cachedFile.SaveFile()
