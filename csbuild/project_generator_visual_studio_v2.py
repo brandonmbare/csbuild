@@ -563,7 +563,7 @@ class project_generator_visual_studio( project_generator.project_generator ):
 
 				comment = MakeComment( rootNode, "Top-level platform information" )
 
-				# Write any top-level information a generator platform may require.=
+				# Write any top-level information a generator platform may require.
 				for platformName in registeredPlatformList:
 					generatorPlatform = platformManager.GetRegisteredPlatformFromVisualStudioName( platformName )
 					generatorPlatform.WriteTopLevelInfo( rootNode )

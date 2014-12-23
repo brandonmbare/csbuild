@@ -102,7 +102,7 @@ class PlatformWindowsX86( PlatformBase ):
 		pass
 
 
-	def WritePropertyConfiguration( self, parentXmlNode, vsConfigName ):
+	def WriteProjectConfiguration( self, parentXmlNode, vsConfigName ):
 		_writeProjectConfiguration( self.GetVisualStudioName(), parentXmlNode, vsConfigName )
 
 

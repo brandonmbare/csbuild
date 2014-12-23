@@ -99,8 +99,7 @@ from . import _shared_globals
 from . import projectSettings
 from . import project_generator_qtcreator
 from . import project_generator_slickedit
-from . import project_generator_visual_studio
-from . import project_generator_visual_studio_wip
+from . import project_generator_visual_studio_v2
 from . import project_generator
 
 
@@ -2251,8 +2250,7 @@ def _setupdefaults( ):
 	RegisterToolchain( "ios", toolchain_ios.iOSCompiler, toolchain_ios.iOSLinker )
 
 	RegisterProjectGenerator( "qtcreator", project_generator_qtcreator.project_generator_qtcreator )
-	RegisterProjectGenerator( "visualstudio", project_generator_visual_studio.project_generator_visual_studio )
-	RegisterProjectGenerator( "visualstudio_wip", project_generator_visual_studio_wip.project_generator_visual_studio )
+	RegisterProjectGenerator( "visualstudio", project_generator_visual_studio_v2.project_generator_visual_studio )
 
 	#TODO: SlickEdit project generation is disabled until we get it fixed up.
 	#RegisterProjectGenerator( "slickedit", project_generator_slickedit.project_generator_slickedit )
