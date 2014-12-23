@@ -689,6 +689,8 @@ class AndroidLinker(AndroidBase, toolchain_gcc.GccLinker):
 			os.makedirs(libDir)
 
 		for library in project.libraryLocations:
+			if sys.version_info >= ( 3, 0 ):
+				library = library.decode( "utf-8" )
 			#don't copy android system libraries
 			if library.startswith(self._ndkHome):
 				continue
