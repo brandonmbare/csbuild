@@ -169,9 +169,12 @@ class CachedFileData:
 
 	def SaveFile( self ):
 		canWriteOutputFile = True
+		replaceUserFiles = csbuild.GetOption( "vs-gen-replace-user-files" )
+		forceOverwrite = csbuild.GetOption( "vs-gen-force-overwrite-all" )
+
 		if os.access( self._outputFilePath, os.F_OK ):
 			# Any user files that already exist will be ignored to preserve user debug settings.
-			if self._isUserFile and csbuild.GetOption( "vs-gen-replace-user-files" ):
+			if self._isUserFile and not replaceUserFiles and not forceOverwrite:
 				log.LOG_BUILD( "Ignoring: {}".format( self._outputFilePath ) )
 				return
 
@@ -182,7 +185,7 @@ class CachedFileData:
 				fileDataHash = fileDataHash.hexdigest()
 				canWriteOutputFile = ( fileDataHash != self._md5FileDataHash )
 
-		if canWriteOutputFile:
+		if canWriteOutputFile or forceOverwrite:
 			log.LOG_BUILD( "Writing file {}...".format( self._outputFilePath ) )
 			with open( self._outputFilePath, "wb" ) as fileHandle:
 				fileHandle.write( self._fileData )
@@ -196,8 +199,8 @@ class project_generator_visual_studio( project_generator.project_generator ):
 	def __init__( self, path, solutionName, extraArgs ):
 		project_generator.project_generator.__init__( self, path, solutionName, extraArgs )
 
-		versionNumber = csbuild.GetOption("vs-gen-version")
-		platformList = csbuild.GetOption("vs-gen-platform")
+		versionNumber = csbuild.GetOption( "vs-gen-version" )
+		platformList = csbuild.GetOption( "vs-gen-platform" )
 
 		if not versionNumber:
 			versionNumber = GetImpliedVisualStudioVersion()
@@ -212,34 +215,33 @@ class project_generator_visual_studio( project_generator.project_generator ):
 		# Register the selected platforms.
 		platformManager = PlatformManager.Get()
 		for platform in platformList:
-			platformManager.RegisterPlatform(platform)
+			platformManager.RegisterPlatform( platform )
 
-		self._createNativeProject = False #TODO: Implement support for native projects.
+		self._createNativeProject = False
 		self._visualStudioVersion = versionNumber
 		self._projectMap = {}
 		self._configList = []
 		self._reverseConfigMap = {} # A reverse look-up map for the configuration names.
-		self._extraBuildArgs = self.extraargs.replace(",", " ")
+		self._extraBuildArgs = self.extraargs.replace( ",", " " )
 		self._fullIncludePathList = set() # Should be a set starting out so duplicates are eliminated.
 		self._projectUuidList = set()
 		self._orderedProjectList = []
 
+		#TODO: Implement support for native projects.
+		if self._createNativeProject:
+			assert False
+
 		# Compile a list of the targets and a reverse-lookup list.
 		for configName in _shared_globals.alltargets:
-			correctedConfigName = CorrectConfigName(configName)
-			self._configList.append(correctedConfigName)
+			correctedConfigName = CorrectConfigName( configName )
+			self._configList.append( correctedConfigName )
 			self._reverseConfigMap[correctedConfigName] = configName
+
+		self._configList = sorted( self._configList )
 
 
 	@staticmethod
 	def AdditionalArgs( parser ):
-		class ListExtendAction(argparse.Action):
-			def __call__(self, _parser, namespace, values, option_string = None):
-				if getattr(namespace, self.dest, None) is None:
-					setattr(namespace, self.dest, [])
-
-				getattr(namespace, self.dest).extend(values)
-
 		#parser.add_argument(
 		#	"--vs-gen-native",
 		#    help = "Generate native Visual Studio projects.",
@@ -253,6 +255,11 @@ class project_generator_visual_studio( project_generator.project_generator ):
 			type = int,
 		)
 		parser.add_argument(
+			"--vs-gen-force-overwrite-all",
+		    help = "Force the project generator to overwrite all existing files.",
+		    action = "store_true",
+		)
+		parser.add_argument(
 			"--vs-gen-replace-user-files",
 			help = "When generating project files, do not ignore existing .vcxproj.user files.",
 			action = "store_true",
@@ -260,7 +267,7 @@ class project_generator_visual_studio( project_generator.project_generator ):
 		parser.add_argument(
 			"--vs-gen-platform",
 		    help = "Desired platform to include in the generated project files. May be specified multiple times, once per platform.",
-		    action = ListExtendAction,
+		    action = "append",
 		    default = [],
 		    type = str,
 		    choices = PlatformManager.Get().GetAvailableNameList(),
@@ -269,7 +276,10 @@ class project_generator_visual_studio( project_generator.project_generator ):
 
 	def WriteProjectFiles( self ):
 		self._collectProjects()
-		self._WriteSolutionFile()
+		self._writeSolutionFile()
+		self._writeVcxprojFiles()
+		self._writeVcxprojFiltersFiles()
+		self._writeVcxprojUserFiles()
 
 
 	def _collectProjects( self ):
@@ -415,7 +425,7 @@ class project_generator_visual_studio( project_generator.project_generator ):
 		self._fullIncludePathList = sorted( self._fullIncludePathList )
 
 
-	def _WriteSolutionFile( self ):
+	def _writeSolutionFile( self ):
 
 		def writeLineToFile( indentLevel, fileHandle, stringToWrite ):
 			fileHandle.write( "{}{}\r\n".format( "\t" * indentLevel, stringToWrite ) )
@@ -527,9 +537,13 @@ class project_generator_visual_studio( project_generator.project_generator ):
 				pass
 
 
-	def _WriteVcxprojFiles(self):
+	def _writeVcxprojFiles(self):
 		CreateRootNode = ET.Element
 		AddNode = ET.SubElement
+		def MakeComment( parentNode, text ):
+			comment = ET.Comment( text )
+			parentNode.append( comment )
+			return comment
 
 		platformToolsetName = {
 			2010: "vc100",
@@ -547,16 +561,27 @@ class project_generator_visual_studio( project_generator.project_generator ):
 				rootNode.set( "ToolsVersion", "4.0" )
 				rootNode.set( "xmlns", "http://schemas.microsoft.com/developer/msbuild/2003" )
 
+				comment = MakeComment( rootNode, "Top-level platform information" )
+
+				# Write any top-level information a generator platform may require.=
+				for platformName in registeredPlatformList:
+					generatorPlatform = platformManager.GetRegisteredPlatformFromVisualStudioName( platformName )
+					generatorPlatform.WriteTopLevelInfo( rootNode )
+
+				comment = MakeComment( rootNode, "Project configurations" )
+
 				itemGroupNode = AddNode( rootNode, "ItemGroup" )
 				itemGroupNode.set( "Label", "ProjectConfigurations" )
 
-				# Add the project configurations
+				# Write the project configurations.
 				for configName in self._configList:
 					for platformName in registeredPlatformList:
 						generatorPlatform = platformManager.GetRegisteredPlatformFromVisualStudioName( platformName )
 						generatorPlatform.WriteProjectConfiguration( itemGroupNode, configName )
 
-				# Add the project's source files.
+				comment = MakeComment( rootNode, "Project source files" )
+
+				# Write the project's source files.
 				if projectData.fullSourceFileList:
 					itemGroupNode = AddNode( rootNode, "ItemGroup" )
 					for sourceFilePath in projectData.fullSourceFileList:
@@ -564,7 +589,9 @@ class project_generator_visual_studio( project_generator.project_generator ):
 						sourceFileNode.set( "Include", os.path.relpath( sourceFilePath, projectData.outputPath ) )
 						#TODO: Handle any configuration or platform excludes for the current file.
 
-				# Add the project's header files.
+				comment = MakeComment( rootNode, "Project header files" )
+
+				# Write the project's header files.
 				if projectData.fullHeaderFileList:
 					itemGroupNode = AddNode( rootNode, "ItemGroup" )
 					for sourceFilePath in projectData.fullHeaderFileList:
@@ -578,6 +605,8 @@ class project_generator_visual_studio( project_generator.project_generator ):
 					makefileNode = AddNode( itemGroupNode, "None" )
 
 					makefileNode.set( "Include", os.path.relpath( projectData.makefilePath, projectData.outputPath ) )
+
+				comment = MakeComment( rootNode, "Import properties" )
 
 				# Add the global property group.
 				propertyGroupNode = AddNode( rootNode, "PropertyGroup" )
@@ -610,6 +639,8 @@ class project_generator_visual_studio( project_generator.project_generator ):
 						generatorPlatform = platformManager.GetRegisteredPlatformFromVisualStudioName( platformName )
 						generatorPlatform.WriteImportProperties( rootNode, configName, self._createNativeProject )
 
+				comment = MakeComment( rootNode, "Platform build commands" )
+
 				# Write the build commands for each platform.
 				for configName in self._configList:
 					for platformName in registeredPlatformList:
@@ -635,7 +666,6 @@ class project_generator_visual_studio( project_generator.project_generator ):
 							mainMakefile = os.path.relpath( os.path.join( os.getcwd(), csbuild.mainFile ), projectData.outputPath )
 
 							if not projectData.isRegenProject:
-								archName = self._archMap[platformName]
 								projectArg = " --project={}".format( projectData.name ) if not projectData.isBuildAllProject else ""
 								properConfigName = self._reverseConfigMap[configName]
 
@@ -670,21 +700,100 @@ class project_generator_visual_studio( project_generator.project_generator ):
 							if not projectData.isBuildAllProject and not projectData.isRegenProject:
 								outputNode = AddNode( propertyGroupNode, "NMakeOutput" )
 
-								outDirNode.text = os.path.relpath( outDir, projectData.outputPath )
-								intDirNode.text = os.path.relpath( intDir, projectData.outputPath)
-								outputNode.text = os.path.relpath( os.path.join( outDir, outputName ), projectData.outputPath )
+								outDirNode.text = os.path.relpath( outDir, projectData.outputPath ) if outDir else ""
+								intDirNode.text = os.path.relpath( intDir, projectData.outputPath) if intDir else ""
+								outputNode.text = os.path.relpath( os.path.join( outDir, outputName ), projectData.outputPath ) if outDir and outputName else ""
 							else:
 								# Gotta put this stuff somewhere for the Build All project.
 								outDirNode.text = projectData.name + "_log"
 								intDirNode.text = "$(OutDir)"
 
+				comment = MakeComment( rootNode, "Final target import; must always be last!" )
+
 				importNode = AddNode( rootNode, "Import" )
 				importNode.set( "Project", r"$(VCTargetsPath)\Microsoft.Cpp.targets" )
 
-				self._SaveXmlFile( rootNode, os.path.join( projectData.outputPath, "{}.{}".format( projectData.name, self._projectFileType ) ) , False )
+				self._saveXmlFile( rootNode, os.path.join( projectData.outputPath, "{}.vcxproj".format( projectData.name ) ) , False )
 
 
-	def _SaveXmlFile( self, rootNode, xmlFilename, isUserFile ):
+	def _writeVcxprojFiltersFiles(self):
+		CreateRootNode = ET.Element
+		AddNode = ET.SubElement
+
+		for projectData in self._orderedProjectList:
+			if not projectData.isFilter:
+				rootNode = CreateRootNode( "Project" )
+				rootNode.set( "ToolsVersion", "4.0" )
+				rootNode.set( "xmlns", "http://schemas.microsoft.com/developer/msbuild/2003" )
+
+				if not projectData.isBuildAllProject and not projectData.isRegenProject:
+					itemGroupNode = AddNode( rootNode, "ItemGroup" )
+
+					# Gather a list of filter paths.
+					filterList = set()
+					for file, filter in projectData.fileFilterMap.items():
+						filterList.add( filter )
+						# Visual Studio requires that each directory level be registered as individual filters.
+						while True:
+							filter = os.path.dirname( filter )
+							if filter:
+								filterList.add( filter )
+							else:
+								break
+
+					# Add each path as a new filter node.
+					filterGuidList = set()
+					for filter in sorted( filterList ):
+						filterNode = AddNode( itemGroupNode, "Filter" )
+						uniqueIdNode = AddNode( filterNode, "UniqueIdentifier" )
+
+						filterNode.set( "Include", filter )
+						uniqueIdNode.text = "{{{}}}".format( GenerateNewUuid( filterGuidList, filter ) )
+
+					# Add the project's source files.
+					if projectData.fullSourceFileList:
+						itemGroupNode = AddNode( rootNode, "ItemGroup" )
+						for sourceFilePath in projectData.fullSourceFileList:
+							sourceFileNode = AddNode( itemGroupNode, "ClCompile" )
+							filterNode = AddNode( sourceFileNode, "Filter" )
+							sourceFileNode.set( "Include", os.path.relpath( sourceFilePath, projectData.outputPath ) )
+							filterNode.text = projectData.fileFilterMap[sourceFilePath]
+
+					# Add the project's header files.
+					if projectData.fullHeaderFileList:
+						itemGroupNode = AddNode( rootNode, "ItemGroup" )
+						for headerFilePath in projectData.fullHeaderFileList:
+							headerFileNode = AddNode( itemGroupNode, "ClInclude" )
+							filterNode = AddNode( headerFileNode, "Filter" )
+							headerFileNode.set( "Include", os.path.relpath( headerFilePath, projectData.outputPath ) )
+							filterNode.text = projectData.fileFilterMap[headerFilePath]
+
+				self._saveXmlFile( rootNode, os.path.join( projectData.outputPath, "{}.vcxproj.filters".format( projectData.name ) ), False )
+
+
+	def _writeVcxprojUserFiles( self ):
+		CreateRootNode = ET.Element
+
+		platformManager = PlatformManager.Get()
+		registeredPlatformList = platformManager.GetRegisteredNameList()
+
+		for projectData in self._orderedProjectList:
+			if not projectData.isFilter:
+				rootNode = CreateRootNode( "Project" )
+				rootNode.set( "ToolsVersion", "4.0" )
+				rootNode.set( "xmlns", "http://schemas.microsoft.com/developer/msbuild/2003" )
+
+				# Write out the user debug settings.
+				if not projectData.isBuildAllProject and not projectData.isRegenProject:
+					for configName in self._configList:
+						for platformName in registeredPlatformList:
+							generatorPlatform = platformManager.GetRegisteredPlatformFromVisualStudioName( platformName )
+							generatorPlatform.WriteUserDebugPropertyGroup( rootNode, configName )
+
+				self._saveXmlFile( rootNode, os.path.join( projectData.outputPath, "{}.vcxproj.user".format( projectData.name ) ), True )
+
+
+	def _saveXmlFile( self, rootNode, xmlFilename, isUserFile ):
 		# Grab a string of the XML document we've created and save it.
 		xmlString = ET.tostring( rootNode )
 

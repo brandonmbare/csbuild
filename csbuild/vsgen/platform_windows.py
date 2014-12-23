@@ -25,62 +25,61 @@ import xml.etree.ElementTree as ET
 from .platform_base import PlatformBase
 
 
-def WriteWindowsProjectConfiguration( platformName, parentXmlNode, vsConfigName ):
-	AddNode = ET.SubElement
+_addNode = ET.SubElement
 
+
+def _writeProjectConfiguration( platformName, parentXmlNode, vsConfigName ):
 	includeString = "{}|{}".format( vsConfigName, platformName )
 
-	projectConfigNode = AddNode(parentXmlNode, "ProjectConfiguration")
-	configNode = AddNode(projectConfigNode, "Configuration")
-	platformNode = AddNode(projectConfigNode, "Platform")
+	projectConfigNode = _addNode( parentXmlNode, "ProjectConfiguration" )
+	configNode = _addNode( projectConfigNode, "Configuration" )
+	platformNode = _addNode( projectConfigNode, "Platform" )
 
 	projectConfigNode.set( "Include", includeString )
 	configNode.text = vsConfigName
 	platformNode.text = platformName
 
 
-def WriteWindowsPropertyGroup( platformName, parentXmlNode, vsConfigName, vsPlatformToolsetName, isNative ):
-	AddNode = ET.SubElement
-
-	propertyGroupNode = AddNode( parentXmlNode, "PropertyGroup" )
+def _writePropertyGroup( platformName, parentXmlNode, vsConfigName, vsPlatformToolsetName, isNative ):
+	propertyGroupNode = _addNode( parentXmlNode, "PropertyGroup" )
 	propertyGroupNode.set( "Label", "Configuration")
 	propertyGroupNode.set( "Condition", "'$(Configuration)|$(Platform)'=='{}|{}'".format( vsConfigName, platformName ) )
 
-	platformToolsetNode = AddNode(propertyGroupNode, "PlatformToolset")
+	# Required for both native and makefiles projects.  Makefiles projects won't really suffer any ill effects from not having this,
+	# but Visual Studio will sometimes annoyingly list each project as being built for another version of Visual Studio.  Adding the
+	# correct toolset for the running version of Visual Studio will make that annoyance go away.
+	platformToolsetNode = _addNode(propertyGroupNode, "PlatformToolset")
 	platformToolsetNode.text = vsPlatformToolsetName
 
 	if isNative:
-		# TODO: Add properties for native projects.
-		assert False
+		#TODO: Add properties for native projects.
+		pass
 	else:
-		configTypeNode = AddNode(propertyGroupNode, "ConfigurationType")
+		configTypeNode = _addNode( propertyGroupNode, "ConfigurationType" )
 		configTypeNode.text = "Makefile"
 
 
-def WriteWindowsImportProperties( platformName, parentXmlNode, vsConfigName, isNative ):
-	"""
-	Write any special import properties for this platform.
-
-	:param parentXmlNode: Parent XML node.
-	:type parentXmlNode: class`xml.etree.ElementTree.SubElement'
-
-	:param vsConfigName: Visual Studio configuration name.
-	:type vsConfigName: str
-
-	:param isNative: Is this a native project?
-	:type isNative: bool
-	"""
-	AddNode = ET.SubElement
-
-	importGroupNode = AddNode( parentXmlNode, "ImportGroup" )
+def _writeImportProperties( platformName, parentXmlNode, vsConfigName, isNative ):
+	importGroupNode = _addNode( parentXmlNode, "ImportGroup" )
 	importGroupNode.set( "Label", "PropertySheets")
 	importGroupNode.set( "Condition", "'$(Configuration)|$(Platform)'=='{}|{}'".format( vsConfigName, platformName ) )
 
-	importNode = AddNode( importGroupNode, "Import" )
+	importNode = _addNode( importGroupNode, "Import" )
 	importNode.set( "Label", "LocalAppDataPlatform" )
 	importNode.set( "Project", r"$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" )
 	importNode.set( "Condition", "exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" )
 
+
+def _writeUserDebugPropertyGroup( platformName, parentXmlNode, vsConfigName ):
+		propertyGroupNode = _addNode( parentXmlNode, "PropertyGroup" )
+		workingDirNode = _addNode( propertyGroupNode, "LocalDebuggerWorkingDirectory" )
+		debuggerTypeNode = _addNode( propertyGroupNode, "LocalDebuggerDebuggerType" )
+		debuggerFlavorNode = _addNode( propertyGroupNode, "DebuggerFlavor" )
+
+		propertyGroupNode.set( "Condition", "'$(Configuration)|$(Platform)'=='{}|{}'".format( vsConfigName, platformName ) )
+		workingDirNode.text = "$(OutDir)"
+		debuggerTypeNode.text = "NativeOnly"
+		debuggerFlavorNode.text = "WindowsLocalDebugger"
 
 
 class PlatformWindowsX86( PlatformBase ):
@@ -90,71 +89,33 @@ class PlatformWindowsX86( PlatformBase ):
 
 	@staticmethod
 	def GetToolchainName():
-		"""
-		Retrieve the toolchain-architecture name combination that this platform will apply to.
-
-		:return: str
-		"""
 		return "msvc-x86"
 
 
 	@staticmethod
 	def GetVisualStudioName():
-		"""
-		Retrieve the name value that will show up in Visual Studio as a buildable platform for a generated project.
-		Must be a name that Visual Studio recognizes.
-
-		:return: str
-		"""
 		return "Win32"
 
 
+	def WriteTopLevelInfo( self, parentXmlNode ):
+		# Nothing to do for Win32.
+		pass
+
+
 	def WritePropertyConfiguration( self, parentXmlNode, vsConfigName ):
-		"""
-		Write the project configuration nodes for this platform.
-
-		:param parentXmlNode: Parent XML node.
-		:type parentXmlNode: class`xml.etree.ElementTree.SubElement`
-
-		:param vsConfigName: Visual Studio configuration name.
-		:type vsConfigName: str
-		"""
-		WriteWindowsProjectConfiguration( self.GetVisualStudioName(), parentXmlNode, vsConfigName )
+		_writeProjectConfiguration( self.GetVisualStudioName(), parentXmlNode, vsConfigName )
 
 
 	def WritePropertyGroup( self, parentXmlNode, vsConfigName, vsPlatformToolsetName, isNative ):
-		"""
-		Write the project's property group nodes for this platform.
-
-		:param parentXmlNode: Parent XML node.
-		:type parentXmlNode: class`xml.etree.ElementTree.SubElement`
-
-		:param vsConfigName: Visual Studio configuration name.
-		:type vsConfigName: str
-
-		:param vsPlatformToolsetName: Name of the platform toolset for the selected version of Visual Studio.
-		:type vsPlatformToolsetName: str
-
-		:param isNative: Is this a native project?
-		:type isNative: bool
-		"""
-		WriteWindowsPropertyGroup( self.GetVisualStudioName(), parentXmlNode, vsConfigName, vsPlatformToolsetName, isNative )
+		_writePropertyGroup( self.GetVisualStudioName(), parentXmlNode, vsConfigName, vsPlatformToolsetName, isNative )
 
 
 	def WriteImportProperties( self, parentXmlNode, vsConfigName, isNative ):
-		"""
-		Write any special import properties for this platform.
+		_writeImportProperties( self.GetVisualStudioName(), parentXmlNode, vsConfigName, isNative )
 
-		:param parentXmlNode: Parent XML node.
-		:type parentXmlNode: class`xml.etree.ElementTree.SubElement'
 
-		:param vsConfigName: Visual Studio configuration name.
-		:type vsConfigName: str
-
-		:param isNative: Is this a native project?
-		:type isNative: bool
-		"""
-		WriteWindowsImportProperties( self.GetVisualStudioName(), parentXmlNode, vsConfigName, isNative )
+	def WriteUserDebugPropertyGroup( self, parentXmlNode, vsConfigName ):
+		_writeUserDebugPropertyGroup( self.GetVisualStudioName(), parentXmlNode, vsConfigName )
 
 
 
@@ -165,68 +126,30 @@ class PlatformWindowsX64( PlatformBase ):
 
 	@staticmethod
 	def GetToolchainName():
-		"""
-		Retrieve the toolchain-architecture name combination that this platform will apply to.
-
-		:return: str
-		"""
 		return "msvc-x64"
 	
 
 	@staticmethod
 	def GetVisualStudioName():
-		"""
-		Retrieve the name value that will show up in Visual Studio as a buildable platform for a generated project.
-		Must be a name that Visual Studio recognizes.
-		
-		:return: str
-		"""
 		return "x64"
 
 
+	def WriteTopLevelInfo( self, parentXmlNode ):
+		# Nothing to do for x64.
+		pass
+
+
 	def WriteProjectConfiguration( self, parentXmlNode, vsConfigName ):
-		"""
-		Write the project configuration nodes for this platform.
-
-		:param parentXmlNode: Parent XML node.
-		:type parentXmlNode: class`xml.etree.ElementTree.SubElement`
-
-		:param vsConfigName: Visual Studio configuration name.
-		:type vsConfigName: str
-		"""
-		WriteWindowsProjectConfiguration( self.GetVisualStudioName(), parentXmlNode, vsConfigName )
+		_writeProjectConfiguration( self.GetVisualStudioName(), parentXmlNode, vsConfigName )
 
 
 	def WritePropertyGroup( self, parentXmlNode, vsConfigName, vsPlatformToolsetName, isNative ):
-		"""
-		Write the project's property group nodes for this platform.
-
-		:param parentXmlNode: Parent XML node.
-		:type parentXmlNode: class`xml.etree.ElementTree.SubElement`
-
-		:param vsConfigName: Visual Studio configuration name.
-		:type vsConfigName: str
-
-		:param vsPlatformToolsetName: Name of the platform toolset for the selected version of Visual Studio.
-		:type vsPlatformToolsetName: str
-
-		:param isNative: Is this a native project?
-		:type isNative: bool
-		"""
-		WriteWindowsPropertyGroup( self.GetVisualStudioName(), parentXmlNode, vsConfigName, vsPlatformToolsetName, isNative )
+		_writePropertyGroup( self.GetVisualStudioName(), parentXmlNode, vsConfigName, vsPlatformToolsetName, isNative )
 
 
 	def WriteImportProperties( self, parentXmlNode, vsConfigName, isNative ):
-		"""
-		Write any special import properties for this platform.
+		_writeImportProperties( self.GetVisualStudioName(), parentXmlNode, vsConfigName, isNative )
 
-		:param parentXmlNode: Parent XML node.
-		:type parentXmlNode: class`xml.etree.ElementTree.SubElement'
 
-		:param vsConfigName: Visual Studio configuration name.
-		:type vsConfigName: str
-
-		:param isNative: Is this a native project?
-		:type isNative: bool
-		"""
-		WriteWindowsImportProperties( self.GetVisualStudioName(), parentXmlNode, vsConfigName, isNative )
+	def WriteUserDebugPropertyGroup(self, parentXmlNode, vsConfigName ):
+		_writeUserDebugPropertyGroup( self.GetVisualStudioName(), parentXmlNode, vsConfigName )

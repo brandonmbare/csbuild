@@ -142,7 +142,8 @@ class PlatformBase( object ):
 		:return: str
 		"""
 		mapKey = ( vsConfigName, projectName )
-		assert mapKey in self._outputNameMap
+		if not mapKey in self._outputNameMap:
+			return ""
 		return self._outputNameMap[mapKey]
 
 
@@ -159,7 +160,8 @@ class PlatformBase( object ):
 		:return: str
 		"""
 		mapKey = ( vsConfigName, projectName )
-		assert mapKey in self._outDirMap
+		if not mapKey in self._outDirMap:
+			return ""
 		return self._outDirMap[mapKey]
 
 
@@ -176,7 +178,8 @@ class PlatformBase( object ):
 		:return: str
 		"""
 		mapKey = ( vsConfigName, projectName )
-		assert mapKey in self._intDirMap
+		if not mapKey in self._intDirMap:
+			return ""
 		return self._intDirMap[mapKey]
 
 
@@ -193,8 +196,19 @@ class PlatformBase( object ):
 		:return: list
 		"""
 		mapKey = ( vsConfigName, projectName )
-		assert mapKey in self._definesMap
+		if not mapKey in self._definesMap:
+			return []
 		return self._definesMap[mapKey]
+
+
+	def WriteTopLevelInfo( self, parentXmlNode ):
+		"""
+		Write any top-level information about this platform at the start of the project.
+
+		:param parentXmlNode: Parent XML node.
+		:type parentXmlNode: class`xml.etree.ElementTree.SubElement`
+		"""
+		pass
 
 
 	def WriteProjectConfiguration( self, parentXmlNode, vsConfigName ):
@@ -202,7 +216,7 @@ class PlatformBase( object ):
 		Write the project configuration nodes for this platform.
 
 		:param parentXmlNode: Parent XML node.
-		:type parentXmlNode: class`_elementtree.SubElement`
+		:type parentXmlNode: class`xml.etree.ElementTree.SubElement`
 
 		:param vsConfigName: Visual Studio configuration name.
 		:type vsConfigName: str
@@ -215,7 +229,7 @@ class PlatformBase( object ):
 		Write the project's property group nodes for this platform.
 
 		:param parentXmlNode: Parent XML node.
-		:type parentXmlNode: class`_elementtree.SubElement`
+		:type parentXmlNode: class`xml.etree.ElementTree.SubElement`
 
 		:param vsConfigName: Visual Studio configuration name.
 		:type vsConfigName: str
@@ -234,12 +248,25 @@ class PlatformBase( object ):
 		Write any special import properties for this platform.
 
 		:param parentXmlNode: Parent XML node.
-		:type parentXmlNode: class`_elementtree.SubElement'
+		:type parentXmlNode: class`xml.etree.ElementTree.SubElement`
 
 		:param vsConfigName: Visual Studio configuration name.
 		:type vsConfigName: str
 
 		:param isNative: Is this a native project?
 		:type isNative: bool
+		"""
+		pass
+
+
+	def WriteUserDebugPropertyGroup( self, parentXmlNode, vsConfigName ):
+		"""
+		Write the property group nodes specifying the user debug settings.
+
+		:param parentXmlNode: Parent XML node.
+		:type parentXmlNode: class`xml.etree.ElementTree.SubElement`
+
+		:param vsConfigName: Visual Studio configuration name.
+		:type vsConfigName: str
 		"""
 		pass

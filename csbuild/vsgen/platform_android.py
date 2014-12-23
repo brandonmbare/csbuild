@@ -25,6 +25,9 @@ import xml.etree.ElementTree as ET
 from .platform_base import PlatformBase
 
 
+_addNode = ET.SubElement
+
+
 class PlatformTegraAndroid( PlatformBase ):
 	def __init__( self ):
 		PlatformBase.__init__( self )
@@ -32,43 +35,29 @@ class PlatformTegraAndroid( PlatformBase ):
 
 	@staticmethod
 	def GetToolchainName():
-		"""
-		Retrieve the toolchain-architecture name combination that this platform will apply to.
-
-		:return: str
-		"""
 		return "android-armeabi-v7a"
 
 
 	@staticmethod
 	def GetVisualStudioName():
-		"""
-		Retrieve the name value that will show up in Visual Studio as a buildable platform for a generated project.
-		Must be a name that Visual Studio recognizes.
-
-		:return: str
-		"""
 		return "Tegra-Android"
 
 
+	def WriteTopLevelInfo( self, parentXmlNode ):
+		propertyGroupNode = _addNode( parentXmlNode, "PropertyGroup" )
+		tegraRevisionNumberNode = _addNode( propertyGroupNode, "NsightTegraProjectRevisionNumber" )
+
+		propertyGroupNode.set( "Label", "NsightTegraProject" )
+		tegraRevisionNumberNode.text = "9"
+
+
 	def WriteProjectConfiguration( self, parentXmlNode, vsConfigName ):
-		"""
-		Write the project configuration nodes for this platform.
-
-		:param parentXmlNode: Parent XML node.
-		:type parentXmlNode: class`xml.etree.ElementTree.SubElement`
-
-		:param vsConfigName: Visual Studio configuration name.
-		:type vsConfigName: str
-		"""
-		AddNode = ET.SubElement
-
 		platformName = self.GetVisualStudioName()
 		includeString = "{}|{}".format( vsConfigName, platformName )
 
-		projectConfigNode = AddNode(parentXmlNode, "ProjectConfiguration")
-		configNode = AddNode(projectConfigNode, "Configuration")
-		platformNode = AddNode(projectConfigNode, "Platform")
+		projectConfigNode = _addNode(parentXmlNode, "ProjectConfiguration")
+		configNode = _addNode(projectConfigNode, "Configuration")
+		platformNode = _addNode(projectConfigNode, "Platform")
 
 		projectConfigNode.set( "Include", includeString )
 		configNode.text = vsConfigName
@@ -76,49 +65,26 @@ class PlatformTegraAndroid( PlatformBase ):
 
 
 	def WritePropertyGroup( self, parentXmlNode, vsConfigName, vsPlatformToolsetName, isNative ):
-		"""
-		Write the project's property group nodes for this platform.
-
-		:param parentXmlNode: Parent XML node.
-		:type parentXmlNode: class`xml.etree.ElementTree.SubElement`
-
-		:param vsConfigName: Visual Studio configuration name.
-		:type vsConfigName: str
-
-		:param vsPlatformToolsetName: Name of the platform toolset for the selected version of Visual Studio.
-		:type vsPlatformToolsetName: str
-
-		:param isNative: Is this a native project?
-		:type isNative: bool
-		"""
-		AddNode = ET.SubElement
-
 		platformName = self.GetVisualStudioName()
 
-		propertyGroupNode = AddNode( parentXmlNode, "PropertyGroup" )
+		propertyGroupNode = _addNode( parentXmlNode, "PropertyGroup" )
 		propertyGroupNode.set( "Label", "Configuration")
 		propertyGroupNode.set( "Condition", "'$(Configuration)|$(Platform)'=='{}|{}'".format( vsConfigName, platformName ) )
 
 		if isNative:
 			#TODO: Add properties for native projects.
-			assert False
+			nativeApiNode = _addNode( propertyGroupNode, "AndroidNativeAPI" )
+			nativeApiNode.text = "UseTarget"
 		else:
-			configTypeNode = AddNode(propertyGroupNode, "ConfigurationType")
+			configTypeNode = _addNode( propertyGroupNode, "ConfigurationType" )
 			configTypeNode.text = "ExternalBuildSystem"
 
 
 	def WriteImportProperties( self, parentXmlNode, vsConfigName, isNative ):
-		"""
-		Write any special import properties for this platform.
-
-		:param parentXmlNode: Parent XML node.
-		:type parentXmlNode: class`xml.etree.ElementTree.SubElement'
-
-		:param vsConfigName: Visual Studio configuration name.
-		:type vsConfigName: str
-
-		:param isNative: Is this a native project?
-		:type isNative: bool
-		"""
 		# Nothing to do for Tegra.
 		pass
+
+
+	def WriteUserDebugPropertyGroup( self, parentXmlNode, vsConfigName ):
+		propertyGroupNode = _addNode( parentXmlNode, "PropertyGroup" )
+		propertyGroupNode.set( "Condition", "'$(Configuration)|$(Platform)'=='{}|{}'".format( vsConfigName, self.GetVisualStudioName() ) )
