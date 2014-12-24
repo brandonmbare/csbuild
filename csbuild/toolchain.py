@@ -25,12 +25,16 @@ Defines the base class for creating custom toolchains
 """
 
 from abc import abstractmethod, ABCMeta
+
 import glob
 import os
 import platform
+import copy
+import csbuild
+
 from . import log
 from . import _shared_globals
-import csbuild
+from . import plugin_plist_generator
 
 
 class ClassCombiner( object ):
@@ -268,11 +272,50 @@ class SettingsOverrider( object ):
 		:param args: The list of directories to be searched.
 		"""
 		if "frameworkDirs" not in self._settingsOverrides:
-			self._settingsOverrides["frameworkDirs"] = []
+			self._settingsOverrides["frameworkDirs"] = set()
 
 		for arg in args:
 			arg = os.path.abspath( arg )
-			self._settingsOverrides["frameworkDirs"].append( arg )
+			self._settingsOverrides["frameworkDirs"].add( arg )
+
+
+	def AddAppleStoryboardFiles( self, *args ):
+		"""
+		Add a list of storyboard files to be compiled. Only applies to builds for Apple platforms.
+
+		:param args: List of storyboard files.
+		:type args: And arbitrary number of strings.
+		"""
+		if "storyboardFiles" not in self._settingsOverrides:
+			self._settingsOverrides["storyboardFiles"] = set()
+
+		self._settingsOverrides["storyboardFiles"] |= set( args )
+
+
+	def AddAppleInterfaceFiles( self, *args ):
+		"""
+		Add a list of interface files to be compiled. Only applies to builds for Apple platforms.
+
+		:param args: List of interface files.
+		:type args: And arbitrary number of strings.
+		"""
+		if "interfaceFiles" not in self._settingsOverrides:
+			self._settingsOverrides["interfaceFiles"] = set()
+
+		self._settingsOverrides["interfaceFiles"] |= set( args )
+
+
+	def AddAppleAssetCatalogs( self, *args ):
+		"""
+		Add a list of asset catalogs to be compiled. Only applies to builds for Apple platforms.
+
+		:param args: List of asset catalogs.
+		:type args: And arbitrary number of strings.
+		"""
+		if "assetCatalogs" not in self._settingsOverrides:
+			self._settingsOverrides["assetCatalogs"] = set()
+
+		self._settingsOverrides["assetCatalogs"] |= set( args )
 
 
 	def ClearLibraries( self ):
@@ -307,7 +350,22 @@ class SettingsOverrider( object ):
 
 	def ClearFrameworkDirectories( self ):
 		"""Clears the framework directories, including the defaults."""
-		self._settingsOverrides["frameworkDirs"] = []
+		self._settingsOverrides["frameworkDirs"] = set()
+
+
+	def ClearAppleStoryboardFiles(self ):
+		"""Clears the list of storyboard files."""
+		self._settingsOverrides["storyboardFiles"] = set()
+
+
+	def ClearAppleInterfaceFiles(self ):
+		"""Clears the list of interface files."""
+		self._settingsOverrides["interfaceFiles"] = set()
+
+
+	def ClearAppleAssetCatalogs(self ):
+		"""Clears the list of asset catalogs."""
+		self._settingsOverrides["assetCatalogs"] = set()
 
 
 	def SetOptimizationLevel( self, i ):
@@ -368,9 +426,26 @@ class SettingsOverrider( object ):
 		self._settingsOverrides["undefines"] = []
 
 
+	def EnableHiddenVisibility( self ):
+		"""
+		Enable the use of hidden symbol visibility. Ignored by all but the gcc toolchain (and derived toolchains).
+		"""
+		self._settingsOverrides["useHiddenVisibility"] = True
+
+
+	def SetCppStandardLibrary( self, s ):
+		"""
+		The standard C++ library to be used when compiling. Possible values are "libstdc++" and "libc++". Ignored by all but the gcc toolchain (and derived toolchains).
+
+		:param s: Library to use.
+		:type s: str
+		"""
+		self._settingsOverrides["stdLib"] = s
+
+
 	def SetCxxCommand( self, s ):
 		"""
-		Specify the compiler executable to be used for compiling C++ files. Ignored by the msvc toolchain.
+		Specify the compiler executable to be used for compiling C++ files. Ignored by all but the gcc toolchain (and derived toolchains).
 
 		:type s: str
 		:param s: Path to the executable to use for compilation
@@ -380,7 +455,7 @@ class SettingsOverrider( object ):
 
 	def SetCcCommand( self, s ):
 		"""
-		Specify the compiler executable to be used for compiling C files. Ignored by the msvc toolchain.
+		Specify the compiler executable to be used for compiling C files. Ignored by all but the gcc toolchain (and derived toolchains).
 
 		:type s: str
 		:param s: Path to the executable to use for compilation
@@ -400,9 +475,11 @@ class SettingsOverrider( object ):
 		:param projectType: The type of project to compile. The options are:
 			- ProjectType.Application - on Windows, this will be built with a .exe extension. On Linux, there is no extension.
 			- ProjectType.SharedLibrary - on Windows, this will generate a .lib and a .dll.
-			On Linux, this will generate a .so and prefix "lib" to the output name.
+			On Linux, this will generate a .so (.dylib for MacOSX) and prefix "lib" to the output name.
 			- ProjectType.StaticLibrary - on Windows, this will generate a .lib. On Linux, this will generate a .a and prefix
 			"lib" to the output name.
+			- ProjectType.LoadableModule - On MacOSX, this will generate a .bundle file. On every other platform, it will be
+			treated exactly the same as ProjectType.SharedLibrary.
 		"""
 		self._settingsOverrides["outputName"] = name
 		self._settingsOverrides["type"] = projectType
@@ -919,6 +996,16 @@ class SettingsOverrider( object ):
 			self._settingsOverrides["userData"] = csbuild.projectSettings.projectSettings.UserData()
 
 		self._settingsOverrides["userData"].dataDict[key] = value
+
+
+	def SetApplePropertyList( self, plistFile ):
+		"""
+		Set the property list for a project.  This only applies to builds on Apple platforms.
+
+		:param plistFile:
+		:type plistFile: str or class:`csbuild.plugin_plist_generator.PListGenerator`
+		"""
+		self._settingsOverrides["plistFile"] = copy.deepcopy( plistFile ) if isinstance( plistFile, plugin_plist_generator.PListGenerator ) else plistFile
 
 
 	def SetSupportedArchitectures(self, *architectures):

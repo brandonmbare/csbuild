@@ -49,11 +49,14 @@ import glob
 import itertools
 import threading
 import types
+import copy
 
 from . import log
 from . import _shared_globals
 from . import _utils
 from . import toolchain
+from . import plugin_plist_generator
+
 
 class projectSettings( object ):
 	"""
@@ -103,6 +106,12 @@ class projectSettings( object ):
 
 	:ivar undefines: #undef declarations for this project
 	:type undefines: list[str]
+
+	:ivar useHiddenVisibility: Use hidden symbol visibility for this project.
+	:type useHiddenVisibility: bool
+
+	:ivar stdLib: C++ standard library to build against for this project.
+	:type stdLib: str
 
 	:ivar cxx: C++ compiler executable for this project
 	:type cxx: str
@@ -383,10 +392,16 @@ class projectSettings( object ):
 		self.libraryDirs = []
 		self.frameworkDirs = set()
 
+		self.storyboardFiles = set()
+		self.interfaceFiles = set()
+		self.assetCatalogs = set()
+
 		self.optLevel = csbuild.OptimizationLevel.Disabled
 		self.debugLevel = csbuild.DebugLevel.Disabled
 		self.defines = []
 		self.undefines = []
+		self.useHiddenVisibility = False
+		self.stdLib = "libstdc++"
 		self.cxx = ""
 		self.cc = ""
 		self.hasCppFiles = False
@@ -540,6 +555,7 @@ class projectSettings( object ):
 		self.splitChunks = {}
 
 		self.userData = projectSettings.UserData()
+		self.plistFile = None
 
 		self._intermediateScopeSettings = {}
 		self._finalScopeSettings = {}
@@ -878,12 +894,16 @@ class projectSettings( object ):
 			return
 
 		if isinstance( newObj, dict ):
+			baseObj["obj"] = dict(baseObj["obj"])
 			baseObj["obj"].update( newObj )
 		elif isinstance( newObj, list ):
+			baseObj["obj"] = list(baseObj["obj"])
 			baseObj["obj"] += newObj
 		elif isinstance( newObj, set ):
+			baseObj["obj"] = set(baseObj["obj"])
 			baseObj["obj"] |= newObj
 		elif isinstance( newObj, csbuild.projectSettings.projectSettings.UserData ):
+			baseObj["obj"] = baseObj["obj"].copy()
 			baseObj["obj"].dataDict.update( newObj.dataDict )
 		else:
 			baseObj["obj"] = newObj
@@ -918,6 +938,7 @@ class projectSettings( object ):
 				projectSettings._processToolchain(base, self.activeToolchain, name)
 
 				self._finalizedSettings[tool][name] = base["obj"]
+
 		self.activeToolchain.SetActiveTool("linker")
 		if sys.version_info >= (3,0):
 			self.GetAttr = types.MethodType(projectSettings.GetAttrNext, self)
@@ -997,10 +1018,15 @@ class projectSettings( object ):
 			"includeDirs": list( self.includeDirs ),
 			"libraryDirs": list( self.libraryDirs ),
 			"frameworkDirs": set( self.frameworkDirs ),
+			"storyboardFiles": set( self.storyboardFiles ),
+			"interfaceFiles": set( self.interfaceFiles ),
+			"assetCatalogs": set( self.assetCatalogs ),
 			"optLevel": self.optLevel,
 			"debugLevel": self.debugLevel,
 			"defines": list( self.defines ),
 			"undefines": list( self.undefines ),
+			"useHiddenVisibility": self.useHiddenVisibility,
+			"stdLib": self.stdLib,
 			"cxx": self.cxx,
 			"cc": self.cc,
 			"hasCppFiles": self.hasCppFiles,
@@ -1135,6 +1161,7 @@ class projectSettings( object ):
 			"linkCommand" : self.linkCommand,
 			"compileCommands" : dict(self.compileCommands),
 			"userData" : self.userData.copy(),
+			"plistFile" : copy.deepcopy( self.plistFile ) if isinstance( self.plistFile, plugin_plist_generator.PListGenerator ) else self.plistFile,
 		}
 
 		for name in self.targets:

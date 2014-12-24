@@ -27,6 +27,7 @@ import platform
 import re
 import subprocess
 import sys
+import glob
 
 from . import toolchain
 from . import _shared_globals
@@ -43,7 +44,7 @@ HAS_SET_VC_VARS = False
 WINDOWS_SDK_DIR = ""
 
 
-class SubSystem:
+class SubSystem( object ):
 	"""
 	Enum to define the subsystem to compile against.
 	"""
@@ -60,7 +61,7 @@ class SubSystem:
 	EFI_RUNTIME_DRIVER = 10
 
 
-class VisualStudioPackage:
+class VisualStudioPackage( object ):
 	"""
 	Helper enum for filling in the MSVC version based on specific versions of Visual Studio.
 	"""
@@ -107,6 +108,15 @@ class MsvcBase( object ):
 		:type msvc_version: int
 		"""
 		self.msvc_version = msvc_version
+
+	def GetMsvcVersion( self ):
+		"""
+		Get the MSVC version that's been set.
+
+		:return: int
+		"""
+		return self.msvc_version
+
 
 	def GetValidArchitectures(self):
 		return ['x86', 'x64']
@@ -191,10 +201,16 @@ class MsvcBase( object ):
 			self._include_path.append(includeWinRT)
 
 		libPath = os.path.join( WINDOWS_SDK_DIR, "lib", "x64" if self._build_64_bit else "" )
-		sdk8path = os.path.join( WINDOWS_SDK_DIR, "lib", "win8", "um", "x64" if self._build_64_bit else "x86" )
+		#sdk8path = os.path.join( WINDOWS_SDK_DIR, "lib", "win8", "um", "x64" if self._build_64_bit else "x86" )
+		sdkLibPath = os.path.join( WINDOWS_SDK_DIR, "lib", "win*" )
+		sdkLibPathList = glob.glob( sdkLibPath )
 
-		if os.access(sdk8path, os.F_OK):
-			self._lib_path.append( sdk8path )
+		# Use the first globbed path and use that to construct the rest of the path.
+		if sdkLibPathList and len(sdkLibPathList) > 0:
+			sdkLibPath = os.path.join( sdkLibPathList[0], "um", "x64" if self._build_64_bit else "x86" )
+
+		if os.access(sdkLibPath, os.F_OK):
+			self._lib_path.append( sdkLibPath )
 		else:
 			self._lib_path.append( libPath )
 
@@ -303,7 +319,7 @@ class MsvcBase( object ):
 
 
 
-class compiler_msvc( MsvcBase, toolchain.compilerBase ):
+class MsvcCompiler( MsvcBase, toolchain.compilerBase ):
 	def __init__( self ):
 		MsvcBase.__init__( self )
 		toolchain.compilerBase.__init__( self )
@@ -500,7 +516,7 @@ class compiler_msvc( MsvcBase, toolchain.compilerBase ):
 		return fileName.rsplit( ".", 1 )[0] + ".pch"
 
 
-class linker_msvc( MsvcBase, toolchain.linkerBase ):
+class MsvcLinker( MsvcBase, toolchain.linkerBase ):
 	def __init__( self ):
 		MsvcBase.__init__( self )
 		toolchain.linkerBase.__init__( self )
@@ -531,12 +547,17 @@ class linker_msvc( MsvcBase, toolchain.linkerBase ):
 
 
 	def _getNonStaticLibraryLinkerArgs( self ):
+		if self._project_settings.type == csbuild.ProjectType.SharedLibrary or self._project_settings.type == csbuild.ProjectType.LoadableModule:
+			dllFlag = "/DLL "
+		else:
+			dllFlag = ""
+
 		# The following arguments should only be specified for dynamic libraries and executables (being used with link.exe, not lib.exe).
 		return "" if self._project_settings.type == csbuild.ProjectType.StaticLibrary else "{}{}{}{}".format(
 			self._getRuntimeLibraryArg( ),
 			"/PROFILE " if self._project_settings.profile else "",
 			"/DEBUG " if self._project_settings.profile or self._project_settings.debugLevel != csbuild.DebugLevel.Disabled else "",
-			"/DLL " if self._project_settings.type == csbuild.ProjectType.SharedLibrary else "" )
+			dllFlag )
 
 
 	def _getLinkerArgs( self, output_file, obj_list ):
@@ -565,7 +586,7 @@ class linker_msvc( MsvcBase, toolchain.linkerBase ):
 
 
 	def _getImportLibraryArg(self, output_file):
-		if self._project_settings.type == csbuild.ProjectType.SharedLibrary:
+		if self._project_settings.type == csbuild.ProjectType.SharedLibrary or self._project_settings.type == csbuild.ProjectType.LoadableModule:
 			return '/IMPLIB:"{}" '.format(os.path.splitext(output_file)[0] + ".lib")
 		else:
 			return ''
@@ -713,7 +734,7 @@ class linker_msvc( MsvcBase, toolchain.linkerBase ):
 			return ".exe"
 		elif projectType == csbuild.ProjectType.StaticLibrary:
 			return ".lib"
-		elif projectType == csbuild.ProjectType.SharedLibrary:
+		elif projectType == csbuild.ProjectType.SharedLibrary or projectType == csbuild.ProjectType.LoadableModule:
 			return ".dll"
 
 

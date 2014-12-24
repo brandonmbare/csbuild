@@ -241,16 +241,16 @@ class AndroidBase( object ):
 		return cmd1Result, cmd2Result
 
 
-class AndroidCompiler(AndroidBase, toolchain_gcc.compiler_gcc):
+class AndroidCompiler(AndroidBase, toolchain_gcc.GccCompiler):
 	def __init__(self):
 		AndroidBase.__init__(self)
-		toolchain_gcc.compiler_gcc.__init__(self)
+		toolchain_gcc.GccCompiler.__init__(self)
 
 		self._toolchainPath = ""
 		self._setupCompleted = False
 
 	def copy(self):
-		ret = toolchain_gcc.compiler_gcc.copy(self)
+		ret = toolchain_gcc.GccCompiler.copy(self)
 		AndroidBase._copyTo(self, ret)
 		ret._toolchainPath = self._toolchainPath
 		ret._setupCompleted = self._setupCompleted
@@ -336,9 +336,18 @@ class AndroidCompiler(AndroidBase, toolchain_gcc.compiler_gcc):
 			exitcodes = ""
 
 		if isCpp:
+			if self._settingsOverrides["cxx"]:
+				compiler = self._settingsOverrides["cxx"]
 			standard = self.cppStandard
 		else:
+			if self._settingsOverrides["cc"]:
+				compiler = self._settingsOverrides["cc"]
 			standard = self.cStandard
+
+		if project.type == csbuild.ProjectType.SharedLibrary or project.type == csbuild.ProjectType.LoadableModule:
+			picFlag = "-fPIC "
+		else:
+			picFlag = ""
 
 		return "\"{}\" {} -Winvalid-pch -c {}-g{} -O{} {}{}{} {} {} {}".format(
 			compiler,
@@ -346,7 +355,7 @@ class AndroidCompiler(AndroidBase, toolchain_gcc.compiler_gcc):
 			self._getDefines( project.defines, project.undefines ),
 			project.debugLevel,
 			project.optLevel,
-			"-fPIC " if project.type == csbuild.ProjectType.SharedLibrary else "",
+			picFlag,
 			"-pg " if project.profile else "",
 			"--std={0}".format( standard ) if standard != "" else "",
 			" ".join( project.cxxCompilerFlags ) if isCpp else " ".join( project.ccCompilerFlags ),
@@ -355,21 +364,21 @@ class AndroidCompiler(AndroidBase, toolchain_gcc.compiler_gcc):
 		)
 
 	def _getIncludeDirs( self, includeDirs ):
-		"""Returns a string containing all of the passed include directories, formatted to be passed to gcc/g++.""" 
+		"""Returns a string containing all of the passed include directories, formatted to be passed to gcc/g++."""
 		ret = ""
 		for inc in includeDirs:
 			ret += "-I{} ".format( os.path.abspath( inc ) )
 		return ret
 
 
-class AndroidLinker(AndroidBase, toolchain_gcc.linker_gcc):
+class AndroidLinker(AndroidBase, toolchain_gcc.GccLinker):
 	def __init__(self):
 		AndroidBase.__init__(self)
-		toolchain_gcc.linker_gcc.__init__(self)
+		toolchain_gcc.GccLinker.__init__(self)
 		self._setupCompleted = False
 
 	def copy(self):
-		ret = toolchain_gcc.linker_gcc.copy(self)
+		ret = toolchain_gcc.GccLinker.copy(self)
 		AndroidBase._copyTo(self, ret)
 		ret._setupCompleted = self._setupCompleted
 		return ret
@@ -391,7 +400,7 @@ class AndroidLinker(AndroidBase, toolchain_gcc.linker_gcc):
 		self._ld, self._ar = self._getCommands(project, "ld", "ar")
 
 	def _setupForProject( self, project ):
-		toolchain_gcc.linker_gcc._setupForProject(self, project)
+		toolchain_gcc.GccLinker._setupForProject(self, project)
 		if not self._setupCompleted:
 			if "clang" in project.cc or "clang" in project.cxx:
 				self.isClang = True
@@ -400,7 +409,7 @@ class AndroidLinker(AndroidBase, toolchain_gcc.linker_gcc):
 			self._setupCompleted = True
 
 			if not self._keystoreLocation:
-				self._keystoreLocation = os.path.join(csbuild.mainfileDir, project.name+".keystore")
+				self._keystoreLocation = os.path.join(csbuild.mainFileDir, project.name+".keystore")
 
 			if not self._keystoreAlias:
 				self._keystoreAlias = project.name
@@ -411,10 +420,10 @@ class AndroidLinker(AndroidBase, toolchain_gcc.linker_gcc):
 				self._keystoreAlias = alias
 
 			if not self._keystorePwFile:
-				self._keystorePwFile = os.path.join(csbuild.mainfileDir, self._keystoreLocation+".pass")
+				self._keystorePwFile = os.path.join(csbuild.mainFileDir, self._keystoreLocation+".pass")
 
 			if not self._keyPwFile:
-				self._keyPwFile = os.path.join(csbuild.mainfileDir, self._keystoreAlias + ".keystore." + project.name + ".pass")
+				self._keyPwFile = os.path.join(csbuild.mainFileDir, self._keystoreAlias + ".keystore." + project.name + ".pass")
 
 
 			ndkHome = csbuild.GetOption("ndk_home")
@@ -525,6 +534,11 @@ class AndroidLinker(AndroidBase, toolchain_gcc.linker_gcc):
 				if not os.access(crtend, os.F_OK):
 					symlink(os.path.join(libDir, "crtend_so.o"), crtend)
 
+			if project.type == csbuild.ProjectType.SharedLibrary or project.type == csbuild.ProjectType.LoadableModule:
+				sharedFlag = "-shared "
+			else:
+				sharedFlag = ""
+
 			return "\"{}\" {}-o{} {} {} {}{}{} {} {}-g{} -O{} {} {} {} {} -L\"{}\"".format(
 				cmd,
 				"-pg " if project.profile else "",
@@ -538,7 +552,7 @@ class AndroidLinker(AndroidBase, toolchain_gcc.linker_gcc):
 				self._getLibraryDirs( project.libraryDirs, True ),
 				project.debugLevel,
 				project.optLevel,
-				"-shared" if project.type == csbuild.ProjectType.SharedLibrary else "",
+				sharedFlag,
 				" ".join( project.linkerFlags ),
 				self._getSystemLibDirs(project),
 				self._getTargetTriple(project),
@@ -614,6 +628,14 @@ class AndroidLinker(AndroidBase, toolchain_gcc.linker_gcc):
 					elif not success:
 						return None
 
+	def GetDefaultOutputExtension( self, projectType ):
+		if projectType == csbuild.ProjectType.Application:
+			return ""
+		elif projectType == csbuild.ProjectType.StaticLibrary:
+			return ".a"
+		elif projectType == csbuild.ProjectType.SharedLibrary or projectType == csbuild.ProjectType.LoadableModule:
+			return ".so"
+
 	def prePrepareBuildStep(self, project):
 		#Everything on Android has to build as a shared library
 		project.metaType = project.type
@@ -667,6 +689,8 @@ class AndroidLinker(AndroidBase, toolchain_gcc.linker_gcc):
 			os.makedirs(libDir)
 
 		for library in project.libraryLocations:
+			if sys.version_info >= ( 3, 0 ):
+				library = library.decode( "utf-8" )
 			#don't copy android system libraries
 			if library.startswith(self._ndkHome):
 				continue

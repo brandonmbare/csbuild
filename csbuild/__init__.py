@@ -45,6 +45,9 @@ import platform
 import imp
 import re
 import traceback
+import copy
+
+from . import plugin_plist_generator
 
 if sys.version_info < (3,0):
 	import cPickle as pickle
@@ -58,6 +61,7 @@ class ProjectType( object ):
 	Application = 0
 	SharedLibrary = 1
 	StaticLibrary = 2
+	LoadableModule = 3 # Only matters for Apple platforms; every other platform will interpret this as SharedLibrary.
 
 class DebugLevel( object ):
 	Disabled = 0
@@ -87,6 +91,7 @@ from . import _utils
 from . import toolchain
 from . import toolchain_msvc
 from . import toolchain_gcc
+from . import toolchain_gcc_darwin
 from . import toolchain_android
 from . import toolchain_ios
 from . import log
@@ -94,7 +99,7 @@ from . import _shared_globals
 from . import projectSettings
 from . import project_generator_qtcreator
 from . import project_generator_slickedit
-from . import project_generator_visual_studio
+from . import project_generator_visual_studio_v2
 from . import project_generator
 
 
@@ -280,6 +285,36 @@ def AddFrameworkDirectories( *args ):
 		projectSettings.currentProject.AddToSet("frameworkDirs",  arg )
 
 
+def AddAppleStoryboardFiles( *args ):
+	"""
+	Add a list of storyboard files to be compiled. Only applies to builds for Apple platforms.
+
+	:param args: List of storyboard files.
+	:type args: And arbitrary number of strings.
+	"""
+	projectSettings.currentProject.UnionSet( "storyboardFiles", set( args ) )
+
+
+def AddAppleInterfaceFiles( *args ):
+	"""
+	Add a list of interface files to be compiled. Only applies to builds for Apple platforms.
+
+	:param args: List of interface files.
+	:type args: And arbitrary number of strings.
+	"""
+	projectSettings.currentProject.UnionSet( "interfaceFiles", set( args ) )
+
+
+def AddAppleAssetCatalogs( *args ):
+	"""
+	Add a list of asset catalogs to be compiled. Only applies to builds for Apple platforms.
+
+	:param args: List of asset catalogs.
+	:type args: And arbitrary number of strings.
+	"""
+	projectSettings.currentProject.UnionSet( "assetCatalogs", set( args ) )
+
+
 def ClearLibraries( ):
 	"""Clears the list of libraries"""
 	projectSettings.currentProject.SetValue("libraries", set())
@@ -303,6 +338,18 @@ def ClearIncludeDirectories( ):
 def ClearLibraryDirectories( ):
 	"""Clears the library directories"""
 	projectSettings.currentProject.SetValue("libraryDirs", [])
+
+
+def ClearAppleStoryboardFiles():
+	projectSettings.currentProject.SetValue( "storyboardFiles", set() )
+
+
+def ClearAppleInterfaceFiles():
+	projectSettings.currentProject.SetValue( "interfaceFiles", set() )
+
+
+def ClearAppleAssetCatalogs():
+	projectSettings.currentProject.SetValue( "assetCatalogs", set() )
 
 
 def SetOptimizationLevel( i ):
@@ -357,9 +404,26 @@ def ClearUndefines( ):
 	projectSettings.currentProject.SetValue("undefines", [])
 
 
+def EnableHiddenVisibility():
+	"""
+	Enable the use of hidden symbol visibility. Ignored by all but the gcc toolchain (and derived toolchains).
+	"""
+	projectSettings.currentProject.SetValue( "useHiddenVisibility", True )
+
+
+def SetCppStandardLibrary( s ):
+	"""
+	The standard C++ library to be used when compiling. Possible values are "libstdc++" and "libc++". Ignored by all but the gcc toolchain (and derived toolchains).
+
+	:param s: Library to use.
+	:type s: str
+	"""
+	projectSettings.currentProject.SetValue( "stdLib", s )
+
+
 def SetCxxCommand( s ):
 	"""
-	Specify the compiler executable to be used for compiling C++ files. Ignored by the msvc toolchain.
+	Specify the compiler executable to be used for compiling C++ files. Ignored by all but the gcc toolchain (and derived toolchains).
 
 	:type s: str
 	:param s: Path to the executable to use for compilation
@@ -790,7 +854,7 @@ def AddExtraObjects( *args ):
 	"""
 	for arg in list( args ):
 		for file in glob.glob( arg ):
-			projectSettings.currentProject.UnionSet("extraObjs",  os.path.abspath( file ) )
+			projectSettings.currentProject.AddToSet("extraObjs", os.path.abspath( file ) )
 
 
 def ClearExtraObjects():
@@ -898,6 +962,16 @@ def SetUserData(key, value):
 	:param value: value to set to that variable
 	"""
 	projectSettings.currentProject.userData.dataDict[key] = value
+
+
+def SetApplePropertyList( plistFile ):
+	"""
+	Set the property list for a project.  This only applies to builds on Apple platforms.
+
+	:param plistFile:
+	:type plistFile: str or class:`csbuild.plugin_plist_generator.PListGenerator`
+	"""
+	projectSettings.currentProject.SetValue( "plistFile", copy.deepcopy( plistFile ) if isinstance( plistFile, plugin_plist_generator.PListGenerator ) else plistFile )
 
 
 def SetSupportedArchitectures(*architectures):
@@ -1718,6 +1792,7 @@ def _performLink(project, objs):
 		return _LinkStatus.UpToDate
 
 	for obj in project.extraObjs:
+		log.LOG_INFO("Adding extra link object {} to link queue".format(obj))
 		if not os.access(obj, os.F_OK):
 			log.LOG_ERROR("Could not find extra object {}".format(obj))
 
@@ -2164,14 +2239,21 @@ def SetupReleaseTarget( ):
 
 
 def _setupdefaults( ):
-	RegisterToolchain( "gcc", toolchain_gcc.compiler_gcc, toolchain_gcc.linker_gcc )
-	RegisterToolchain( "msvc", toolchain_msvc.compiler_msvc, toolchain_msvc.linker_msvc )
+	if platform.system() == "Darwin":
+		gccCompiler, gccLinker = toolchain_gcc_darwin.GccCompilerDarwin, toolchain_gcc_darwin.GccLinkerDarwin
+	else:
+		gccCompiler, gccLinker = toolchain_gcc.GccCompiler, toolchain_gcc.GccLinker
+
+	RegisterToolchain( "gcc", gccCompiler, gccLinker )
+	RegisterToolchain( "msvc", toolchain_msvc.MsvcCompiler, toolchain_msvc.MsvcLinker )
 	RegisterToolchain( "android", toolchain_android.AndroidCompiler, toolchain_android.AndroidLinker )
 	RegisterToolchain( "ios", toolchain_ios.iOSCompiler, toolchain_ios.iOSLinker )
 
 	RegisterProjectGenerator( "qtcreator", project_generator_qtcreator.project_generator_qtcreator )
-	RegisterProjectGenerator( "slickedit", project_generator_slickedit.project_generator_slickedit )
-	RegisterProjectGenerator( "visualstudio", project_generator_visual_studio.project_generator_visual_studio )
+	RegisterProjectGenerator( "visualstudio", project_generator_visual_studio_v2.project_generator_visual_studio )
+
+	#TODO: SlickEdit project generation is disabled until we get it fixed up.
+	#RegisterProjectGenerator( "slickedit", project_generator_slickedit.project_generator_slickedit )
 
 	if platform.system( ) == "Windows":
 		SetActiveToolchain( "msvc" )
@@ -2693,33 +2775,6 @@ def _run( ):
 						func()
 
 					newproject.fileOverrideSettings[file] = projCopy
-
-				if newproject.targetName not in newproject.targets:
-					log.LOG_INFO( "Project {} has no rules specified for target {}. Skipping.".format( newproject.name,
-						newproject.targetName ) )
-					return
-
-				projectSettings.currentProject = newproject
-
-				SetOutputArchitecture(architecture)
-
-				for targetFunc in newproject.targets[newproject.targetName]:
-					targetFunc( )
-
-				if newproject.outputArchitecture in newproject.archFuncs:
-					for archFunc in newproject.archFuncs[newproject.outputArchitecture]:
-						archFunc()
-
-				for file in newproject.fileOverrides:
-					projCopy = newproject.copy()
-					projectSettings.currentProject = projCopy
-
-					for func in newproject.fileOverrides[file]:
-						func()
-
-					newproject.fileOverrideSettings[file] = projCopy
-
-				projectSettings.currentProject = newproject
 
 				alteredLinkDepends = []
 				alteredLinkDependsIntermediate = []
