@@ -8,7 +8,7 @@ with open("csbuild/version", "r") as f:
 setup(name='csbuild',
       version=csbuild_version,
       #py_modules=['csbuild'],
-      packages=["csbuild"],
+      packages=["csbuild", "csbuild.vsgen"],
       package_data={"csbuild":["version", "*.py"]},
       author="Jaedyn K. Draper",
       author_email="jaedyn.pypi@jaedyn.co",
@@ -31,12 +31,13 @@ Finally, CSB combines "./configure" and "make" into one call, checking dependenc
          "Intended Audience :: Developers",
          "License :: OSI Approved :: MIT License",
          "Natural Language :: English",
-         "Operating System :: POSIX :: Linux",
+         "Operating System :: POSIX :: Linux :: MacOSX :: Windows",
          "Programming Language :: C",
          "Programming Language :: C++",
          "Programming Language :: Python :: 2.7",
          "Programming Language :: Python :: 3.2",
          "Programming Language :: Python :: 3.3",
+         "Programming Language :: Python :: 3.4",
          "Topic :: Software Development :: Build Tools"
       ]
       )
