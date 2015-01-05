@@ -700,9 +700,16 @@ class project_generator_visual_studio( project_generator.project_generator ):
 							if not projectData.isBuildAllProject and not projectData.isRegenProject:
 								outputNode = AddNode( propertyGroupNode, "NMakeOutput" )
 
-								outDirNode.text = os.path.relpath( outDir, projectData.outputPath ) if outDir else ""
-								intDirNode.text = os.path.relpath( intDir, projectData.outputPath) if intDir else ""
-								outputNode.text = os.path.relpath( os.path.join( outDir, outputName ), projectData.outputPath ) if outDir and outputName else ""
+								if not outDir:
+									outDir = "./out"
+								if not intDir:
+									intDir = "int"
+								if not outputName:
+									outputName = "outputName"
+
+								outDirNode.text = os.path.relpath( outDir, projectData.outputPath )
+								intDirNode.text = os.path.relpath( intDir, projectData.outputPath )
+								outputNode.text = os.path.relpath( os.path.join( outDir, outputName ), projectData.outputPath )
 							else:
 								# Gotta put this stuff somewhere for the Build All project.
 								outDirNode.text = projectData.name + "_log"
