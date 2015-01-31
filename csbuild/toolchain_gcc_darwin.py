@@ -93,14 +93,6 @@ class GccCompilerDarwin( GccDarwinBase, toolchain_gcc.GccCompiler ):
 		return ret
 
 
-	def _getIncludeDirs( self, includeDirs ):
-		"""Returns a string containing all of the passed include directories, formatted to be passed to clang/clang++."""
-		ret = ""
-		for inc in includeDirs:
-			ret += "-I{} ".format( os.path.abspath( inc ) )
-		return ret
-
-
 	def _getNoCommonFlag( self, project ):
 		if project.type == csbuild.ProjectType.SharedLibrary or project.type == csbuild.ProjectType.LoadableModule:
 			return "-fno-common "
@@ -113,7 +105,6 @@ class GccCompilerDarwin( GccDarwinBase, toolchain_gcc.GccCompiler ):
 		ret = ""
 		for inc in includeDirs:
 			ret += "-I{} ".format( os.path.abspath( inc ) )
-		ret += "-I/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include "
 		return ret
 
 
