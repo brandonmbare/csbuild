@@ -48,8 +48,8 @@ class GccDarwinBase( object ):
 
 
 	def _copyTo( self, other ):
-		other._targetMacVersion = self._targetMacVersion
-		other._sysroot = self._sysroot
+		other.shared._targetMacVersion = self.shared._targetMacVersion
+		other.shared._sysroot = self.shared._sysroot
 
 
 	def SetTargetMacVersion( self, version ):
@@ -59,8 +59,8 @@ class GccDarwinBase( object ):
 		:param version: Version of MacOSX to target. Possible values are "10.9", "10.10", etc.
 		:type version: str
 		"""
-		self._targetMacVersion = version
-		self._sysroot = "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX{}.sdk".format( self._targetMacVersion )
+		self.shared._targetMacVersion = version
+		self.shared._sysroot = "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX{}.sdk".format( self.shared._targetMacVersion )
 
 
 	def GetTargetMacVersion( self ):
@@ -69,17 +69,17 @@ class GccDarwinBase( object ):
 
 		:return: str
 		"""
-		return self._targetMacVersion
+		return self.shared._targetMacVersion
 
 
 	def _getSysRoot( self ):
-		return '-isysroot "{}" '.format( self._sysroot )
+		return '-isysroot "{}" '.format( self.shared._sysroot )
 
 
 class GccCompilerDarwin( GccDarwinBase, toolchain_gcc.GccCompiler ):
-	def __init__( self ):
+	def __init__( self, shared ):
+		toolchain_gcc.GccCompiler.__init__( self, shared )
 		GccDarwinBase.__init__( self )
-		toolchain_gcc.GccCompiler.__init__( self )
 
 		# Force the use of clang for now since that's what is typically used on Mac.
 		self._settingsOverrides["cxx"] = "clang++"
@@ -87,8 +87,8 @@ class GccCompilerDarwin( GccDarwinBase, toolchain_gcc.GccCompiler ):
 		self._settingsOverrides["stdLib"] = "libc++"
 
 
-	def copy(self):
-		ret = toolchain_gcc.GccCompiler.copy( self )
+	def copy(self, shared):
+		ret = toolchain_gcc.GccCompiler.copy( self, shared )
 		GccDarwinBase._copyTo( self, ret )
 		return ret
 
@@ -119,16 +119,16 @@ class GccCompilerDarwin( GccDarwinBase, toolchain_gcc.GccCompiler ):
 
 
 class GccLinkerDarwin( GccDarwinBase, toolchain_gcc.GccLinker ):
-	def __init__( self ):
+	def __init__( self, shared ):
+		toolchain_gcc.GccLinker.__init__( self, shared )
 		GccDarwinBase.__init__( self )
-		toolchain_gcc.GccLinker.__init__( self )
 
 		self._settingsOverrides["cxx"] = "clang++"
 		self._settingsOverrides["cc"] = "clang"
 
 
-	def copy( self ):
-		ret = toolchain_gcc.GccLinker.copy( self )
+	def copy( self, shared ):
+		ret = toolchain_gcc.GccLinker.copy( self, shared )
 		GccDarwinBase._copyTo( self, ret )
 		return ret
 

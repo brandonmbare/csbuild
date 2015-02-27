@@ -313,11 +313,11 @@ class projectSettings( object ):
 	:ivar mutex: A mutex used to control modification of project data across multiple threads
 	:type mutex: threading.Lock
 
-	:ivar preBuildStep: A function that will be executed before compile of this project begins
-	:type preBuildStep: function
+	:ivar preBuildSteps: Functions that will be executed before compile of this project begins
+	:type preBuildSteps: set(function)
 
-	:ivar postBuildStep: A function that will be executed after compile of this project ends
-	:type postBuildStep: function
+	:ivar postBuildSteps: Functions that will be executed after compile of this project ends
+	:type postBuildSteps: set(function)
 
 	:ivar parentGroup: The group this project is contained within
 	:type parentGroup: ProjectGroup
@@ -510,13 +510,13 @@ class projectSettings( object ):
 
 		self.mutex = threading.Lock( )
 
-		self.postBuildStep = None
-		self.preBuildStep = None
-		self.prePrepareBuildStep = None
-		self.postPrepareBuildStep = None
-		self.preLinkStep = None
-		self.preMakeStep = None
-		self.postMakeStep = None
+		self.postBuildSteps = set()
+		self.preBuildSteps = set()
+		self.prePrepareBuildSteps = set()
+		self.postPrepareBuildSteps = set()
+		self.preLinkSteps = set()
+		self.preMakeSteps = set()
+		self.postMakeSteps = set()
 
 		self.parentGroup = currentGroup
 
@@ -556,6 +556,8 @@ class projectSettings( object ):
 
 		self.userData = projectSettings.UserData()
 		self.plistFile = None
+
+		self.plugins = set()
 
 		self._intermediateScopeSettings = {}
 		self._finalScopeSettings = {}
@@ -600,10 +602,16 @@ class projectSettings( object ):
 		global currentProject
 		currentProject = self
 
-		self.activeToolchain.prePrepareBuildStep(self)
-		if self.prePrepareBuildStep:
-			log.LOG_BUILD( "Running pre-PrepareBuild step for {} ({} {}/{})".format( self.outputName, self.targetName, self.outputArchitecture, self.activeToolchainName ) )
-			self.prePrepareBuildStep(self)
+		pluginClasses = self.plugins
+		self.plugins = []
+		for pluginClass in pluginClasses:
+			self.plugins.append(pluginClass())
+
+		for plugin in self.plugins:
+			_utils.CheckRunBuildStep(self, plugin.prePrepareBuildStep, "plugin pre-PrepareBuild")
+		_utils.CheckRunBuildStep(self, self.activeToolchain.prePrepareBuildStep, "toolchain pre-PrepareBuild")
+		for buildStep in self.prePrepareBuildSteps:
+			_utils.CheckRunBuildStep(self, buildStep, "project pre-PrepareBuild")
 
 		self.outputDir = os.path.abspath( self.outputDir ).format(project=self)
 
@@ -618,11 +626,6 @@ class projectSettings( object ):
 				log.LOG_WARN("Library path {} does not exist!".format(directory))
 			alteredLibraryDirs.append(directory)
 		self.libraryDirs = alteredLibraryDirs
-
-		#Kind of hacky. The libraries returned here are a temporary object that's been created by combining
-		#base, toolchain, and architecture information. We need to bind it to something more permanent so we
-		#can actually modify it. Assigning it to itself makes that temporary list permanent.
-		self.libraries = self.libraries
 
 		for dep in self.reconciledLinkDepends:
 			proj = _shared_globals.projects[dep]
@@ -677,17 +680,6 @@ class projectSettings( object ):
 		if not os.access(self.csbuildDir , os.F_OK):
 			os.makedirs( self.csbuildDir )
 
-		# Walk the source directory and construct the paths to each possible intermediate object file.
-		# Make sure the paths exist, and if they don't, create them.
-		for root, _, _ in os.walk(self.workingDirectory):
-			# Exclude the intermediate and output paths in case they're in the working directory.
-			if ".csbuild" in root or self.outputDir in root or self.objDir in root:
-				continue
-			tempFilename = os.path.join(root, "not_a_real.file")
-			objFilePath = os.path.dirname(_utils.GetSourceObjPath(self, tempFilename))
-			if not os.access(objFilePath, os.F_OK):
-				os.makedirs(objFilePath)
-
 		for item in self.fileOverrideSettings.items():
 			item[1].activeToolchain = item[1].toolchains[self.activeToolchainName]
 			self.ccOverrideCmds[item[0]] = self.activeToolchain.Compiler().GetBaseCcCommand( item[1] )
@@ -725,10 +717,18 @@ class projectSettings( object ):
 
 		self.parentGroup.projects[self.name][self.activeToolchainName][self.targetName][self.outputArchitecture] = self
 
-		self.activeToolchain.postPrepareBuildStep(self)
-		if self.postPrepareBuildStep:
-			log.LOG_BUILD( "Running post-PrepareBuild step for {} ({} {}/{})".format( self.outputName, self.targetName, self.outputArchitecture, self.activeToolchainName ) )
-			self.postPrepareBuildStep(self)
+		for plugin in self.plugins:
+			_utils.CheckRunBuildStep(self, plugin.postPrepareBuildStep, "plugin post-PrepareBuild")
+		_utils.CheckRunBuildStep(self, self.activeToolchain.postPrepareBuildStep, "toolchain post-PrepareBuild")
+		for buildStep in self.postPrepareBuildSteps:
+			_utils.CheckRunBuildStep(self, buildStep, "project post-PrepareBuild")
+
+		# Make output directories for all of the source files
+		for source in self.allsources:
+			# Exclude the intermediate and output paths in case they're in the working directory.
+			objFilePath = os.path.dirname(_utils.GetSourceObjPath(self, source))
+			if not os.access(objFilePath, os.F_OK):
+				os.makedirs(objFilePath)
 
 		os.chdir( wd )
 
@@ -737,6 +737,11 @@ class projectSettings( object ):
 		Force a re-run of the file discovery process. Useful if a postPrepareBuild step adds additional files to the project.
 		This will have no effect when called from any place other than a postPrepareBuild step.
 		"""
+		#Have to chdir in case this gets called from a build step.
+		#We'll chdir back when we're done.
+		wd = os.getcwd()
+		os.chdir( self.workingDirectory )
+
 		self.sources = []
 		if not self.forceChunks:
 			self.allsources = []
@@ -751,6 +756,7 @@ class projectSettings( object ):
 			self.allheaders = self.cppHeaders + self.cHeaders
 
 			if not self.allsources:
+				os.chdir(wd)
 				return
 
 			#We'll do this even if _use_chunks is false, because it simplifies the linker logic.
@@ -767,6 +773,7 @@ class projectSettings( object ):
 			self.sources = list( self.allsources )
 
 		_shared_globals.allfiles |= set(self.sources)
+		os.chdir(wd)
 
 	def SetValue(self, key, value):
 		scope = self._currentScope
@@ -1107,13 +1114,13 @@ class projectSettings( object ):
 			"scriptPath": self.scriptPath,
 			"scriptFile": self.scriptFile,
 			"mutex": threading.Lock( ),
-			"preBuildStep" : self.preBuildStep,
-			"postBuildStep" : self.postBuildStep,
-			"prePrepareBuildStep" : self.prePrepareBuildStep,
-			"postPrepareBuildStep" : self.postPrepareBuildStep,
-			"preLinkStep" : self.preLinkStep,
-			"preMakeStep" : self.preMakeStep,
-			"postMakeStep" : self.postMakeStep,
+			"preBuildSteps" : set(self.preBuildSteps),
+			"postBuildSteps" : set(self.postBuildSteps),
+			"prePrepareBuildSteps" : set(self.prePrepareBuildSteps),
+			"postPrepareBuildSteps" : set(self.postPrepareBuildSteps),
+			"preLinkSteps" : set(self.preLinkSteps),
+			"preMakeSteps" : set(self.preMakeSteps),
+			"postMakeSteps" : set(self.postMakeSteps),
 			"parentGroup" : self.parentGroup,
 			"extraFiles": list(self.extraFiles),
 			"extraDirs": list(self.extraDirs),
@@ -1162,6 +1169,7 @@ class projectSettings( object ):
 			"compileCommands" : dict(self.compileCommands),
 			"userData" : self.userData.copy(),
 			"plistFile" : copy.deepcopy( self.plistFile ) if isinstance( self.plistFile, plugin_plist_generator.PListGenerator ) else self.plistFile,
+			"plugins" : set(self.plugins),
 		}
 
 		for name in self.targets:
