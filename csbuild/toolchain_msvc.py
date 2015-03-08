@@ -32,11 +32,11 @@ import glob
 from . import toolchain
 from . import _shared_globals
 from . import log
-from scrapers import COFF
+from .scrapers import COFF
+
 import csbuild
 
 ### Reference: http://msdn.microsoft.com/en-us/library/f35ctcxw.aspx
-import time
 
 X64 = "X64"
 X86 = "X86"

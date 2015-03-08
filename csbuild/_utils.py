@@ -850,7 +850,10 @@ def GetChunkedObjPath(project, chunk):
 
 def GetSourceObjPath(project, source, sourceIsChunkPath=False):
 	if not sourceIsChunkPath:
-		objSubPath = hashlib.md5( os.path.dirname(os.path.abspath(source)) ).hexdigest()
+		sourceDirName = os.path.dirname(os.path.abspath(source))
+		if sys.version_info >= (3, 0):
+			sourceDirName = sourceDirName.encode("utf-8")
+		objSubPath = hashlib.md5( sourceDirName ).hexdigest()
 	else:
 		objSubPath = ""
 	return os.path.join(project.objDir, objSubPath, "{}_{}{}".format(
