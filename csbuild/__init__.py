@@ -47,6 +47,13 @@ import re
 import traceback
 import copy
 
+if sys.version_info >= (3,0):
+	import io
+	StringIO = io.StringIO
+else:
+	import cStringIO
+	StringIO = cStringIO.StringIO
+
 from . import plugin_plist_generator
 
 if sys.version_info < (3,0):
@@ -101,7 +108,7 @@ from . import project_generator_qtcreator
 from . import project_generator_slickedit
 from . import project_generator_visual_studio_v2
 from . import project_generator
-
+from . import plugin
 
 __author__ = "Jaedyn K. Draper, Brandon M. Bare"
 __copyright__ = 'Copyright (C) 2012-2014 Jaedyn K. Draper'
@@ -170,7 +177,11 @@ def AddExcludeDirectories( *args ):
 	args = list( args )
 	newargs = []
 	for arg in args:
-		if arg[0] != '/' and not arg.startswith( "./" ):
+		isWindowsAbsPath = False
+		if platform.system() == "Windows":
+			splitPath = os.path.splitdrive(arg)
+			isWindowsAbsPath = (splitPath[0] != '')
+		if not isWindowsAbsPath and arg[0] != '/' and not arg.startswith( "./" ):
 			arg = "./" + arg
 		newargs.append( os.path.abspath( arg ) )
 	projectSettings.currentProject.ExtendList("excludeDirs", newargs)
@@ -187,7 +198,11 @@ def AddExcludeFiles( *args ):
 	args = list( args )
 	newargs = []
 	for arg in args:
-		if arg[0] != '/' and not arg.startswith( "./" ):
+		isWindowsAbsPath = False
+		if platform.system() == "Windows":
+			splitPath = os.path.splitdrive(arg)
+			isWindowsAbsPath = (splitPath[0] != '')
+		if not isWindowsAbsPath and arg[0] != '/' and not arg.startswith( "./" ):
 			arg = "./" + arg
 		newargs.append( os.path.abspath( arg ) )
 	projectSettings.currentProject.ExtendList("excludeFiles", newargs)
@@ -992,7 +1007,7 @@ def SetSupportedToolchains(*toolchains):
 	projectSettings.currentProject.SetValue("supportedToolchains", set(toolchains))
 
 
-def RegisterToolchain( name, compiler, linker ):
+def RegisterToolchain( name, compiler, linker, **customTools ):
 	"""
 	Register a new toolchain for use in the project.
 
@@ -1006,8 +1021,11 @@ def RegisterToolchain( name, compiler, linker ):
 	class registeredToolchain(toolchain.toolchain):
 		def __init__(self):
 			toolchain.toolchain.__init__(self)
-			self.tools["compiler"] = compiler()
-			self.tools["linker"] = linker()
+			self.tools["compiler"] = compiler(self.shared)
+			self.tools["linker"] = linker(self.shared)
+			toolsDict = dict(customTools)
+			for name, tool in toolsDict.items():
+				self.tools[name] = tool(self.shared)
 
 	# Format the name so that it can be used as part of its architecture command line option.
 	# This generally means replacing all whitespace with dashes.
@@ -1043,6 +1061,10 @@ def RegisterProjectGenerator( name, generator ):
 	"""
 	_shared_globals.allgenerators[name] = generator
 	_shared_globals.project_generators[name] = generator
+
+
+def RegisterPlugin( pluginClass ):
+	projectSettings.currentProject.AddToSet( "plugins", pluginClass )
 
 
 def Toolchain( *args ):
@@ -1309,7 +1331,7 @@ def prePrepareBuildStep( func ):
 		:class:`csbuild.projectSettings.projectSettings`.
 	"""
 
-	projectSettings.currentProject.SetValue("prePrepareBuildStep", func)
+	projectSettings.currentProject.AddToSet("prePrepareBuildSteps", func)
 	return func
 
 
@@ -1326,7 +1348,7 @@ def postPrepareBuildStep( func ):
 		:class:`csbuild.projectSettings.projectSettings`.
 	"""
 
-	projectSettings.currentProject.SetValue("postPrepareBuildStep", func)
+	projectSettings.currentProject.AddToSet("postPrepareBuildSteps", func)
 	return func
 
 
@@ -1342,7 +1364,7 @@ def preMakeStep( func ):
 		:class:`csbuild.projectSettings.projectSettings`.
 	"""
 
-	projectSettings.currentProject.SetValue("preMakeStep", func)
+	projectSettings.currentProject.AddToSet("preMakeSteps", func)
 	return func
 
 
@@ -1358,7 +1380,7 @@ def postMakeStep( func ):
 		:class:`csbuild.projectSettings.projectSettings`.
 	"""
 
-	projectSettings.currentProject.SetValue("postMakeStep", func)
+	projectSettings.currentProject.AddToSet("postMakeSteps", func)
 	return func
 
 
@@ -1374,7 +1396,7 @@ def preBuildStep( func ):
 		:class:`csbuild.projectSettings.projectSettings`.
 	"""
 
-	projectSettings.currentProject.SetValue("preBuildStep", func)
+	projectSettings.currentProject.AddToSet("preBuildSteps", func)
 	return func
 
 
@@ -1390,7 +1412,7 @@ def postBuildStep( func ):
 		:class:`csbuild.projectSettings.projectSettings`.
 	"""
 
-	projectSettings.currentProject.SetValue("postBuildStep", func)
+	projectSettings.currentProject.AddToSet("postBuildSteps", func)
 	return func
 
 
@@ -1406,7 +1428,39 @@ def preLinkStep( func ):
 		:class:`csbuild.projectSettings.projectSettings`.
 	"""
 
-	projectSettings.currentProject.SetValue("preLinkStep", func)
+	projectSettings.currentProject.AddToSet("preLinkSteps", func)
+	return func
+
+def globalPostMakeStep( func ):
+	"""
+	Decorator that creates a global post-make step that will only be executed once. Post-make steps run after all projects have
+	finished building and linking. This step will only run if the entire build process was successful.
+
+	Global build steps execute after all project build steps of the same type have completed.
+
+	:param func: (Implicit) The function wrapped by this decorator
+	:type func: (Implicit) function
+
+	.. note:: The function this wraps should take no arguments.
+	"""
+	_shared_globals.globalPostMakeSteps.add(func)
+	return func
+
+
+def globalPreMakeStep( func ):
+	"""
+	Decorator that creates a global pre-make step that will only be executed once. Pre-make steps run after all projects' preparation
+	steps have completed and their final chunk sets have been collected, but before any compiling starts.
+
+	Global build steps execute after all project build steps of the same type have completed.
+
+	:param func: (Implicit) The function wrapped by this decorator
+	:type func: (Implicit) function
+
+	.. note:: The function this wraps should take no arguments.
+	"""
+
+	_shared_globals.globalPreMakeSteps.add(func)
 	return func
 
 
@@ -1459,10 +1513,21 @@ def _build( ):
 	#projects_needing_links = set()
 
 	for project in pending_builds:
-		project.activeToolchain.preMakeStep(project)
-		if project.preMakeStep:
-			log.LOG_BUILD( "Running pre-make step for {} ({} {}/{})".format( project.outputName, project.targetName, project.outputArchitecture, project.activeToolchainName ) )
-			project.preMakeStep(project)
+		for plugin in project.plugins:
+			_utils.CheckRunBuildStep(project, plugin.preMakeStep, "plugin pre-make")
+			_shared_globals.globalPreMakeSteps.add(plugin.globalPreMakeStep)
+
+		_utils.CheckRunBuildStep(project, project.activeToolchain.preMakeStep, "toolchain pre-make")
+		_shared_globals.globalPreMakeSteps |= project.activeToolchain.GetGlobalPreMakeSteps()
+		for buildStep in project.preMakeSteps:
+			_utils.CheckRunBuildStep(project, buildStep, "project pre-make")
+
+	for buildStep in _shared_globals.globalPreMakeSteps:
+		if _utils.FuncIsEmpty(buildStep):
+			continue
+
+		log.LOG_BUILD( "Running global pre-make step {}".format(_utils.GetFuncName(buildStep)))
+		buildStep()
 
 	for project in _shared_globals.sortedProjects:
 		log.LOG_BUILD( "Verifying libraries for {} ({} {}/{})".format( project.outputName, project.targetName, project.outputArchitecture, project.activeToolchainName ) )
@@ -1547,10 +1612,12 @@ def _build( ):
 
 			project.starttime = time.time( )
 
-			project.activeToolchain.preBuildStep(project)
-			if project.preBuildStep:
-				log.LOG_BUILD( "Running pre-build step for {} ({} {}/{})".format( project.outputName, project.targetName, project.outputArchitecture, project.activeToolchainName ) )
-				project.preBuildStep( project )
+			for plugin in project.plugins:
+				_utils.CheckRunBuildStep(project, plugin.preBuildStep, "plugin pre-build")
+				plugin.preBuildStep(project)
+			_utils.CheckRunBuildStep(project, project.activeToolchain.preBuildStep, "toolchain pre-build")
+			for buildStep in project.preBuildSteps:
+				_utils.CheckRunBuildStep(project, buildStep, "project pre-build")
 
 			log.LOG_BUILD( "Building {} ({} {}/{})".format( project.outputName, project.targetName, project.outputArchitecture, project.activeToolchainName ) )
 			project.state = _shared_globals.ProjectState.BUILDING
@@ -1706,10 +1773,21 @@ def _build( ):
 
 	if not projects_in_flight and not pending_links:
 		for project in _shared_globals.sortedProjects:
-			project.activeToolchain.postMakeStep(project)
-			if project.postMakeStep:
-				log.LOG_BUILD( "Running post-make step for {} ({} {}/{})".format( project.outputName, project.targetName, project.outputArchitecture, project.activeToolchainName ) )
-				project.postMakeStep(project)
+			for plugin in project.plugins:
+				_utils.CheckRunBuildStep(project, plugin.postMakeStep, "plugin post-make")
+				_shared_globals.globalPostMakeSteps.add(plugin.globalPostMakeStep)
+
+			_utils.CheckRunBuildStep(project, project.activeToolchain.postMakeStep, "toolchain post-make")
+			_shared_globals.globalPostMakeSteps |= project.activeToolchain.GetGlobalPostMakeSteps()
+			for buildStep in project.postMakeSteps:
+				_utils.CheckRunBuildStep(project, buildStep, "project post-make")
+
+		for buildStep in _shared_globals.globalPostMakeSteps:
+			if _utils.FuncIsEmpty(buildStep):
+				continue
+
+			log.LOG_BUILD( "Running global post-make step {}".format(_utils.GetFuncName(buildStep)))
+			buildStep()
 
 	compiletime = time.time( ) - _shared_globals.starttime
 	totalmin = math.floor( compiletime / 60 )
@@ -1750,10 +1828,11 @@ def _link( project, *objs ):
 def _performLink(project, objs):
 	project.linkStart = time.time()
 
-	project.activeToolchain.preLinkStep(project)
-	if project.preLinkStep:
-		log.LOG_BUILD( "Running pre-link step for {} ({} {}/{})".format( project.outputName, project.targetName, project.outputArchitecture, project.activeToolchainName  ) )
-		project.preLinkStep(project)
+	for plugin in project.plugins:
+		_utils.CheckRunBuildStep(project, plugin.preLinkStep, "plugin pre-link")
+	_utils.CheckRunBuildStep(project, project.activeToolchain.preLinkStep, "toolchain pre-link")
+	for buildStep in project.preLinkSteps:
+		_utils.CheckRunBuildStep(project, buildStep, "project pre-link")
 
 	project.activeToolchain.SetActiveTool("linker")
 
@@ -1952,18 +2031,12 @@ class _LinkThread(threading.Thread):
 				_shared_globals.build_success = False
 				project.state = _shared_globals.ProjectState.LINK_FAILED
 			elif ret == _LinkStatus.Success:
+				for plugin in project.plugins:
+					_utils.CheckRunBuildStep(project, plugin.postBuildStep, "plugin post-build")
+				_utils.CheckRunBuildStep(project, project.activeToolchain.postBuildStep, "toolchain post-build")
 
-				try:
-					project.activeToolchain.postBuildStep(project)
-				except Exception:
-					traceback.print_exc()
-
-				if project.postBuildStep:
-					log.LOG_BUILD( "Running post-build step for {} ({} {}/{})".format( project.outputName, project.targetName, project.outputArchitecture, project.activeToolchainName ) )
-					try:
-						project.postBuildStep( project )
-					except Exception:
-						traceback.print_exc()
+				for buildStep in project.postBuildSteps:
+					_utils.CheckRunBuildStep(project, buildStep, "project post-build")
 				project.state = _shared_globals.ProjectState.FINISHED
 			elif ret == _LinkStatus.UpToDate:
 				project.state = _shared_globals.ProjectState.UP_TO_DATE
@@ -2212,10 +2285,8 @@ def SetupDebugTarget( ):
 		projectSettings.currentProject.outputDir = "{project.activeToolchainName}-{project.outputArchitecture}-{project.targetName}"
 	if not projectSettings.currentProject._objDir_set:
 		projectSettings.currentProject.objDir = os.path.join(projectSettings.currentProject.outputDir, "obj")
-	if not projectSettings.currentProject.toolchains["msvc"].Compiler().debug_runtime_set:
-		projectSettings.currentProject.toolchains["msvc"].Compiler().debug_runtime = True
-	if not projectSettings.currentProject.toolchains["msvc"].Linker().debug_runtime_set:
-		projectSettings.currentProject.toolchains["msvc"].Linker().debug_runtime = True
+	if not projectSettings.currentProject.toolchains["msvc"].shared.debug_runtime_set:
+		projectSettings.currentProject.toolchains["msvc"].shared.debug_runtime = True
 
 
 def SetupReleaseTarget( ):
@@ -2232,10 +2303,8 @@ def SetupReleaseTarget( ):
 		projectSettings.currentProject.outputDir = "{project.activeToolchainName}-{project.outputArchitecture}-{project.targetName}"
 	if not projectSettings.currentProject._objDir_set:
 		projectSettings.currentProject.objDir = os.path.join(projectSettings.currentProject.outputDir, "obj")
-	if not projectSettings.currentProject.toolchains["msvc"].Compiler().debug_runtime_set:
-		projectSettings.currentProject.toolchains["msvc"].Compiler().debug_runtime = False
-	if not projectSettings.currentProject.toolchains["msvc"].Linker().debug_runtime_set:
-		projectSettings.currentProject.toolchains["msvc"].Linker().debug_runtime = False
+	if not projectSettings.currentProject.toolchains["msvc"].shared.debug_runtime_set:
+		projectSettings.currentProject.toolchains["msvc"].shared.debug_runtime = False
 
 
 def _setupdefaults( ):
@@ -2246,7 +2315,7 @@ def _setupdefaults( ):
 
 	RegisterToolchain( "gcc", gccCompiler, gccLinker )
 	RegisterToolchain( "msvc", toolchain_msvc.MsvcCompiler, toolchain_msvc.MsvcLinker )
-	RegisterToolchain( "android", toolchain_android.AndroidCompiler, toolchain_android.AndroidLinker )
+	RegisterToolchain( "android", toolchain_android.AndroidCompiler, toolchain_android.AndroidLinker, apkBuilder = toolchain_android.APKBuilder )
 	RegisterToolchain( "ios", toolchain_ios.iOSCompiler, toolchain_ios.iOSLinker )
 
 	RegisterProjectGenerator( "qtcreator", project_generator_qtcreator.project_generator_qtcreator )
@@ -2392,11 +2461,8 @@ class _dummy( object ):
 
 
 def _execfile( file, glob, loc ):
-	if sys.version_info >= (3, 0):
-		with open( file, "r" ) as f:
-			exec (f.read( ), glob, loc)
-	else:
-		execfile( file, glob, loc )
+	with open( file, "r" ) as f:
+		exec(compile(f.read( ), file, "exec"), glob, loc)
 
 
 mainFile = ""
@@ -3012,7 +3078,8 @@ def _run( ):
 			else:
 				add_intermediates(proj.linkDependsIntermediate)
 
-		project.finalizeSettings2()
+		if not args.dg:
+			project.finalizeSettings2()
 
 	already_errored_link = { }
 	already_errored_source = { }
@@ -3078,7 +3145,8 @@ def _run( ):
 	_shared_globals.sortedProjects = _utils.SortProjects( _shared_globals.projects )
 
 	if args.dg:
-		builder = 'digraph G {\n\tlayout="neato";\n\toverlap="false";\n\tsplines="spline"\n'
+		builder = StringIO()
+		builder.write('digraph G {\n\tlayout="neato";\n\toverlap="false";\n\tsplines="spline"\n')
 		colors = [
 			"#ff0000", "#cc5200", "#b2742d", "#858c23", "#20802d",
 			"#00ffcc", "#39c3e6", "#205380", "#003380", "#38008c",
@@ -3095,29 +3163,49 @@ def _run( ):
 			idx += 1
 			if idx == len(colors):
 				idx = 0
-			builder += '\t{0} [shape="{1}" color="{2}" style="filled" fillcolor="{2}30"];\n'.format(project.name, "box3d" if project.type == ProjectType.Application else "oval", color)
+			builder.write('\t{0} [shape="{1}" color="{2}" style="filled" fillcolor="{2}30"];\n'.format(project.name, "box3d" if project.type == ProjectType.Application else "oval", color))
 			for dep in project.linkDepends:
 				otherProj = _shared_globals.projects[dep]
-				builder += '\t{} -> {} [color="{}"];\n'.format(project.name, otherProj.name, color)
+				builder.write('\t{} -> {} [color="{}"];\n'.format(project.name, otherProj.name, color))
 			for dep in project.linkDependsIntermediate:
 				otherProj = _shared_globals.projects[dep]
-				builder += '\t{} -> {} [color="{}B0" style="dashed" arrowhead="onormal"];\n'.format(project.name, otherProj.name, color)
+				builder.write('\t{} -> {} [color="{}B0" style="dashed" arrowhead="onormal"];\n'.format(project.name, otherProj.name, color))
 			for dep in project.linkDependsFinal:
 				otherProj = _shared_globals.projects[dep]
-				builder += '\t{} -> {} [color="{}B0" style="dashed" arrowhead="onormal"];\n'.format(project.name, otherProj.name, color)
+				builder.write('\t{} -> {} [color="{}B0" style="dashed" arrowhead="onormal"];\n'.format(project.name, otherProj.name, color))
 
 			if args.with_libs:
 				project.activeToolchain = project.toolchains[project.activeToolchainName]
 				project.activeToolchain.SetActiveTool("linker")
-				for lib in project.libraries:
-					lib = lib.replace("-", "_")
-					if lib not in libs_drawn:
-						builder += '\t{} [shape="diamond" color="#303030" style="filled" fillcolor="#D0D0D080"];\n'.format(lib)
-						libs_drawn.add(lib)
-					builder += '\t{} -> {} [color="{}" style="dotted" arrowhead="onormal"];\n'.format(project.name, lib, color)
-		builder += "}\n"
+				def drawLibs(libraries, style):
+					for lib in libraries:
+						lib = lib.replace("-", "_")
+						if lib not in libs_drawn:
+							builder.write('\t{} [shape="diamond" color="#303030" style="filled" fillcolor="#D0D0D080"];\n'.format(lib))
+							libs_drawn.add(lib)
+						builder.write('\t{} -> {} [color="{}" style="{}" arrowhead="onormal"];\n'.format(project.name, lib, color, style))
+
+				drawLibs(project.libraries, "solid")
+				if "libraries" in project._intermediateScopeSettings:
+					drawLibs(project._intermediateScopeSettings["libraries"], "dashed")
+				if "libraries" in project._finalScopeSettings:
+					drawLibs(project._finalScopeSettings["libraries"], "dashed")
+
+				tc = object.__getattribute__(project, "finalToolchains")[object.__getattribute__(project, "activeToolchainName")]
+				tc.SetActiveTool("linker")
+
+				if "libraries" in tc.activeTool._settingsOverrides:
+					drawLibs(tc.activeTool._settingsOverrides["libraries"], "dashed")
+
+				tc = object.__getattribute__(project, "intermediateToolchains")[object.__getattribute__(project, "activeToolchainName")]
+				tc.SetActiveTool("linker")
+
+				if "libraries" in tc.activeTool._settingsOverrides:
+					drawLibs(tc.activeTool._settingsOverrides["libraries"], "dashed")
+
+		builder.write("}\n")
 		with open("depends.gv", "w") as f:
-			f.write(builder)
+			f.write(builder.getvalue())
 		log.LOG_BUILD("Wrote depends.gv")
 		try:
 			from graphviz import Digraph
@@ -3125,7 +3213,7 @@ def _run( ):
 			log.LOG_WARN("graphviz library not found. You can open depends.gv with graphviz or a similar dot viewer to view the graph, or install graphviz with pip install graphviz.")
 		else:
 			graph = Digraph(comment="CSBuild Dependency Graph", format="png", engine="dot", filename="depends")
-			Digraph.source=property(lambda self: builder)
+			Digraph.source=property(lambda self: builder.getvalue())
 			graph.render("depends.gv", view=True)
 			log.LOG_BUILD("Wrote depends.png")
 		return

@@ -35,13 +35,13 @@ from . import log
 
 class gccBase( object ):
 	def __init__( self ):
-		self.isClang = False
-		self._objcAbiVersion = 2
+		self.shared.isClang = False
+		self.shared._objcAbiVersion = 2
 
 
 	def _copyTo( self, other ):
-		other.isClang = self.isClang
-		other._objcAbiVersion = self._objcAbiVersion
+		other.shared.isClang = self.shared.isClang
+		other.shared._objcAbiVersion = self.shared._objcAbiVersion
 
 
 	def GetValidArchitectures( self ):
@@ -49,7 +49,7 @@ class gccBase( object ):
 
 
 	def SetObjcAbiVersion( self, version ):
-		self._objcAbiVersion = version
+		self.shared._objcAbiVersion = version
 
 
 	def _getStandardLibraryArg( self, project ):
@@ -216,16 +216,16 @@ class gccBase( object ):
 
 
 	def _parseOutput(self, outputStr):
-		if self.isClang:
+		if self.shared.isClang:
 			return self._parseClangOutput(outputStr)
 		else:
 			return self._parseGccOutput(outputStr)
 
 
 class GccCompiler( gccBase, toolchain.compilerBase ):
-	def __init__( self ):
+	def __init__( self, shared ):
+		toolchain.compilerBase.__init__( self, shared )
 		gccBase.__init__( self )
-		toolchain.compilerBase.__init__( self )
 
 		self.warnFlags = set()
 		self.cppStandard = ""
@@ -235,8 +235,8 @@ class GccCompiler( gccBase, toolchain.compilerBase ):
 		#self._settingsOverrides["cc"] = "gcc"
 
 
-	def copy( self ):
-		ret = toolchain.compilerBase.copy( self )
+	def copy( self, shared ):
+		ret = toolchain.compilerBase.copy( self, shared )
 		gccBase._copyTo( self, ret )
 		ret.warnFlags = set( self.warnFlags )
 		ret.cppStandard = self.cppStandard
@@ -245,7 +245,7 @@ class GccCompiler( gccBase, toolchain.compilerBase ):
 
 
 	def _getObjcAbiVersionArg( self ):
-		return "-fobjc-abi-version={} ".format( self._objcAbiVersion ) if self._objcAbiVersion else ""
+		return "-fobjc-abi-version={} ".format( self.shared._objcAbiVersion ) if self.shared._objcAbiVersion else ""
 
 
 	def _getVisibilityArgs( self, project ):
@@ -297,7 +297,7 @@ class GccCompiler( gccBase, toolchain.compilerBase ):
 		if "clang" not in compiler:
 			exitcodes = "-pass-exit-codes"
 		else:
-			self.isClang = True
+			self.shared.isClang = True
 
 		if isCpp:
 			standard = self.cppStandard
@@ -421,9 +421,9 @@ class GccCompiler( gccBase, toolchain.compilerBase ):
 
 
 class GccLinker( gccBase, toolchain.linkerBase ):
-	def __init__( self ):
+	def __init__( self, shared ):
+		toolchain.linkerBase.__init__( self, shared )
 		gccBase.__init__(self)
-		toolchain.linkerBase.__init__( self )
 
 		self.strictOrdering = False
 		self._ld = "ld"
@@ -437,8 +437,8 @@ class GccLinker( gccBase, toolchain.linkerBase ):
 		#self._settingsOverrides["cc"] = "gcc"
 
 
-	def copy(self):
-		ret = toolchain.linkerBase.copy(self)
+	def copy(self, shared):
+		ret = toolchain.linkerBase.copy(self, shared)
 		gccBase._copyTo(self, ret)
 		ret.strictOrdering = self.strictOrdering
 		ret._actual_library_names = dict(self._actual_library_names)

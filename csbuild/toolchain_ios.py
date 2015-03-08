@@ -37,13 +37,13 @@ class iOSArchitecture( object ):
 
 class iOSBase( object ):
 	def __init__( self ):
-		self._targetDeviceVersion = "8.1"
-		self._targetSimulatorVersion = "8.1"
+		self.shared._targetDeviceVersion = "8.1"
+		self.shared._targetSimulatorVersion = "8.1"
 
 
 	def _copyTo( self, other ):
-		other._targetDeviceVersion = self._targetDeviceVersion
-		other._targetSimulatorVersin = self._targetSimulatorVersion
+		other.shared._targetDeviceVersion = self.shared._targetDeviceVersion
+		other._targetSimulatorVersin = self.shared._targetSimulatorVersion
 
 
 	def GetDefaultArchitecture( self ) :
@@ -61,7 +61,7 @@ class iOSBase( object ):
 		:param version: Target device version.
 		:type version: str
 		"""
-		self._targetDeviceVersion = version
+		self.shared._targetDeviceVersion = version
 
 
 	def SetTargetSimulatorVersion( self, version ):
@@ -71,23 +71,23 @@ class iOSBase( object ):
 		:param version: Target simulator version.
 		:type version: str
 		"""
-		self._targetSimulatorVersion = version
+		self.shared._targetSimulatorVersion = version
 
 
 	def GetTargetDeviceVersion( self ):
-		return self._targetDeviceVersion
+		return self.shared._targetDeviceVersion
 
 
 	def GetTargetSimulatorVersion( self ):
-		return self._targetSimulatorVersion
+		return self.shared._targetSimulatorVersion
 
 
 	def _getMinVersionArg( self, arch ):
 		argumentMap = {
-			iOSArchitecture.DEVICE_ARMV7:   "-miphoneos-version-min={} ".format( self._targetDeviceVersion ),
-			iOSArchitecture.DEVICE_ARM64:   "-miphoneos-version-min={} ".format( self._targetDeviceVersion ),
-			iOSArchitecture.SIMULATOR_I386: "-mios-simulator-version-min={} ".format( self._targetSimulatorVersion ),
-			iOSArchitecture.SIMULATOR_X64:  "-mios-simulator-version-min={} ".format( self._targetSimulatorVersion ),
+			iOSArchitecture.DEVICE_ARMV7:   "-miphoneos-version-min={} ".format( self.shared._targetDeviceVersion ),
+			iOSArchitecture.DEVICE_ARM64:   "-miphoneos-version-min={} ".format( self.shared._targetDeviceVersion ),
+			iOSArchitecture.SIMULATOR_I386: "-mios-simulator-version-min={} ".format( self.shared._targetSimulatorVersion ),
+			iOSArchitecture.SIMULATOR_X64:  "-mios-simulator-version-min={} ".format( self.shared._targetSimulatorVersion ),
 		}
 		return argumentMap[arch]
 
@@ -112,22 +112,22 @@ class iOSBase( object ):
 
 	def _setSysRoot( self, arch ):
 		sysRootMap = {
-			iOSArchitecture.DEVICE_ARMV7:   "/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS{}.sdk".format( self._targetDeviceVersion ),
-			iOSArchitecture.DEVICE_ARM64:   "/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS{}.sdk".format( self._targetDeviceVersion ),
-			iOSArchitecture.SIMULATOR_I386: "/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator{}.sdk".format( self._targetSimulatorVersion ),
-			iOSArchitecture.SIMULATOR_X64:  "/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator{}.sdk".format( self._targetSimulatorVersion ),
+			iOSArchitecture.DEVICE_ARMV7:   "/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS{}.sdk".format( self.shared._targetDeviceVersion ),
+			iOSArchitecture.DEVICE_ARM64:   "/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS{}.sdk".format( self.shared._targetDeviceVersion ),
+			iOSArchitecture.SIMULATOR_I386: "/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator{}.sdk".format( self.shared._targetSimulatorVersion ),
+			iOSArchitecture.SIMULATOR_X64:  "/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator{}.sdk".format( self.shared._targetSimulatorVersion ),
 		}
 		self._sysroot = sysRootMap[arch]
 
 
 class iOSCompiler( iOSBase, toolchain_gcc_darwin.GccCompilerDarwin ):
-	def __init__( self ):
+	def __init__( self, shared ):
+		toolchain_gcc_darwin.GccCompilerDarwin.__init__( self, shared )
 		iOSBase.__init__( self )
-		toolchain_gcc_darwin.GccCompilerDarwin.__init__( self )
 
 
-	def copy( self ):
-		ret = toolchain_gcc_darwin.GccCompilerDarwin.copy( self )
+	def copy( self, shared ):
+		ret = toolchain_gcc_darwin.GccCompilerDarwin.copy( self, shared )
 		iOSBase._copyTo( self, ret )
 		return ret
 
@@ -154,13 +154,13 @@ class iOSCompiler( iOSBase, toolchain_gcc_darwin.GccCompilerDarwin ):
 
 
 class iOSLinker( iOSBase, toolchain_gcc_darwin.GccLinkerDarwin ):
-	def __init__( self ):
+	def __init__( self, shared ):
+		toolchain_gcc_darwin.GccLinkerDarwin.__init__( self, shared )
 		iOSBase.__init__( self )
-		toolchain_gcc_darwin.GccLinkerDarwin.__init__( self )
 
 
-	def copy( self ):
-		ret = toolchain_gcc_darwin.GccLinkerDarwin.copy( self )
+	def copy( self, shared ):
+		ret = toolchain_gcc_darwin.GccLinkerDarwin.copy( self, shared )
 		iOSBase._copyTo( self, ret )
 		return ret
 

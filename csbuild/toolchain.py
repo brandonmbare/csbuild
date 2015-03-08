@@ -31,10 +31,12 @@ import os
 import platform
 import copy
 import csbuild
+import functools
 
 from . import log
 from . import _shared_globals
 from . import plugin_plist_generator
+from . import _utils
 
 
 class ClassCombiner( object ):
@@ -67,12 +69,17 @@ class ClassCombiner( object ):
 
 		return combined_func
 
+
+class SharedSettings(object):
+	pass
+
+
 class SettingsOverrider( object ):
 	def __init__(self):
 		self._settingsOverrides = {}
 
-	def copy(self):
-		ret = self.__class__()
+	def copy(self, shared):
+		ret = self.__class__(shared)
 
 		for kvp in self._settingsOverrides.items( ):
 			if isinstance( kvp[1], list ):
@@ -138,7 +145,11 @@ class SettingsOverrider( object ):
 		args = list( args )
 		newargs = []
 		for arg in args:
-			if arg[0] != '/' and not arg.startswith( "./" ):
+			isWindowsAbsPath = False
+			if platform.system() == "Windows":
+				splitPath = os.path.splitdrive(arg)
+				isWindowsAbsPath = (splitPath[0] != '')
+			if not isWindowsAbsPath and arg[0] != '/' and not arg.startswith( "./" ):
 				arg = "./" + arg
 			newargs.append( os.path.abspath( arg ) )
 		self._settingsOverrides["excludeDirs"] += newargs
@@ -158,7 +169,11 @@ class SettingsOverrider( object ):
 		args = list( args )
 		newargs = []
 		for arg in args:
-			if arg[0] != '/' and not arg.startswith( "./" ):
+			isWindowsAbsPath = False
+			if platform.system() == "Windows":
+				splitPath = os.path.splitdrive(arg)
+				isWindowsAbsPath = (splitPath[0] != '')
+			if not isWindowsAbsPath and arg[0] != '/' and not arg.startswith( "./" ):
 				arg = "./" + arg
 			newargs.append( os.path.abspath( arg ) )
 		self._settingsOverrides["excludeFiles"] += newargs
@@ -1016,11 +1031,10 @@ class SettingsOverrider( object ):
 		"""
 		self._settingsOverrides["supportedArchitectures"] = set(architectures)
 
-
-@_shared_globals.MetaClass(ABCMeta)
-class linkerBase( SettingsOverrider ):
-	def __init__(self):
+class toolBase( SettingsOverrider ):
+	def __init__(self, shared):
 		SettingsOverrider.__init__(self)
+		self.shared = shared
 
 	def prePrepareBuildStep(self, project):
 		pass
@@ -1043,12 +1057,26 @@ class linkerBase( SettingsOverrider ):
 	def postBuildStep(self, project):
 		pass
 
+	@staticmethod
+	def globalPreMakeStep():
+		pass
+
+	@staticmethod
+	def globalPostMakeStep():
+		pass
+
+
+@_shared_globals.MetaClass(ABCMeta)
+class linkerBase( toolBase ):
+	def __init__(self, shared):
+		toolBase.__init__(self, shared)
+
 	def parseOutput(self, outputStr):
 		return None
 
 	@abstractmethod
-	def copy(self):
-		return SettingsOverrider.copy(self)
+	def copy(self, shared):
+		return toolBase.copy(self, shared)
 
 	@staticmethod
 	def AdditionalArgs( parser ):
@@ -1141,30 +1169,9 @@ class linkerBase( SettingsOverrider ):
 
 
 @_shared_globals.MetaClass(ABCMeta)
-class compilerBase( SettingsOverrider ):
-	def __init__(self):
-		SettingsOverrider.__init__(self)
-
-	def prePrepareBuildStep(self, project):
-		pass
-
-	def postPrepareBuildStep(self, project):
-		pass
-
-	def preMakeStep(self, project):
-		pass
-
-	def postMakeStep(self, project):
-		pass
-
-	def preBuildStep(self, project):
-		pass
-
-	def preLinkStep(self, project):
-		pass
-
-	def postBuildStep(self, project):
-		pass
+class compilerBase( toolBase ):
+	def __init__(self, shared):
+		toolBase.__init__(self, shared)
 
 	def parseOutput(self, outputStr):
 		return None
@@ -1177,8 +1184,8 @@ class compilerBase( SettingsOverrider ):
 
 
 	@abstractmethod
-	def copy(self):
-		return SettingsOverrider.copy(self)
+	def copy(self, shared):
+		return toolBase.copy(self, shared)
 
 	@staticmethod
 	def AdditionalArgs( parser ):
@@ -1408,6 +1415,11 @@ class compilerBase( SettingsOverrider ):
 		"""
 		pass
 
+	def GetObjectScraper(self):
+		return None
+
+	def MakeDummyObjects(self, objList):
+		pass
 
 class toolchain( object ):
 	"""
@@ -1424,6 +1436,7 @@ class toolchain( object ):
 		self.tools = {}
 		self.activeTool = None
 		self.activeToolName = ""
+		self.shared = SharedSettings()
 
 
 	def Compiler(self):
@@ -1470,7 +1483,7 @@ class toolchain( object ):
 
 
 	def AddCustomTool(self, name, tool):
-		self.tools[name] = tool()
+		self.tools[name] = tool(self.shared)
 
 
 	def SetActiveTool(self, name):
@@ -1480,43 +1493,40 @@ class toolchain( object ):
 		else:
 			self.activeTool = None
 
-	def _runStep(self, name, project):
+	def GetGlobalPreMakeSteps(self):
+		ret = set()
 		for tool in self.tools.values():
-			if hasattr(tool, name):
-				getattr(tool, name)(project)
+			ret.add(tool.__class__.globalPreMakeStep)
+		return ret
 
-	def prePrepareBuildStep(self, project):
-		self._runStep("prePrepareBuildStep", project)
-
-	def postPrepareBuildStep(self, project):
-		self._runStep("postPrepareBuildStep", project)
-
-	def preMakeStep(self, project):
-		self._runStep("preMakeStep", project)
-
-	def postMakeStep(self, project):
-		self._runStep("postMakeStep", project)
-
-	def preBuildStep(self, project):
-		self._runStep("preBuildStep", project)
-
-	def preLinkStep(self, project):
-		self._runStep("preLinkStep", project)
-
-	def postBuildStep(self, project):
-		self._runStep("postBuildStep", project)
-
+	def GetGlobalPostMakeSteps(self):
+		ret = set()
+		for tool in self.tools.values():
+			ret.add(tool.__class__.globalPostMakeStep)
+		return ret
 
 	def __getattr__( self, name ):
 		funcs = []
 		for obj in self.tools.values():
-			funcs.append( getattr( obj, name ) )
+			func = getattr(obj, name)
+			if not _utils.FuncIsEmpty(func):
+				funcs.append( func )
 
 		def combined_func( *args, **kwargs ):
 			for func in funcs:
 				func( *args, **kwargs )
 
-		return combined_func
+		if funcs:
+			if len(funcs) == 1:
+				return funcs[0]
+
+			functools.update_wrapper(combined_func, funcs[0])
+			return combined_func
+
+		def empty_func( *args, **kwargs ):
+			pass
+
+		return empty_func
 
 
 	def copy( self ):
@@ -1527,9 +1537,11 @@ class toolchain( object ):
 		:rtype: toolchain
 		"""
 		ret = toolchain()
+		ret.shared = SharedSettings()
 
 		for kvp in self.tools.items():
-			ret.tools[kvp[0]] = kvp[1].copy()
+			ret.tools[kvp[0]] = kvp[1].copy(ret.shared)
+
 
 		if self.activeToolName:
 			ret.activeToolName = self.activeToolName
