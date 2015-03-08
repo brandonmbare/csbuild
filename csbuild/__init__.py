@@ -177,7 +177,11 @@ def AddExcludeDirectories( *args ):
 	args = list( args )
 	newargs = []
 	for arg in args:
-		if arg[0] != '/' and not arg.startswith( "./" ):
+		isWindowsAbsPath = False
+		if platform.system() == "Windows":
+			splitPath = os.path.splitdrive(arg)
+			isWindowsAbsPath = (splitPath[0] != '')
+		if not isWindowsAbsPath and arg[0] != '/' and not arg.startswith( "./" ):
 			arg = "./" + arg
 		newargs.append( os.path.abspath( arg ) )
 	projectSettings.currentProject.ExtendList("excludeDirs", newargs)
@@ -194,7 +198,11 @@ def AddExcludeFiles( *args ):
 	args = list( args )
 	newargs = []
 	for arg in args:
-		if arg[0] != '/' and not arg.startswith( "./" ):
+		isWindowsAbsPath = False
+		if platform.system() == "Windows":
+			splitPath = os.path.splitdrive(arg)
+			isWindowsAbsPath = (splitPath[0] != '')
+		if not isWindowsAbsPath and arg[0] != '/' and not arg.startswith( "./" ):
 			arg = "./" + arg
 		newargs.append( os.path.abspath( arg ) )
 	projectSettings.currentProject.ExtendList("excludeFiles", newargs)

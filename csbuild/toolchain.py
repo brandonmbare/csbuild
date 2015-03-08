@@ -145,7 +145,11 @@ class SettingsOverrider( object ):
 		args = list( args )
 		newargs = []
 		for arg in args:
-			if arg[0] != '/' and not arg.startswith( "./" ):
+			isWindowsAbsPath = False
+			if platform.system() == "Windows":
+				splitPath = os.path.splitdrive(arg)
+				isWindowsAbsPath = (splitPath[0] != '')
+			if not isWindowsAbsPath and arg[0] != '/' and not arg.startswith( "./" ):
 				arg = "./" + arg
 			newargs.append( os.path.abspath( arg ) )
 		self._settingsOverrides["excludeDirs"] += newargs
@@ -165,7 +169,11 @@ class SettingsOverrider( object ):
 		args = list( args )
 		newargs = []
 		for arg in args:
-			if arg[0] != '/' and not arg.startswith( "./" ):
+			isWindowsAbsPath = False
+			if platform.system() == "Windows":
+				splitPath = os.path.splitdrive(arg)
+				isWindowsAbsPath = (splitPath[0] != '')
+			if not isWindowsAbsPath and arg[0] != '/' and not arg.startswith( "./" ):
 				arg = "./" + arg
 			newargs.append( os.path.abspath( arg ) )
 		self._settingsOverrides["excludeFiles"] += newargs
