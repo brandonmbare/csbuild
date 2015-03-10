@@ -200,17 +200,28 @@ class project_generator_visual_studio( project_generator.project_generator ):
 		project_generator.project_generator.__init__( self, path, solutionName, extraArgs )
 
 		versionNumber = csbuild.GetOption( "vs-gen-version" )
-		platformList = csbuild.GetOption( "vs-gen-platform" )
 
 		if not versionNumber:
 			versionNumber = GetImpliedVisualStudioVersion()
 			log.LOG_BUILD( "No Visual Studio version selected; defaulting to {}.".format( versionNumber ) )
 
-		# If the user did not specify any target platforms, add a default.
+		platformList = set()
+
+		# Use the selected toolchains and architectures for form a list of platforms.
+		if "msvc" in _shared_globals.selectedToolchains:
+			if "x86" in _shared_globals.allarchitectures:
+				platformList.add( PlatformWindowsX86.GetVisualStudioName() )
+			if "x64" in _shared_globals.allarchitectures:
+				platformList.add( PlatformWindowsX64.GetVisualStudioName() )
+		if "android" in _shared_globals.selectedToolchains:
+			if "armeabi-v7a" in _shared_globals.allarchitectures:
+				platformList.add( PlatformTegraAndroid.GetVisualStudioName() )
+
+		# If no valid platforms were found, add a default.
 		if not platformList:
 			defaultName = PlatformWindowsX64.GetVisualStudioName()
-			platformList.append( defaultName )
-			log.LOG_BUILD( "No platforms selected; defaulting to {}.".format( defaultName ) )
+			platformList.add( defaultName )
+			log.LOG_BUILD( "No valid platforms selected; defaulting to {}.".format( defaultName ) )
 
 		# Register the selected platforms.
 		platformManager = PlatformManager.Get()
@@ -256,21 +267,13 @@ class project_generator_visual_studio( project_generator.project_generator ):
 		)
 		parser.add_argument(
 			"--vs-gen-force-overwrite-all",
-		    help = "Force the project generator to overwrite all existing files.",
-		    action = "store_true",
+	        help = "Force the project generator to overwrite all existing files.",
+	        action = "store_true",
 		)
 		parser.add_argument(
 			"--vs-gen-replace-user-files",
 			help = "When generating project files, do not ignore existing .vcxproj.user files.",
 			action = "store_true",
-		)
-		parser.add_argument(
-			"--vs-gen-platform",
-		    help = "Desired platform to include in the generated project files. May be specified multiple times, once per platform.",
-		    action = "append",
-		    default = [],
-		    type = str,
-		    choices = PlatformManager.Get().GetAvailableNameList(),
 		)
 
 
@@ -320,10 +323,19 @@ class project_generator_visual_studio( project_generator.project_generator ):
 							projectData.fullIncludePathList.update( set( settings.includeDirs ) )
 
 							# Construct the path that the files will show under in the Solution Explorer.
+							def constructExplorerPath( filePath ):
+								try:
+									# Try to construct the path relative to the working directory.
+									newPath = os.path.dirname( os.path.relpath( filePath, settings.workingDirectory ) ).replace( ".." + os.path.sep, "" )
+								except:
+									# If that fails, put it at the filter root. This can happen if the supplied file path is on a different drive than the working directory.
+									newPath = ""
+								return newPath
+
 							for source in projectData.fullSourceFileList:
-								projectData.fileFilterMap[source] = os.path.join( "Source Files", os.path.dirname( os.path.relpath( source, settings.workingDirectory ) ).replace( ".." + os.path.sep, "" ) ).rstrip( os.path.sep )
+								projectData.fileFilterMap[source] = os.path.join( "Source Files", constructExplorerPath( source ) ).rstrip( os.path.sep )
 							for header in projectData.fullHeaderFileList:
-								projectData.fileFilterMap[header] = os.path.join( "Header Files", os.path.dirname( os.path.relpath( header, settings.workingDirectory ) ).replace( ".." + os.path.sep, "" ) ).rstrip( os.path.sep )
+								projectData.fileFilterMap[header] = os.path.join( "Header Files", constructExplorerPath( header ) ).rstrip( os.path.sep )
 
 				projectData.fullSourceFileList = sorted( projectData.fullSourceFileList )
 				projectData.fullHeaderFileList = sorted( projectData.fullHeaderFileList )
@@ -459,7 +471,7 @@ class project_generator_visual_studio( project_generator.project_generator ):
 
 			for projectData in self._orderedProjectList:
 				if not projectData.isFilter:
-					relativeProjectPath = os.path.relpath( projectData.outputPath, self.rootpath )
+					relativeProjectPath = self._constructRelPath( projectData.outputPath, self.rootpath )
 					projectFilePath = os.path.join( relativeProjectPath, "{}.vcxproj".format( projectData.name ) )
 					nodeId = "{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}"
 				else:
@@ -586,7 +598,7 @@ class project_generator_visual_studio( project_generator.project_generator ):
 					itemGroupNode = AddNode( rootNode, "ItemGroup" )
 					for sourceFilePath in projectData.fullSourceFileList:
 						sourceFileNode = AddNode( itemGroupNode, "ClCompile" )
-						sourceFileNode.set( "Include", os.path.relpath( sourceFilePath, projectData.outputPath ) )
+						sourceFileNode.set( "Include", self._constructRelPath( sourceFilePath, projectData.outputPath ) )
 						#TODO: Handle any configuration or platform excludes for the current file.
 
 				comment = MakeComment( rootNode, "Project header files" )
@@ -596,7 +608,7 @@ class project_generator_visual_studio( project_generator.project_generator ):
 					itemGroupNode = AddNode( rootNode, "ItemGroup" )
 					for sourceFilePath in projectData.fullHeaderFileList:
 						sourceFileNode = AddNode( itemGroupNode, "ClInclude" )
-						sourceFileNode.set( "Include", os.path.relpath( sourceFilePath, projectData.outputPath ) )
+						sourceFileNode.set( "Include", self._constructRelPath( sourceFilePath, projectData.outputPath ) )
 						#TODO: Handle any configuration or platform excludes for the current file.
 
 				# Add the makefile to the project's list of files.
@@ -604,7 +616,7 @@ class project_generator_visual_studio( project_generator.project_generator ):
 					itemGroupNode = AddNode( rootNode, "ItemGroup" )
 					makefileNode = AddNode( itemGroupNode, "None" )
 
-					makefileNode.set( "Include", os.path.relpath( projectData.makefilePath, projectData.outputPath ) )
+					makefileNode.set( "Include", self._constructRelPath( projectData.makefilePath, projectData.outputPath ) )
 
 				comment = MakeComment( rootNode, "Import properties" )
 
@@ -663,7 +675,7 @@ class project_generator_visual_studio( project_generator.project_generator ):
 							intDirNode = AddNode( propertyGroupNode, "IntDir" )
 
 							pythonExePath = os.path.normcase( sys.executable )
-							mainMakefile = os.path.relpath( os.path.join( os.getcwd(), csbuild.mainFile ), projectData.outputPath )
+							mainMakefile = self._constructRelPath( os.path.join( os.getcwd(), csbuild.mainFile ), projectData.outputPath )
 
 							if not projectData.isRegenProject:
 								projectArg = " --project={}".format( projectData.name ) if not projectData.isBuildAllProject else ""
@@ -707,9 +719,9 @@ class project_generator_visual_studio( project_generator.project_generator ):
 								if not outputName:
 									outputName = "outputName"
 
-								outDirNode.text = os.path.relpath( outDir, projectData.outputPath )
-								intDirNode.text = os.path.relpath( intDir, projectData.outputPath )
-								outputNode.text = os.path.relpath( os.path.join( outDir, outputName ), projectData.outputPath )
+								outDirNode.text = self._constructRelPath( outDir, projectData.outputPath )
+								intDirNode.text = self._constructRelPath( intDir, projectData.outputPath )
+								outputNode.text = self._constructRelPath( os.path.join( outDir, outputName ), projectData.outputPath )
 							else:
 								# Gotta put this stuff somewhere for the Build All project.
 								outDirNode.text = projectData.name + "_log"
@@ -763,7 +775,7 @@ class project_generator_visual_studio( project_generator.project_generator ):
 						for sourceFilePath in projectData.fullSourceFileList:
 							sourceFileNode = AddNode( itemGroupNode, "ClCompile" )
 							filterNode = AddNode( sourceFileNode, "Filter" )
-							sourceFileNode.set( "Include", os.path.relpath( sourceFilePath, projectData.outputPath ) )
+							sourceFileNode.set( "Include", self._constructRelPath( sourceFilePath, projectData.outputPath ) )
 							filterNode.text = projectData.fileFilterMap[sourceFilePath]
 
 					# Add the project's header files.
@@ -772,7 +784,7 @@ class project_generator_visual_studio( project_generator.project_generator ):
 						for headerFilePath in projectData.fullHeaderFileList:
 							headerFileNode = AddNode( itemGroupNode, "ClInclude" )
 							filterNode = AddNode( headerFileNode, "Filter" )
-							headerFileNode.set( "Include", os.path.relpath( headerFilePath, projectData.outputPath ) )
+							headerFileNode.set( "Include", self._constructRelPath( headerFilePath, projectData.outputPath ) )
 							filterNode.text = projectData.fileFilterMap[headerFilePath]
 
 				self._saveXmlFile( rootNode, os.path.join( projectData.outputPath, "{}.vcxproj.filters".format( projectData.name ) ), False )
@@ -827,3 +839,14 @@ class project_generator_visual_studio( project_generator.project_generator ):
 
 		cachedFile = CachedFileData( xmlFilename, finalXmlString, isUserFile )
 		cachedFile.SaveFile()
+
+
+	@staticmethod
+	def _constructRelPath( filePath, rootPath ):
+		try:
+			# Attempt to construct the relative path from the root.
+			newPath = os.path.relpath( filePath, rootPath )
+		except:
+			# If that fails, return the input path as-is.
+			newPath = filePath
+		return newPath

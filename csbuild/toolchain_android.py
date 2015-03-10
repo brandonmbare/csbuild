@@ -149,7 +149,7 @@ class AndroidBase( object ):
 		return ['x86', 'armeabi', 'armeabi-v7a', 'armeabi-v7a-hard', 'mips']
 
 	def _getTargetTriple(self, project):
-		if self.isClang:
+		if self.shared.isClang:
 			if project.outputArchitecture == "x86":
 				return "-target i686-linux-android"
 			elif project.outputArchitecture == "mips":
@@ -270,20 +270,20 @@ class AndroidCompiler(AndroidBase, toolchain_gcc.GccCompiler):
 	def _setupCompiler(self, project):
 		#TODO: Let user choose which compiler version to use; for now, using the highest numbered version.
 
-		if self.isClang:
+		if self.shared.isClang:
 			ccName = "clang"
 			cxxName = "clang++"
 		else:
 			ccName = "gcc"
 			cxxName = "g++"
 
-		self._settingsOverrides["cc"], self._settingsOverrides["cxx"] = self._getCommands(project, ccName, cxxName, self.isClang)
+		self._settingsOverrides["cc"], self._settingsOverrides["cxx"] = self._getCommands(project, ccName, cxxName, self.shared.isClang)
 
 	def _setupForProject( self, project ):
 		#toolchain_gcc.compiler_gcc.SetupForProject(self, project)
 		if not self._setupCompleted:
 			if "clang" in project.cc or "clang" in project.cxx:
-				self.isClang = True
+				self.shared.isClang = True
 			self._setupCompiler(project)
 			self._setSysRootDir(project)
 			self._setupCompleted = True
@@ -337,7 +337,7 @@ class AndroidCompiler(AndroidBase, toolchain_gcc.GccCompiler):
 	def _getBaseCommand( self, compiler, project, isCpp ):
 		self._setupForProject(project)
 
-		if not self.isClang:
+		if not self.shared.isClang:
 			exitcodes = "-pass-exit-codes"
 		else:
 			exitcodes = ""
@@ -410,7 +410,7 @@ class AndroidLinker(AndroidBase, toolchain_gcc.GccLinker):
 		toolchain_gcc.GccLinker._setupForProject(self, project)
 		if not self._setupCompleted:
 			if "clang" in project.cc or "clang" in project.cxx:
-				self.isClang = True
+				self.shared.isClang = True
 			self._setupLinker(project)
 			self._setSysRootDir(project)
 			self._setupCompleted = True
@@ -533,7 +533,7 @@ class AndroidLinker(AndroidBase, toolchain_gcc.GccLinker):
 
 			libDir = os.path.join( self.shared._ndkHome, "platforms", "android-{}".format(self.shared._targetSdkVersion), "arch-{}".format(self._getSimplifiedArch(project)), "usr", "lib")
 
-			if self.isClang:
+			if self.shared.isClang:
 				crtbegin = os.path.join(project.objDir, "crtbegin_so.o")
 				if not os.access(crtbegin, os.F_OK):
 					symlink(os.path.join(libDir, "crtbegin_so.o"), crtbegin)

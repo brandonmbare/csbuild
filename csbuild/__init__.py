@@ -2786,7 +2786,7 @@ def _run( ):
 
 	if args.generate_solution is not None:
 		args.at = True
-		args.aa = True
+		#args.aa = True
 		#args.ao = True
 
 	if args.at:
