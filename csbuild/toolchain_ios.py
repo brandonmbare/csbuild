@@ -43,7 +43,7 @@ class iOSBase( object ):
 
 	def _copyTo( self, other ):
 		other.shared._targetDeviceVersion = self.shared._targetDeviceVersion
-		other._targetSimulatorVersin = self.shared._targetSimulatorVersion
+		other.shared._targetSimulatorVersin = self.shared._targetSimulatorVersion
 
 
 	def GetDefaultArchitecture( self ) :
@@ -117,7 +117,7 @@ class iOSBase( object ):
 			iOSArchitecture.SIMULATOR_I386: "/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator{}.sdk".format( self.shared._targetSimulatorVersion ),
 			iOSArchitecture.SIMULATOR_X64:  "/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator{}.sdk".format( self.shared._targetSimulatorVersion ),
 		}
-		self._sysroot = sysRootMap[arch]
+		self.shared._sysroot = sysRootMap[arch]
 
 
 class iOSCompiler( iOSBase, toolchain_gcc_darwin.GccCompilerDarwin ):
