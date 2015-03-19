@@ -255,7 +255,6 @@ class SettingsOverrider( object ):
 			self._settingsOverrides["includeDirs"] = []
 
 		for arg in args:
-			arg = os.path.abspath( arg )
 			self._settingsOverrides["includeDirs"].append( arg )
 
 
@@ -274,7 +273,6 @@ class SettingsOverrider( object ):
 			self._settingsOverrides["libraryDirs"] = []
 
 		for arg in args:
-			arg = os.path.abspath( arg )
 			self._settingsOverrides["libraryDirs"].append( arg )
 
 
@@ -517,7 +515,7 @@ class SettingsOverrider( object ):
 		:type s: str
 		:param s: The output directory, relative to the current script location, NOT to the project working directory.
 		"""
-		self._settingsOverrides["outputDir"] = os.path.abspath( s )
+		self._settingsOverrides["outputDir"] = s
 		self._settingsOverrides["_outputDir_set"] = True
 
 
@@ -528,7 +526,7 @@ class SettingsOverrider( object ):
 		:type s: str
 		:param s: The object directory, relative to the current script location, NOT to the project working directory.
 		"""
-		self._settingsOverrides["objDir"] = os.path.abspath( s )
+		self._settingsOverrides["objDir"] = s
 		self._settingsOverrides["_objDir_set"] = True
 
 

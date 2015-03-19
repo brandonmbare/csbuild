@@ -900,3 +900,16 @@ def CheckRunBuildStep(project, step, name):
 				traceback.print_exc()
 
 			os.chdir(wd)
+
+
+def ResolveProjectMacros(_path, _project):
+	"""
+	This will iteratively resolve each project macro in a string until there are none left.  However, If either the '{' or '}' characters are desired in the path,
+	they'll need to be escaped up to the correct number of times since each resolve pass will remove one set of those characters.
+	"""
+	while True:
+		fixedPath = _path.format( project=_project )
+		if fixedPath == _path:
+			break
+		_path = fixedPath
+	return _path

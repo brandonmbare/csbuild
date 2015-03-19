@@ -267,7 +267,6 @@ def AddIncludeDirectories( *args ):
 	:param args: The list of directories to be searched.
 	"""
 	for arg in args:
-		arg = os.path.abspath( arg )
 		projectSettings.currentProject.AppendList("includeDirs",  arg )
 
 
@@ -283,7 +282,6 @@ def AddLibraryDirectories( *args ):
 	:param args: The list of directories to be searched.
 	"""
 	for arg in args:
-		arg = os.path.abspath( arg )
 		projectSettings.currentProject.AppendList("libraryDirs",  arg )
 
 
@@ -296,7 +294,6 @@ def AddFrameworkDirectories( *args ):
 	:param args: The list of directories to be searched.
 	"""
 	for arg in args:
-		arg = os.path.abspath( arg )
 		projectSettings.currentProject.AddToSet("frameworkDirs",  arg )
 
 

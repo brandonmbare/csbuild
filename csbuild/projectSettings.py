@@ -613,7 +613,7 @@ class projectSettings( object ):
 		for buildStep in self.prePrepareBuildSteps:
 			_utils.CheckRunBuildStep(self, buildStep, "project pre-PrepareBuild")
 
-		self.outputDir = os.path.abspath( self.outputDir.format( project=self ) )
+		self.outputDir = os.path.abspath( _utils.ResolveProjectMacros( self.outputDir, self ) )
 
 		# Create the executable/library output directory if it doesn't exist.
 		if not os.access(self.outputDir, os.F_OK):
@@ -621,7 +621,7 @@ class projectSettings( object ):
 
 		alteredLibraryDirs = []
 		for directory in self.libraryDirs:
-			directory = directory.format(project=self)
+			directory = os.path.abspath( _utils.ResolveProjectMacros( directory, self ) )
 			if not os.access(directory, os.F_OK):
 				log.LOG_WARN("Library path {} does not exist!".format(directory))
 			alteredLibraryDirs.append(directory)
@@ -633,17 +633,17 @@ class projectSettings( object ):
 			if proj.type == csbuild.ProjectType.StaticLibrary and self.linkMode == csbuild.StaticLinkMode.LinkIntermediateObjects:
 				continue
 			self.libraries.add(proj.outputName.split(".")[0])
-			dir = proj.outputDir.format(project=proj)
+			dir = os.path.abspath( _utils.ResolveProjectMacros( proj.outputDir, proj ) )
 			if dir not in self.libraryDirs:
 				self.libraryDirs.append(dir)
 
 		self.activeToolchain.SetActiveTool("compiler")
-		self.objDir = os.path.abspath( self.objDir.format( project=self ) )
+		self.objDir = os.path.abspath( _utils.ResolveProjectMacros( self.objDir, self ) )
 		self.csbuildDir = os.path.join( self.objDir, ".csbuild" )
 
 		alteredIncludeDirs = []
 		for directory in self.includeDirs:
-			directory = directory.format(project=self)
+			directory = os.path.abspath( _utils.ResolveProjectMacros( directory, self ) )
 			if not os.access(directory, os.F_OK):
 				log.LOG_WARN("Include path {} does not exist!".format(directory))
 			alteredIncludeDirs.append(directory)
@@ -652,7 +652,7 @@ class projectSettings( object ):
 		def apply_macro(l):
 			alteredList = []
 			for s in l:
-				s = os.path.abspath(s.format(project=self))
+				s = os.path.abspath( _utils.ResolveProjectMacros( s, self ) )
 				alteredList.append(s)
 			return alteredList
 
@@ -666,7 +666,7 @@ class projectSettings( object ):
 		self.precompileAsC = apply_macro(self.precompileAsC)
 		self.precompileExcludeFiles = apply_macro(self.precompileExcludeFiles)
 
-		self.headerInstallSubdir = self.headerInstallSubdir.format(project=self)
+		self.headerInstallSubdir = os.path.abspath( _utils.ResolveProjectMacros( self.headerInstallSubdir, self ) )
 
 		self.excludeDirs.append( self.csbuildDir )
 
