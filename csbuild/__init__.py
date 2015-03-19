@@ -493,7 +493,7 @@ def SetOutputDirectory( s ):
 	:type s: str
 	:param s: The output directory, relative to the current script location, NOT to the project working directory.
 	"""
-	projectSettings.currentProject.SetValue("outputDir", os.path.abspath( s ))
+	projectSettings.currentProject.SetValue("outputDir", s )
 	projectSettings.currentProject.SetValue("_outputDir_set", True)
 
 
@@ -504,7 +504,7 @@ def SetIntermediateDirectory( s ):
 	:type s: str
 	:param s: The object directory, relative to the current script location, NOT to the project working directory.
 	"""
-	projectSettings.currentProject.SetValue("objDir", os.path.abspath( s ))
+	projectSettings.currentProject.SetValue("objDir", s )
 	projectSettings.currentProject.SetValue("_objDir_set", True)
 
 

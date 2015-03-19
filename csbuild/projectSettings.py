@@ -613,7 +613,7 @@ class projectSettings( object ):
 		for buildStep in self.prePrepareBuildSteps:
 			_utils.CheckRunBuildStep(self, buildStep, "project pre-PrepareBuild")
 
-		self.outputDir = os.path.abspath( self.outputDir ).format(project=self)
+		self.outputDir = os.path.abspath( self.outputDir.format( project=self ) )
 
 		# Create the executable/library output directory if it doesn't exist.
 		if not os.access(self.outputDir, os.F_OK):
@@ -638,7 +638,7 @@ class projectSettings( object ):
 				self.libraryDirs.append(dir)
 
 		self.activeToolchain.SetActiveTool("compiler")
-		self.objDir = os.path.abspath( self.objDir ).format(project=self)
+		self.objDir = os.path.abspath( self.objDir.format( project=self ) )
 		self.csbuildDir = os.path.join( self.objDir, ".csbuild" )
 
 		alteredIncludeDirs = []
