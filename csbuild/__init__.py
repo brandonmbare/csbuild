@@ -180,7 +180,7 @@ def AddExcludeDirectories( *args ):
 		arg = _utils.FixupRelativePath( arg )
 		arg = _utils.PathWorkingDirPair( arg )
 		newargs.append( arg )
-	projectSettings.currentProject.ExtendList("excludeDirs", newargs)
+	projectSettings.currentProject.ExtendList("excludeDirsTemp", newargs)
 
 
 def AddExcludeFiles( *args ):
@@ -197,7 +197,7 @@ def AddExcludeFiles( *args ):
 		arg = _utils.FixupRelativePath( arg )
 		arg = _utils.PathWorkingDirPair( arg )
 		newargs.append( arg )
-	projectSettings.currentProject.ExtendList("excludeFiles", newargs)
+	projectSettings.currentProject.ExtendList("excludeFilesTemp", newargs)
 
 
 def AddLibraries( *args ):
@@ -261,7 +261,7 @@ def AddIncludeDirectories( *args ):
 	for arg in args:
 		arg = _utils.FixupRelativePath( arg )
 		arg = _utils.PathWorkingDirPair( arg )
-		projectSettings.currentProject.AppendList("includeDirs", arg )
+		projectSettings.currentProject.AppendList("includeDirsTemp", arg )
 
 
 def AddLibraryDirectories( *args ):
@@ -278,7 +278,7 @@ def AddLibraryDirectories( *args ):
 	for arg in args:
 		arg = _utils.FixupRelativePath( arg )
 		arg = _utils.PathWorkingDirPair( arg )
-		projectSettings.currentProject.AppendList("libraryDirs",  arg )
+		projectSettings.currentProject.AppendList("libraryDirsTemp",  arg )
 
 
 def AddFrameworkDirectories( *args ):
@@ -292,7 +292,7 @@ def AddFrameworkDirectories( *args ):
 	for arg in args:
 		arg = _utils.FixupRelativePath( arg )
 		arg = _utils.PathWorkingDirPair( arg )
-		projectSettings.currentProject.AddToSet("frameworkDirs",  arg )
+		projectSettings.currentProject.AddToSet("frameworkDirsTemp",  arg )
 
 
 def AddAppleStoryboardFiles( *args ):
@@ -345,12 +345,12 @@ def ClearSharedibraries( ):
 
 def ClearIncludeDirectories( ):
 	"""Clears the include directories"""
-	projectSettings.currentProject.SetValue("includeDirs", [])
+	projectSettings.currentProject.SetValue("includeDirsTemp", [])
 
 
 def ClearLibraryDirectories( ):
 	"""Clears the library directories"""
-	projectSettings.currentProject.SetValue("libraryDirs", [])
+	projectSettings.currentProject.SetValue("libraryDirsTemp", [])
 
 
 def ClearAppleStoryboardFiles():
@@ -493,7 +493,7 @@ def SetOutputDirectory( s ):
 	"""
 	s = _utils.FixupRelativePath( s )
 	s = _utils.PathWorkingDirPair( s )
-	projectSettings.currentProject.SetValue("outputDir", s )
+	projectSettings.currentProject.SetValue("outputDirTemp", s )
 	projectSettings.currentProject.SetValue("_outputDir_set", True)
 
 
@@ -506,7 +506,7 @@ def SetIntermediateDirectory( s ):
 	"""
 	s = _utils.FixupRelativePath( s )
 	s = _utils.PathWorkingDirPair( s )
-	projectSettings.currentProject.SetValue("objDir", s )
+	projectSettings.currentProject.SetValue("objDirTemp", s )
 	projectSettings.currentProject.SetValue("_objDir_set", True)
 
 
@@ -747,11 +747,11 @@ def Precompile( *args ):
 	:type args: an arbitrary number of strings
 	:param args: The files to precompile.
 	"""
-	projectSettings.currentProject.SetValue( "precompile", [] )
+	projectSettings.currentProject.SetValue( "precompileTemp", [] )
 	for arg in list( args ):
 		arg = _utils.FixupRelativePath( arg )
 		arg = _utils.PathWorkingDirPair( arg )
-		projectSettings.currentProject.AppendList( "precompile",  arg )
+		projectSettings.currentProject.AppendList( "precompileTemp",  arg )
 	projectSettings.currentProject.SetValue( "chunkedPrecompile", False )
 
 
@@ -762,11 +762,11 @@ def PrecompileAsC( *args ):
 	:type args: an arbitrary number of strings
 	:param args: The files to specify as C files.
 	"""
-	projectSettings.currentProject.SetValue( "precompileAsC", [] )
+	projectSettings.currentProject.SetValue( "precompileAsCTemp", [] )
 	for arg in list( args ):
 		arg = _utils.FixupRelativePath( arg )
 		arg = _utils.PathWorkingDirPair( arg )
-		projectSettings.currentProject.AppendList( "precompileAsC", arg )
+		projectSettings.currentProject.AppendList( "precompileAsCTemp", arg )
 
 
 def EnableChunkedPrecompile():
@@ -791,11 +791,11 @@ def DisablePrecompile( *args ):
 			arg = _utils.FixupRelativePath( arg )
 			arg = _utils.PathWorkingDirPair( arg )
 			newargs.append( arg )
-		projectSettings.currentProject.ExtendList( "precompileExcludeFiles", newargs )
+		projectSettings.currentProject.ExtendList( "precompileExcludeFilesTemp", newargs )
 	else:
 		projectSettings.currentProject.SetValue( "chunkedPrecompile", False )
-		projectSettings.currentProject.SetValue( "precompile", [] )
-		projectSettings.currentProject.SetValue( "precompileAsC", [] )
+		projectSettings.currentProject.SetValue( "precompileTemp", [] )
+		projectSettings.currentProject.SetValue( "precompileAsCTemp", [] )
 
 
 def EnableUnityBuild( ):
@@ -840,14 +840,14 @@ def AddExtraFiles( *args ):
 		for file in glob.glob( arg ):
 			file = _utils.FixupRelativePath( file )
 			file = _utils.PathWorkingDirPair( file )
-			projectSettings.currentProject.AppendList("extraFiles",  file )
+			projectSettings.currentProject.AppendList("extraFilesTemp",  file )
 
 
 def ClearExtraFiles():
 	"""
 	Clear the list of external files to compile.
 	"""
-	projectSettings.currentProject.SetValue("extraFiles", [])
+	projectSettings.currentProject.SetValue("extraFilesTemp", [])
 
 
 def AddExtraDirectories( *args ):
@@ -860,14 +860,14 @@ def AddExtraDirectories( *args ):
 	for arg in list( args ):
 		arg = _utils.FixupRelativePath( arg )
 		arg = _utils.PathWorkingDirPair( arg )
-		projectSettings.currentProject.AppendList("extraDirs",  arg )
+		projectSettings.currentProject.AppendList("extraDirsTemp",  arg )
 
 
 def ClearExtraDirectories():
 	"""
 	Clear the list of external directories to search.
 	"""
-	projectSettings.currentProject.SetValue("extraDirs", [])
+	projectSettings.currentProject.SetValue("extraDirsTemp", [])
 
 
 def AddExtraObjects( *args ):

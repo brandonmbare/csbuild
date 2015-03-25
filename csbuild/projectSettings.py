@@ -89,11 +89,17 @@ class projectSettings( object ):
 	:ivar sharedLibraries: The libraries the project will forcibly statically link against
 	:type sharedLibraries: list[str]
 
+	:ivar frameworks: The Apple frameworks the project will link against (only applicable to Apple platforms).
+	:type frameworks: set[str]
+
 	:ivar includeDirs: Directories to search for included headers in
 	:type includeDirs: list[str]
 
 	:ivar libraryDirs: Directories to search for libraries in
 	:type libraryDirs: list[str]
+
+	:ivar frameworkDirs: Directories to search for Apple frameworks.
+	:type frameworkDirs: set[str]
 
 	:ivar optLevel: Optimization level for this project
 	:type optLevel: csbuild.OptimizationLevel
@@ -355,14 +361,20 @@ class projectSettings( object ):
 	:ivar precompileTemp: List of files to precompile
 	:type precompileTemp: list[:_utils.PathWorkingDir:]
 
+	:ivar precompileAsCTemp: List of files to precompile as C files
+	:type precompileAsCTemp: list[:_utils.PathWorkingDir:]
+
 	:ivar precompileExcludeFilesTemp: List of files NOT to precompile
 	:type precompileExcludeFilesTemp: list[:_utils.PathWorkingDir:]
 
 	:ivar excludeDirsTemp: Directories excluded from source file discovery
 	:type excludeDirsTemp: list[:_utils.PathWorkingDir:]
 
-	:ivar excludeFiles: Files excluded from source file discovery
-	:type excludeFiles: list[:_utils.PathWorkingDir:]
+	:ivar excludeFilesTemp: Files excluded from source file discovery
+	:type excludeFilesTemp: list[:_utils.PathWorkingDir:]
+
+	:ivar frameworkDirsTemp: Directories to search for Apple frameworks.
+	:type frameworkDirsTemp: list[:_utils.PathWorkingDir:]
 
 	.. note:: Toolchains can define additional variables that will show up on this class's
 		instance variable list when that toolchain is active. See toolchain documentation for
@@ -554,9 +566,11 @@ class projectSettings( object ):
 		self.objDirTemp = None
 		self.outputDirTemp = None
 		self.precompileTemp = []
+		self.precompileAsCTemp = []
 		self.precompileExcludeFilesTemp = []
 		self.excludeDirsTemp = []
 		self.excludeFilesTemp = []
+		self.frameworkDirsTemp = []
 
 		self.cExtensions = {".c"}
 		self.cppExtensions = {".cpp", ".cxx", ".cc", ".cp", ".c++"}
@@ -1206,9 +1220,11 @@ class projectSettings( object ):
 			"objDirTemp" : self.objDirTemp,
 			"outputDirTemp" : self.outputDirTemp,
 			"precompileTemp" : self.precompileTemp,
+			"precompileAsCTemp" : self.precompileAsCTemp,
 			"precompileExcludeFilesTemp" : self.precompileExcludeFilesTemp,
 			"excludeDirsTemp" : self.excludeDirsTemp,
 			"excludeFilesTemp" : self.excludeFilesTemp,
+			"frameworkDirsTemp" : self.frameworkDirsTemp,
 			"cExtensions" : set(self.cExtensions),
 			"cppExtensions" : set(self.cppExtensions),
 			"asmExtensions" : set(self.asmExtensions),
