@@ -340,6 +340,30 @@ class projectSettings( object ):
 	:type extraObjs: set[str]
 	:ivar extraObjs: Extra objects to pass to the linker
 
+	:ivar includeDirsTemp: Directories to search for included headers in
+	:type includeDirsTemp: list[:_utils.PathWorkingDir:]
+
+	:ivar libraryDirsTemp: Directories to search for libraries in
+	:type libraryDirsTemp: list[:_utils.PathWorkingDir:]
+
+	:ivar objDirTemp: Output directory for intermediate object files
+	:type objDirTemp: :_utils.PathWorkingDir:
+
+	:ivar outputDirTemp: Output directory for the final output file
+	:type outputDirTemp: :_utils.PathWorkingDir:
+
+	:ivar precompileTemp: List of files to precompile
+	:type precompileTemp: list[:_utils.PathWorkingDir:]
+
+	:ivar precompileExcludeFilesTemp: List of files NOT to precompile
+	:type precompileExcludeFilesTemp: list[:_utils.PathWorkingDir:]
+
+	:ivar excludeDirsTemp: Directories excluded from source file discovery
+	:type excludeDirsTemp: list[:_utils.PathWorkingDir:]
+
+	:ivar excludeFiles: Files excluded from source file discovery
+	:type excludeFiles: list[:_utils.PathWorkingDir:]
+
 	.. note:: Toolchains can define additional variables that will show up on this class's
 		instance variable list when that toolchain is active. See toolchain documentation for
 		more details on what additional instance variables are available.
@@ -524,6 +548,16 @@ class projectSettings( object ):
 		self.extraDirs = []
 		self.extraObjs = set()
 
+		self.includeDirsTemp = []
+		self.libraryDirsTemp = []
+
+		self.objDirTemp = None
+		self.outputDirTemp = None
+		self.precompileTemp = []
+		self.precompileExcludeFilesTemp = []
+		self.excludeDirsTemp = []
+		self.excludeFilesTemp = []
+
 		self.cExtensions = {".c"}
 		self.cppExtensions = {".cpp", ".cxx", ".cc", ".cp", ".c++"}
 		self.asmExtensions = {".s", ".asm"}
@@ -613,6 +647,10 @@ class projectSettings( object ):
 		for buildStep in self.prePrepareBuildSteps:
 			_utils.CheckRunBuildStep(self, buildStep, "project pre-PrepareBuild")
 
+		# Save the current working directory because we're going to be changing it when fixing up paths.
+		oldWorkingDir = os.getcwd()
+
+		os.chdir( self.outputDir.workingDir )
 		self.outputDir = os.path.abspath( _utils.ResolveProjectMacros( self.outputDir, self ) )
 
 		# Create the executable/library output directory if it doesn't exist.
@@ -621,7 +659,8 @@ class projectSettings( object ):
 
 		alteredLibraryDirs = []
 		for directory in self.libraryDirs:
-			directory = os.path.abspath( _utils.ResolveProjectMacros( directory, self ) )
+			os.chdir( directory.workingDir )
+			directory = os.path.abspath( _utils.ResolveProjectMacros( directory.path, self ) )
 			if not os.access(directory, os.F_OK):
 				log.LOG_WARN("Library path {} does not exist!".format(directory))
 			alteredLibraryDirs.append(directory)
@@ -633,26 +672,34 @@ class projectSettings( object ):
 			if proj.type == csbuild.ProjectType.StaticLibrary and self.linkMode == csbuild.StaticLinkMode.LinkIntermediateObjects:
 				continue
 			self.libraries.add(proj.outputName.split(".")[0])
-			dir = os.path.abspath( _utils.ResolveProjectMacros( proj.outputDir, proj ) )
-			if dir not in self.libraryDirs:
-				self.libraryDirs.append(dir)
+			if isinstance( proj.outputDir, str ):
+				# This project has already been prepared, use its output directory as is.
+				depOutDir = proj.outputDir
+			else:
+				# This project has not been prepared yet, so we need to construct its output directory manually.
+				os.chdir( proj.outputDir.workingDir )
+				depOutDir = os.path.abspath( _utils.ResolveProjectMacros( proj.outputDir.path, proj ) )
+			if depOutDir not in self.libraryDirs:
+				self.libraryDirs.append(depOutDir)
 
-		self.activeToolchain.SetActiveTool("compiler")
+		self.activeToolchain.SetActiveTool( "compiler" )
 		self.objDir = os.path.abspath( _utils.ResolveProjectMacros( self.objDir, self ) )
 		self.csbuildDir = os.path.join( self.objDir, ".csbuild" )
 
 		alteredIncludeDirs = []
 		for directory in self.includeDirs:
-			directory = os.path.abspath( _utils.ResolveProjectMacros( directory, self ) )
+			os.chdir( directory.workingDir )
+			directory = os.path.abspath( _utils.ResolveProjectMacros( directory.path, self ) )
 			if not os.access(directory, os.F_OK):
-				log.LOG_WARN("Include path {} does not exist!".format(directory))
-			alteredIncludeDirs.append(directory)
+				log.LOG_WARN( "Include path {} does not exist!".format( directory ) )
+			alteredIncludeDirs.append( directory )
 		self.includeDirs = alteredIncludeDirs
 
 		def apply_macro(l):
 			alteredList = []
 			for s in l:
-				s = os.path.abspath( _utils.ResolveProjectMacros( s, self ) )
+				os.chdir( s.workingDir )
+				s = os.path.abspath( _utils.ResolveProjectMacros( s.path, self ) )
 				alteredList.append(s)
 			return alteredList
 
@@ -669,6 +716,9 @@ class projectSettings( object ):
 		self.headerInstallSubdir = os.path.abspath( _utils.ResolveProjectMacros( self.headerInstallSubdir, self ) )
 
 		self.excludeDirs.append( self.csbuildDir )
+
+		# Restore the old working directory.
+		os.chdir( oldWorkingDir )
 
 		self.activeToolchain.SetActiveTool("linker")
 		if self.ext is None:
@@ -1153,6 +1203,12 @@ class projectSettings( object ):
 			"linkOutput" : self.linkOutput,
 			"linkErrors" : self.linkErrors,
 			"parsedLinkErrors" : self.parsedLinkErrors,
+			"objDirTemp" : self.objDirTemp,
+			"outputDirTemp" : self.outputDirTemp,
+			"precompileTemp" : self.precompileTemp,
+			"precompileExcludeFilesTemp" : self.precompileExcludeFilesTemp,
+			"excludeDirsTemp" : self.excludeDirsTemp,
+			"excludeFilesTemp" : self.excludeFilesTemp,
 			"cExtensions" : set(self.cExtensions),
 			"cppExtensions" : set(self.cppExtensions),
 			"asmExtensions" : set(self.asmExtensions),

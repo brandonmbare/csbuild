@@ -913,3 +913,23 @@ def ResolveProjectMacros(_path, _project):
 			break
 		_path = fixedPath
 	return _path
+
+
+def FixupRelativePath( arg ):
+	isWindowsAbsPath = False
+	if platform.system() == "Windows":
+		splitPath = os.path.splitdrive( arg )
+		isWindowsAbsPath = ( splitPath[0] != '' )
+	if not isWindowsAbsPath and arg[0] != '/' and not arg.startswith( "./" ):
+		path = "./" + arg
+	return arg
+
+
+class PathWorkingDirPair( object ):
+	def __init__( self, _path ):
+		self.path = _path
+		self.workingDir = os.getcwd()
+
+	def __lt__(self, other):
+
+		return ( self.path < other.path ) and ( self.workingDir < other.workingDir )

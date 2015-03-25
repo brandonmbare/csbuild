@@ -177,13 +177,9 @@ def AddExcludeDirectories( *args ):
 	args = list( args )
 	newargs = []
 	for arg in args:
-		isWindowsAbsPath = False
-		if platform.system() == "Windows":
-			splitPath = os.path.splitdrive(arg)
-			isWindowsAbsPath = (splitPath[0] != '')
-		if not isWindowsAbsPath and arg[0] != '/' and not arg.startswith( "./" ):
-			arg = "./" + arg
-		newargs.append( os.path.abspath( arg ) )
+		arg = _utils.FixupRelativePath( arg )
+		arg = _utils.PathWorkingDirPair( arg )
+		newargs.append( arg )
 	projectSettings.currentProject.ExtendList("excludeDirs", newargs)
 
 
@@ -198,13 +194,9 @@ def AddExcludeFiles( *args ):
 	args = list( args )
 	newargs = []
 	for arg in args:
-		isWindowsAbsPath = False
-		if platform.system() == "Windows":
-			splitPath = os.path.splitdrive(arg)
-			isWindowsAbsPath = (splitPath[0] != '')
-		if not isWindowsAbsPath and arg[0] != '/' and not arg.startswith( "./" ):
-			arg = "./" + arg
-		newargs.append( os.path.abspath( arg ) )
+		arg = _utils.FixupRelativePath( arg )
+		arg = _utils.PathWorkingDirPair( arg )
+		newargs.append( arg )
 	projectSettings.currentProject.ExtendList("excludeFiles", newargs)
 
 
@@ -267,7 +259,9 @@ def AddIncludeDirectories( *args ):
 	:param args: The list of directories to be searched.
 	"""
 	for arg in args:
-		projectSettings.currentProject.AppendList("includeDirs",  arg )
+		arg = _utils.FixupRelativePath( arg )
+		arg = _utils.PathWorkingDirPair( arg )
+		projectSettings.currentProject.AppendList("includeDirs", arg )
 
 
 def AddLibraryDirectories( *args ):
@@ -282,6 +276,8 @@ def AddLibraryDirectories( *args ):
 	:param args: The list of directories to be searched.
 	"""
 	for arg in args:
+		arg = _utils.FixupRelativePath( arg )
+		arg = _utils.PathWorkingDirPair( arg )
 		projectSettings.currentProject.AppendList("libraryDirs",  arg )
 
 
@@ -294,11 +290,14 @@ def AddFrameworkDirectories( *args ):
 	:param args: The list of directories to be searched.
 	"""
 	for arg in args:
+		arg = _utils.FixupRelativePath( arg )
+		arg = _utils.PathWorkingDirPair( arg )
 		projectSettings.currentProject.AddToSet("frameworkDirs",  arg )
 
 
 def AddAppleStoryboardFiles( *args ):
 	"""
+	DEPRECATED - This will be removed when tool plugins are able to register file extensions.
 	Add a list of storyboard files to be compiled. Only applies to builds for Apple platforms.
 
 	:param args: List of storyboard files.
@@ -309,6 +308,7 @@ def AddAppleStoryboardFiles( *args ):
 
 def AddAppleInterfaceFiles( *args ):
 	"""
+	DEPRECATED - This will be removed when tool plugins are able to register file extensions.
 	Add a list of interface files to be compiled. Only applies to builds for Apple platforms.
 
 	:param args: List of interface files.
@@ -319,6 +319,7 @@ def AddAppleInterfaceFiles( *args ):
 
 def AddAppleAssetCatalogs( *args ):
 	"""
+	DEPRECATED - This will be removed when tool plugins are able to register file extensions.
 	Add a list of asset catalogs to be compiled. Only applies to builds for Apple platforms.
 
 	:param args: List of asset catalogs.
@@ -490,6 +491,8 @@ def SetOutputDirectory( s ):
 	:type s: str
 	:param s: The output directory, relative to the current script location, NOT to the project working directory.
 	"""
+	s = _utils.FixupRelativePath( s )
+	s = _utils.PathWorkingDirPair( s )
 	projectSettings.currentProject.SetValue("outputDir", s )
 	projectSettings.currentProject.SetValue("_outputDir_set", True)
 
@@ -501,6 +504,8 @@ def SetIntermediateDirectory( s ):
 	:type s: str
 	:param s: The object directory, relative to the current script location, NOT to the project working directory.
 	"""
+	s = _utils.FixupRelativePath( s )
+	s = _utils.PathWorkingDirPair( s )
 	projectSettings.currentProject.SetValue("objDir", s )
 	projectSettings.currentProject.SetValue("_objDir_set", True)
 
@@ -742,10 +747,12 @@ def Precompile( *args ):
 	:type args: an arbitrary number of strings
 	:param args: The files to precompile.
 	"""
-	projectSettings.currentProject.SetValue("precompile", [])
+	projectSettings.currentProject.SetValue( "precompile", [] )
 	for arg in list( args ):
-		projectSettings.currentProject.AppendList("precompile",  os.path.abspath( arg ) )
-	projectSettings.currentProject.SetValue("chunkedPrecompile", False)
+		arg = _utils.FixupRelativePath( arg )
+		arg = _utils.PathWorkingDirPair( arg )
+		projectSettings.currentProject.AppendList( "precompile",  arg )
+	projectSettings.currentProject.SetValue( "chunkedPrecompile", False )
 
 
 def PrecompileAsC( *args ):
@@ -755,16 +762,18 @@ def PrecompileAsC( *args ):
 	:type args: an arbitrary number of strings
 	:param args: The files to specify as C files.
 	"""
-	projectSettings.currentProject.SetValue("precompileAsC", [])
+	projectSettings.currentProject.SetValue( "precompileAsC", [] )
 	for arg in list( args ):
-		projectSettings.currentProject.AppendList("precompileAsC",  os.path.abspath( arg ) )
+		arg = _utils.FixupRelativePath( arg )
+		arg = _utils.PathWorkingDirPair( arg )
+		projectSettings.currentProject.AppendList( "precompileAsC", arg )
 
 
-def EnableChunkedPrecompile( ):
+def EnableChunkedPrecompile():
 	"""
 	When this is enabled, all header files will be precompiled into a single "superheader" and included in all files.
 	"""
-	projectSettings.currentProject.SetValue("chunkedPrecompile", True)
+	projectSettings.currentProject.SetValue( "chunkedPrecompile", True )
 
 
 def DisablePrecompile( *args ):
@@ -779,14 +788,14 @@ def DisablePrecompile( *args ):
 	if args:
 		newargs = []
 		for arg in args:
-			if arg[0] != '/' and not arg.startswith( "./" ):
-				arg = "./" + arg
-			newargs.append( os.path.abspath( arg ) )
-			projectSettings.currentProject.ExtendList("precompileExcludeFiles", newargs)
+			arg = _utils.FixupRelativePath( arg )
+			arg = _utils.PathWorkingDirPair( arg )
+			newargs.append( arg )
+		projectSettings.currentProject.ExtendList( "precompileExcludeFiles", newargs )
 	else:
-		projectSettings.currentProject.SetValue("chunkedPrecompile", False)
-		projectSettings.currentProject.SetValue("precompile", [])
-		projectSettings.currentProject.SetValue("precompileAsC", [])
+		projectSettings.currentProject.SetValue( "chunkedPrecompile", False )
+		projectSettings.currentProject.SetValue( "precompile", [] )
+		projectSettings.currentProject.SetValue( "precompileAsC", [] )
 
 
 def EnableUnityBuild( ):
@@ -829,7 +838,9 @@ def AddExtraFiles( *args ):
 	"""
 	for arg in list( args ):
 		for file in glob.glob( arg ):
-			projectSettings.currentProject.AppendList("extraFiles",  os.path.abspath( file ) )
+			file = _utils.FixupRelativePath( file )
+			file = _utils.PathWorkingDirPair( file )
+			projectSettings.currentProject.AppendList("extraFiles",  file )
 
 
 def ClearExtraFiles():
@@ -847,7 +858,9 @@ def AddExtraDirectories( *args ):
 	:param args: A list of directories to search.
 	"""
 	for arg in list( args ):
-		projectSettings.currentProject.AppendList("extraDirs",  os.path.abspath( arg ) )
+		arg = _utils.FixupRelativePath( arg )
+		arg = _utils.PathWorkingDirPair( arg )
+		projectSettings.currentProject.AppendList("extraDirs",  arg )
 
 
 def ClearExtraDirectories():
@@ -866,7 +879,9 @@ def AddExtraObjects( *args ):
 	"""
 	for arg in list( args ):
 		for file in glob.glob( arg ):
-			projectSettings.currentProject.AddToSet("extraObjs", os.path.abspath( file ) )
+			file = _utils.FixupRelativePath( file )
+			file = _utils.PathWorkingDirPair( file )
+			projectSettings.currentProject.AddToSet("extraObjs", file )
 
 
 def ClearExtraObjects():

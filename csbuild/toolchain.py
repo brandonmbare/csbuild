@@ -100,10 +100,6 @@ class SettingsOverrider( object ):
 		Enables installation of the compiled output file.
 		Default target is /usr/local/lib, unless the --prefix option is specified.
 		If --prefix is specified, the target will be *{prefix*}/lib
-
-		:type s: str
-		:param s: Override directory - i.e., if you specify this as "libraries", the libraries will be installed
-		to *{prefix*}/libraries.
 		"""
 		self._settingsOverrides["installOutput"] = True
 
@@ -113,10 +109,6 @@ class SettingsOverrider( object ):
 		Enables installation of the project's headers
 		Default target is /usr/local/include, unless the --prefix option is specified.
 		If --prefix is specified, the target will be *{prefix*}/include
-
-		:type s: str
-		:param s: Override directory - i.e., if you specify this as "headers", the headers will be installed
-		to *{prefix*}/headers.
 		"""
 		self._settingsOverrides["installHeaders"] = True
 
@@ -145,13 +137,9 @@ class SettingsOverrider( object ):
 		args = list( args )
 		newargs = []
 		for arg in args:
-			isWindowsAbsPath = False
-			if platform.system() == "Windows":
-				splitPath = os.path.splitdrive(arg)
-				isWindowsAbsPath = (splitPath[0] != '')
-			if not isWindowsAbsPath and arg[0] != '/' and not arg.startswith( "./" ):
-				arg = "./" + arg
-			newargs.append( os.path.abspath( arg ) )
+			arg = _utils.FixupRelativePath( arg )
+			arg = _utils.PathWorkingDirPair( arg )
+			newargs.append( arg )
 		self._settingsOverrides["excludeDirs"] += newargs
 
 
@@ -169,13 +157,9 @@ class SettingsOverrider( object ):
 		args = list( args )
 		newargs = []
 		for arg in args:
-			isWindowsAbsPath = False
-			if platform.system() == "Windows":
-				splitPath = os.path.splitdrive(arg)
-				isWindowsAbsPath = (splitPath[0] != '')
-			if not isWindowsAbsPath and arg[0] != '/' and not arg.startswith( "./" ):
-				arg = "./" + arg
-			newargs.append( os.path.abspath( arg ) )
+			arg = _utils.FixupRelativePath( arg )
+			arg = _utils.PathWorkingDirPair( arg )
+			newargs.append( arg )
 		self._settingsOverrides["excludeFiles"] += newargs
 
 
@@ -255,6 +239,8 @@ class SettingsOverrider( object ):
 			self._settingsOverrides["includeDirs"] = []
 
 		for arg in args:
+			arg = _utils.FixupRelativePath( arg )
+			arg = _utils.PathWorkingDirPair( arg )
 			self._settingsOverrides["includeDirs"].append( arg )
 
 
@@ -273,6 +259,8 @@ class SettingsOverrider( object ):
 			self._settingsOverrides["libraryDirs"] = []
 
 		for arg in args:
+			arg = _utils.FixupRelativePath( arg )
+			arg = _utils.PathWorkingDirPair( arg )
 			self._settingsOverrides["libraryDirs"].append( arg )
 
 
@@ -288,12 +276,14 @@ class SettingsOverrider( object ):
 			self._settingsOverrides["frameworkDirs"] = set()
 
 		for arg in args:
-			arg = os.path.abspath( arg )
+			arg = _utils.FixupRelativePath( arg )
+			arg = _utils.PathWorkingDirPair( arg )
 			self._settingsOverrides["frameworkDirs"].add( arg )
 
 
 	def AddAppleStoryboardFiles( self, *args ):
 		"""
+		DEPRECATED - This will be removed when tool plugins are able to register file extensions.
 		Add a list of storyboard files to be compiled. Only applies to builds for Apple platforms.
 
 		:param args: List of storyboard files.
@@ -307,6 +297,7 @@ class SettingsOverrider( object ):
 
 	def AddAppleInterfaceFiles( self, *args ):
 		"""
+		DEPRECATED - This will be removed when tool plugins are able to register file extensions.
 		Add a list of interface files to be compiled. Only applies to builds for Apple platforms.
 
 		:param args: List of interface files.
@@ -320,6 +311,7 @@ class SettingsOverrider( object ):
 
 	def AddAppleAssetCatalogs( self, *args ):
 		"""
+		DEPRECATED - This will be removed when tool plugins are able to register file extensions.
 		Add a list of asset catalogs to be compiled. Only applies to builds for Apple platforms.
 
 		:param args: List of asset catalogs.
@@ -515,6 +507,8 @@ class SettingsOverrider( object ):
 		:type s: str
 		:param s: The output directory, relative to the current script location, NOT to the project working directory.
 		"""
+		s = _utils.FixupRelativePath( s )
+		s = _utils.PathWorkingDirPair( s )
 		self._settingsOverrides["outputDir"] = s
 		self._settingsOverrides["_outputDir_set"] = True
 
@@ -526,6 +520,8 @@ class SettingsOverrider( object ):
 		:type s: str
 		:param s: The object directory, relative to the current script location, NOT to the project working directory.
 		"""
+		s = _utils.FixupRelativePath( s )
+		s = _utils.PathWorkingDirPair( s )
 		self._settingsOverrides["objDir"] = s
 		self._settingsOverrides["_objDir_set"] = True
 
@@ -769,7 +765,9 @@ class SettingsOverrider( object ):
 		"""
 		self._settingsOverrides["precompile"] = []
 		for arg in list( args ):
-			self._settingsOverrides["precompile"].append( os.path.abspath( arg ) )
+			arg = _utils.FixupRelativePath( arg )
+			arg = _utils.PathWorkingDirPair( arg )
+			self._settingsOverrides["precompile"].append( arg )
 		self._settingsOverrides["chunkedPrecompile"] = False
 
 
@@ -782,7 +780,9 @@ class SettingsOverrider( object ):
 		"""
 		self._settingsOverrides["precompileAsC"] = []
 		for arg in list( args ):
-			self._settingsOverrides["precompileAsC"].append( os.path.abspath( arg ) )
+			arg = _utils.FixupRelativePath( arg )
+			arg = _utils.PathWorkingDirPair( arg )
+			self._settingsOverrides["precompileAsC"].append( arg )
 
 
 	def EnableChunkedPrecompile( self ):
@@ -807,10 +807,10 @@ class SettingsOverrider( object ):
 		if args:
 			newargs = []
 			for arg in args:
-				if arg[0] != '/' and not arg.startswith( "./" ):
-					arg = "./" + arg
-				newargs.append( os.path.abspath( arg ) )
-				self._settingsOverrides["precompileExcludeFiles"] += newargs
+				arg = _utils.FixupRelativePath( arg )
+				arg = _utils.PathWorkingDirPair( arg )
+				newargs.append( arg )
+			self._settingsOverrides["precompileExcludeFiles"] += newargs
 		else:
 			self._settingsOverrides["chunkedPrecompile"] = False
 			self._settingsOverrides["precompile"] = []
