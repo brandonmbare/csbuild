@@ -121,7 +121,9 @@ class SettingsOverrider( object ):
 		:param s: The desired subdirectory; i.e., if you specify this as "myLib", the headers will be
 		installed under *{prefix*}/include/myLib.
 		"""
-		self._settingsOverrides["headerInstallSubdir"] = s
+		s = _utils.FixupRelativePath( s )
+		s = _utils.PathWorkingDirPair( s )
+		self._settingsOverrides["headerInstallSubdirTemp"] = s
 
 
 	def AddExcludeDirectories( self, *args ):

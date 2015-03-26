@@ -165,7 +165,7 @@ def SetHeaderInstallSubdirectory( s ):
 	"""
 	s = _utils.FixupRelativePath( s )
 	s = _utils.PathWorkingDirPair( s )
-	projectSettings.currentProject.SetValue("headerInstallSubdir", s)
+	projectSettings.currentProject.SetValue("headerInstallSubdirTemp", s)
 
 
 def AddExcludeDirectories( *args ):
