@@ -367,6 +367,15 @@ class projectSettings( object ):
 	:ivar precompileExcludeFilesTemp: List of files NOT to precompile
 	:type precompileExcludeFilesTemp: list[:_utils.PathWorkingDir:]
 
+	:type extraFilesTemp: list[:_utils.PathWorkingDir:]
+	:ivar extraFilesTemp: Extra files being compiled, these will be rolled into project.sources, so use that instead
+
+	:type extraDirsTemp: list[:_utils.PathWorkingDir:]
+	:ivar extraDirsTemp: Extra directories used to search for files
+
+	:type extraObjsTemp: list[:_utils.PathWorkingDir:]
+	:ivar extraObjsTemp: Extra objects to pass to the linker
+
 	:ivar excludeDirsTemp: Directories excluded from source file discovery
 	:type excludeDirsTemp: list[:_utils.PathWorkingDir:]
 
@@ -568,6 +577,9 @@ class projectSettings( object ):
 		self.precompileTemp = []
 		self.precompileAsCTemp = []
 		self.precompileExcludeFilesTemp = []
+		self.extraFilesTemp = []
+		self.extraDirsTemp = []
+		self.extraObjsTemp = []
 		self.excludeDirsTemp = []
 		self.excludeFilesTemp = []
 		self.frameworkDirsTemp = []
@@ -664,15 +676,15 @@ class projectSettings( object ):
 		# Save the current working directory because we're going to be changing it when fixing up paths.
 		oldWorkingDir = os.getcwd()
 
-		os.chdir( self.outputDir.workingDir )
-		self.outputDir = os.path.abspath( _utils.ResolveProjectMacros( self.outputDir, self ) )
+		os.chdir( self.outputDirTemp.workingPath )
+		self.outputDir = os.path.abspath( _utils.ResolveProjectMacros( self.outputDirTemp.path, self ) )
 
 		# Create the executable/library output directory if it doesn't exist.
 		if not os.access(self.outputDir, os.F_OK):
 			os.makedirs(self.outputDir)
 
 		alteredLibraryDirs = []
-		for directory in self.libraryDirs:
+		for directory in self.libraryDirsTemp:
 			os.chdir( directory.workingDir )
 			directory = os.path.abspath( _utils.ResolveProjectMacros( directory.path, self ) )
 			if not os.access(directory, os.F_OK):
@@ -686,13 +698,13 @@ class projectSettings( object ):
 			if proj.type == csbuild.ProjectType.StaticLibrary and self.linkMode == csbuild.StaticLinkMode.LinkIntermediateObjects:
 				continue
 			self.libraries.add(proj.outputName.split(".")[0])
-			if isinstance( proj.outputDir, str ):
+			if proj.outputDir:
 				# This project has already been prepared, use its output directory as is.
 				depOutDir = proj.outputDir
 			else:
 				# This project has not been prepared yet, so we need to construct its output directory manually.
-				os.chdir( proj.outputDir.workingDir )
-				depOutDir = os.path.abspath( _utils.ResolveProjectMacros( proj.outputDir.path, proj ) )
+				os.chdir( proj.outputDirTemp.workingDir )
+				depOutDir = os.path.abspath( _utils.ResolveProjectMacros( proj.outputDirTemp.path, proj ) )
 			if depOutDir not in self.libraryDirs:
 				self.libraryDirs.append(depOutDir)
 
@@ -701,7 +713,7 @@ class projectSettings( object ):
 		self.csbuildDir = os.path.join( self.objDir, ".csbuild" )
 
 		alteredIncludeDirs = []
-		for directory in self.includeDirs:
+		for directory in self.includeDirsTemp:
 			os.chdir( directory.workingDir )
 			directory = os.path.abspath( _utils.ResolveProjectMacros( directory.path, self ) )
 			if not os.access(directory, os.F_OK):
@@ -717,15 +729,15 @@ class projectSettings( object ):
 				alteredList.append(s)
 			return alteredList
 
-		self.excludeDirs = apply_macro(self.excludeDirs)
+		self.excludeDirs = apply_macro( self.excludeDirs )
 
-		self.extraFiles = apply_macro(self.extraFiles)
-		self.extraDirs = apply_macro(self.extraDirs)
-		self.extraObjs = set(apply_macro(list(self.extraObjs)))
-		self.excludeFiles = apply_macro(self.excludeFiles)
-		self.precompile = apply_macro(self.precompile)
-		self.precompileAsC = apply_macro(self.precompileAsC)
-		self.precompileExcludeFiles = apply_macro(self.precompileExcludeFiles)
+		self.extraFiles = apply_macro( self.extraFilesTemp )
+		self.extraDirs = apply_macro( self.extraDirsTemp )
+		self.extraObjs = set( apply_macro( list( self.extraObjsTemp ) ) )
+		self.excludeFiles = apply_macro(self.excludeFilesTemp )
+		self.precompile = apply_macro( self.precompileTemp )
+		self.precompileAsC = apply_macro( self.precompileAsCTemp )
+		self.precompileExcludeFiles = apply_macro( self.precompileExcludeFilesTemp )
 
 		self.headerInstallSubdir = os.path.abspath( _utils.ResolveProjectMacros( self.headerInstallSubdir, self ) )
 
@@ -1222,6 +1234,9 @@ class projectSettings( object ):
 			"precompileTemp" : self.precompileTemp,
 			"precompileAsCTemp" : self.precompileAsCTemp,
 			"precompileExcludeFilesTemp" : self.precompileExcludeFilesTemp,
+			"extraFilesTemp" : self.extraFilesTemp,
+			"extraDirsTemp" : self.extraDirsTemp,
+			"extraObjsTemp" : self.extraObjsTemp,
 			"excludeDirsTemp" : self.excludeDirsTemp,
 			"excludeFilesTemp" : self.excludeFilesTemp,
 			"frameworkDirsTemp" : self.frameworkDirsTemp,

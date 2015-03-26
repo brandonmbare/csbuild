@@ -163,6 +163,8 @@ def SetHeaderInstallSubdirectory( s ):
 	:param s: The desired subdirectory; i.e., if you specify this as "myLib", the headers will be
 	installed under *{prefix*}/include/myLib.
 	"""
+	s = _utils.FixupRelativePath( s )
+	s = _utils.PathWorkingDirPair( s )
 	projectSettings.currentProject.SetValue("headerInstallSubdir", s)
 
 
@@ -343,6 +345,11 @@ def ClearSharedibraries( ):
 	projectSettings.currentProject.SetValue("sharedLibraries", set())
 
 
+def ClearFrameworks():
+	"""Clears the list of frameworks."""
+	projectSettings.currentProject.SetValue( "frameworks", set() )
+
+
 def ClearIncludeDirectories( ):
 	"""Clears the include directories"""
 	projectSettings.currentProject.SetValue("includeDirsTemp", [])
@@ -351,6 +358,11 @@ def ClearIncludeDirectories( ):
 def ClearLibraryDirectories( ):
 	"""Clears the library directories"""
 	projectSettings.currentProject.SetValue("libraryDirsTemp", [])
+
+
+def ClearFrameworkDirectories():
+	"""Clears the framework directories."""
+	projectSettings.currentProject.SetValue( "frameworkDirsTemp", [] )
 
 
 def ClearAppleStoryboardFiles():
@@ -881,7 +893,7 @@ def AddExtraObjects( *args ):
 		for file in glob.glob( arg ):
 			file = _utils.FixupRelativePath( file )
 			file = _utils.PathWorkingDirPair( file )
-			projectSettings.currentProject.AddToSet("extraObjs", file )
+			projectSettings.currentProject.AddToSet("extraObjsTemp", file )
 
 
 def ClearExtraObjects():

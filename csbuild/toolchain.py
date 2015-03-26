@@ -894,12 +894,14 @@ class SettingsOverrider( object ):
 		:param args: A list of objects to add.
 		"""
 		# Make sure the set exists before adding anything to it.
-		if not "extraObjs" in self._settingsOverrides:
-			self._settingsOverrides["extraObjs"] = set()
+		if not "extraObjsTemp" in self._settingsOverrides:
+			self._settingsOverrides["extraObjsTemp"] = set()
 
 		for arg in list( args ):
 			for file in glob.glob( arg ):
-				self._settingsOverrides["extraObjs"].add( os.path.abspath( file ) )
+				file = _utils.FixupRelativePath( file )
+				file = _utils.PathWorkingDirPair( file )
+				self._settingsOverrides["extraObjsTemp"].add( file )
 
 
 	def ClearExtraObjects( self ):
