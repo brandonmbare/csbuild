@@ -897,28 +897,28 @@ class SettingsOverrider( object ):
 		"""
 		# Make sure the set exists before adding anything to it.
 		if not "extraObjsTemp" in self._settingsOverrides:
-			self._settingsOverrides["extraObjsTemp"] = set()
+			self._settingsOverrides["extraObjsTemp"] = []
 
 		for arg in list( args ):
 			for file in glob.glob( arg ):
 				file = _utils.FixupRelativePath( file )
 				file = _utils.PathWorkingDirPair( file )
-				self._settingsOverrides["extraObjsTemp"].add( file )
+				self._settingsOverrides["extraObjsTemp"].append( file )
 
 
 	def ClearExtraObjects( self ):
 		"""
 		Clear the list of external objects to link.
 		"""
-		if "extraObjs" in self._settingsOverrides:
-			self._settingsOverrides["extraObjs"] = set()
+		if "extraObjsTemp" in self._settingsOverrides:
+			self._settingsOverrides["extraObjsTemp"] = []
 
 
 	def ClearExtraDirectories(self):
 		"""
 		Clear the list of external directories to search.
 		"""
-		self._settingsOverrides["extraDirs"] = []
+		self._settingsOverrides["extraDirsTemp"] = []
 
 	def EnableWarningsAsErrors( self ):
 		"""

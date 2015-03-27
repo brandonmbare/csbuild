@@ -735,7 +735,7 @@ class projectSettings( object ):
 		os.chdir( wd )
 
 
-	def _resolveFilesAndDirectories( self ):
+	def ResolveFilesAndDirectories( self ):
 		# Save the current working directory because we're going to be changing it when fixing up paths.
 		oldWorkingDir = os.getcwd()
 
@@ -826,7 +826,7 @@ class projectSettings( object ):
 		Force a re-run of the file discovery process. Useful if a postPrepareBuild step adds additional files to the project.
 		This will have no effect when called from any place other than a postPrepareBuild step.
 		"""
-		self._resolveFilesAndDirectories()
+		self.ResolveFilesAndDirectories()
 
 		#Have to chdir in case this gets called from a build step.
 		#We'll chdir back when we're done.

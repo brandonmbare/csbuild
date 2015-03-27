@@ -893,14 +893,14 @@ def AddExtraObjects( *args ):
 		for file in glob.glob( arg ):
 			file = _utils.FixupRelativePath( file )
 			file = _utils.PathWorkingDirPair( file )
-			projectSettings.currentProject.AddToSet("extraObjsTemp", file )
+			projectSettings.currentProject.AppendList( "extraObjsTemp", file )
 
 
 def ClearExtraObjects():
 	"""
 	Clear the list of external objects to link.
 	"""
-	projectSettings.currentProject.SetValue("extraObjs", set())
+	projectSettings.currentProject.SetValue( "extraObjs", [] )
 
 
 def EnableWarningsAsErrors( ):
