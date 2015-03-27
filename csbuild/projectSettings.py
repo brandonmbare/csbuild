@@ -676,7 +676,7 @@ class projectSettings( object ):
 		for buildStep in self.prePrepareBuildSteps:
 			_utils.CheckRunBuildStep(self, buildStep, "project pre-PrepareBuild")
 
-		self.RediscoverFiles()
+		self.ResolveFilesAndDirectories()
 
 		self.activeToolchain.SetActiveTool("linker")
 		if self.ext is None:
@@ -718,6 +718,8 @@ class projectSettings( object ):
 			self.parentGroup.projects[self.name][self.activeToolchainName][self.targetName] = {}
 
 		self.parentGroup.projects[self.name][self.activeToolchainName][self.targetName][self.outputArchitecture] = self
+
+		self.RediscoverFiles()
 
 		for plugin in self.plugins:
 			_utils.CheckRunBuildStep(self, plugin.postPrepareBuildStep, "plugin post-PrepareBuild")

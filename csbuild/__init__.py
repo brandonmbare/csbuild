@@ -1643,6 +1643,8 @@ def _build( ):
 			for buildStep in project.preBuildSteps:
 				_utils.CheckRunBuildStep(project, buildStep, "project pre-build")
 
+			project.RediscoverFiles()
+
 			log.LOG_BUILD( "Building {} ({} {}/{})".format( project.outputName, project.targetName, project.outputArchitecture, project.activeToolchainName ) )
 			project.state = _shared_globals.ProjectState.BUILDING
 			project.startTime = time.time()
@@ -1857,6 +1859,8 @@ def _performLink(project, objs):
 	_utils.CheckRunBuildStep(project, project.activeToolchain.preLinkStep, "toolchain pre-link")
 	for buildStep in project.preLinkSteps:
 		_utils.CheckRunBuildStep(project, buildStep, "project pre-link")
+
+	project.ResolveFilesAndDirectories()
 
 	project.activeToolchain.SetActiveTool("linker")
 
