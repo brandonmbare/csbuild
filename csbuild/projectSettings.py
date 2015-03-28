@@ -818,6 +818,7 @@ class projectSettings( object ):
 		self.precompile = apply_macro( self.precompileTemp )
 		self.precompileAsC = apply_macro( self.precompileAsCTemp )
 		self.precompileExcludeFiles = apply_macro( self.precompileExcludeFilesTemp )
+		self.frameworkDirs = apply_macro( self.frameworkDirsTemp )
 
 		if self.headerInstallSubdirTemp:
 			self.headerInstallSubdir = resolvePath( self.headerInstallSubdirTemp, self )
