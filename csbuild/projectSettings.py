@@ -572,6 +572,7 @@ class projectSettings( object ):
 		self.extraDirs = []
 		self.extraObjs = set()
 
+		self.tempsDirty = True # Default to true so the first call to resolve paths is forced to run.
 		self.objDirTemp = None
 		self.outputDirTemp = None
 		self.headerInstallSubdirTemp = None
@@ -719,13 +720,15 @@ class projectSettings( object ):
 
 		self.parentGroup.projects[self.name][self.activeToolchainName][self.targetName][self.outputArchitecture] = self
 
-		self.RediscoverFiles()
+		self.RunFileDiscovery()
 
 		for plugin in self.plugins:
 			_utils.CheckRunBuildStep(self, plugin.postPrepareBuildStep, "plugin post-PrepareBuild")
 		_utils.CheckRunBuildStep(self, self.activeToolchain.postPrepareBuildStep, "toolchain post-PrepareBuild")
 		for buildStep in self.postPrepareBuildSteps:
 			_utils.CheckRunBuildStep(self, buildStep, "project post-PrepareBuild")
+
+		self.ResolveFilesAndDirectories()
 
 		# Make output directories for all of the source files
 		for source in self.allsources:
@@ -738,6 +741,10 @@ class projectSettings( object ):
 
 
 	def ResolveFilesAndDirectories( self ):
+		# Nothing to resolve if no files or directories have been added since the last resolve.
+		if not self.tempsDirty:
+			return
+
 		# Save the current working directory because we're going to be changing it when fixing up paths.
 		oldWorkingDir = os.getcwd()
 
@@ -823,13 +830,7 @@ class projectSettings( object ):
 		os.chdir( oldWorkingDir )
 
 
-	def RediscoverFiles(self):
-		"""
-		Force a re-run of the file discovery process. Useful if a postPrepareBuild step adds additional files to the project.
-		This will have no effect when called from any place other than a postPrepareBuild step.
-		"""
-		self.ResolveFilesAndDirectories()
-
+	def RunFileDiscovery( self ):
 		#Have to chdir in case this gets called from a build step.
 		#We'll chdir back when we're done.
 		wd = os.getcwd()
@@ -867,6 +868,16 @@ class projectSettings( object ):
 
 		_shared_globals.allfiles |= set(self.sources)
 		os.chdir(wd)
+
+
+	def RediscoverFiles(self):
+		"""
+		Force a re-run of the file discovery process. Useful if a postPrepareBuild step adds additional files to the project.
+		This will have no effect when called from any place other than a postPrepareBuild step.
+		"""
+		self.ResolveFilesAndDirectories()
+		self.RunFileDiscovery()
+
 
 	def SetValue(self, key, value):
 		scope = self._currentScope
@@ -1246,6 +1257,7 @@ class projectSettings( object ):
 			"linkOutput" : self.linkOutput,
 			"linkErrors" : self.linkErrors,
 			"parsedLinkErrors" : self.parsedLinkErrors,
+		    "tempsDirty" : self.tempsDirty,
 			"objDirTemp" : self.objDirTemp,
 			"outputDirTemp" : self.outputDirTemp,
 			"headerInstallSubdirTemp" : self.headerInstallSubdirTemp,

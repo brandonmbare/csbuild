@@ -165,7 +165,8 @@ def SetHeaderInstallSubdirectory( s ):
 	"""
 	s = _utils.FixupRelativePath( s )
 	s = _utils.PathWorkingDirPair( s )
-	projectSettings.currentProject.SetValue("headerInstallSubdirTemp", s)
+	projectSettings.currentProject.SetValue( "headerInstallSubdirTemp", s)
+	projectSettings.currentProject.SetValue( "tempsDirty", True )
 
 
 def AddExcludeDirectories( *args ):
@@ -182,7 +183,8 @@ def AddExcludeDirectories( *args ):
 		arg = _utils.FixupRelativePath( arg )
 		arg = _utils.PathWorkingDirPair( arg )
 		newargs.append( arg )
-	projectSettings.currentProject.ExtendList("excludeDirsTemp", newargs)
+	projectSettings.currentProject.ExtendList( "excludeDirsTemp", newargs )
+	projectSettings.currentProject.SetValue( "tempsDirty", True )
 
 
 def AddExcludeFiles( *args ):
@@ -199,7 +201,8 @@ def AddExcludeFiles( *args ):
 		arg = _utils.FixupRelativePath( arg )
 		arg = _utils.PathWorkingDirPair( arg )
 		newargs.append( arg )
-	projectSettings.currentProject.ExtendList("excludeFilesTemp", newargs)
+	projectSettings.currentProject.ExtendList( "excludeFilesTemp", newargs )
+	projectSettings.currentProject.SetValue( "tempsDirty", True )
 
 
 def AddLibraries( *args ):
@@ -260,10 +263,13 @@ def AddIncludeDirectories( *args ):
 	:type args: an arbitrary number of strings
 	:param args: The list of directories to be searched.
 	"""
+	newArgs = []
 	for arg in args:
 		arg = _utils.FixupRelativePath( arg )
 		arg = _utils.PathWorkingDirPair( arg )
-		projectSettings.currentProject.AppendList("includeDirsTemp", arg )
+		newArgs.append( arg )
+	projectSettings.currentProject.ExtendList( "includeDirsTemp", newArgs )
+	projectSettings.currentProject.SetValue( "tempsDirty", True )
 
 
 def AddLibraryDirectories( *args ):
@@ -277,10 +283,13 @@ def AddLibraryDirectories( *args ):
 	:type args: an arbitrary number of strings
 	:param args: The list of directories to be searched.
 	"""
+	newArgs = []
 	for arg in args:
 		arg = _utils.FixupRelativePath( arg )
 		arg = _utils.PathWorkingDirPair( arg )
-		projectSettings.currentProject.AppendList("libraryDirsTemp",  arg )
+		newArgs.append( arg )
+	projectSettings.currentProject.ExtendList( "libraryDirsTemp",  newArgs )
+	projectSettings.currentProject.SetValue( "tempsDirty", True )
 
 
 def AddFrameworkDirectories( *args ):
@@ -291,10 +300,13 @@ def AddFrameworkDirectories( *args ):
 	:type args: an arbitrary number of strings
 	:param args: The list of directories to be searched.
 	"""
+	newArgs = []
 	for arg in args:
 		arg = _utils.FixupRelativePath( arg )
 		arg = _utils.PathWorkingDirPair( arg )
-		projectSettings.currentProject.AddToSet("frameworkDirsTemp",  arg )
+		newArgs.append( arg )
+	projectSettings.currentProject.ExtendList( "frameworkDirsTemp",  newArgs )
+	projectSettings.currentProject.SetValue( "tempsDirty", True )
 
 
 def AddAppleStoryboardFiles( *args ):
@@ -352,17 +364,20 @@ def ClearFrameworks():
 
 def ClearIncludeDirectories( ):
 	"""Clears the include directories"""
-	projectSettings.currentProject.SetValue("includeDirsTemp", [])
+	projectSettings.currentProject.SetValue( "includeDirsTemp", [] )
+	projectSettings.currentProject.SetValue( "tempsDirty", True )
 
 
 def ClearLibraryDirectories( ):
 	"""Clears the library directories"""
-	projectSettings.currentProject.SetValue("libraryDirsTemp", [])
+	projectSettings.currentProject.SetValue( "libraryDirsTemp", [] )
+	projectSettings.currentProject.SetValue( "tempsDirty", True )
 
 
 def ClearFrameworkDirectories():
 	"""Clears the framework directories."""
 	projectSettings.currentProject.SetValue( "frameworkDirsTemp", [] )
+	projectSettings.currentProject.SetValue( "tempsDirty", True )
 
 
 def ClearAppleStoryboardFiles():
@@ -505,8 +520,9 @@ def SetOutputDirectory( s ):
 	"""
 	s = _utils.FixupRelativePath( s )
 	s = _utils.PathWorkingDirPair( s )
-	projectSettings.currentProject.SetValue("outputDirTemp", s )
-	projectSettings.currentProject.SetValue("_outputDir_set", True)
+	projectSettings.currentProject.SetValue( "outputDirTemp", s )
+	projectSettings.currentProject.SetValue( "_outputDir_set", True )
+	projectSettings.currentProject.SetValue( "tempsDirty", True )
 
 
 def SetIntermediateDirectory( s ):
@@ -518,8 +534,9 @@ def SetIntermediateDirectory( s ):
 	"""
 	s = _utils.FixupRelativePath( s )
 	s = _utils.PathWorkingDirPair( s )
-	projectSettings.currentProject.SetValue("objDirTemp", s )
-	projectSettings.currentProject.SetValue("_objDir_set", True)
+	projectSettings.currentProject.SetValue( "objDirTemp", s )
+	projectSettings.currentProject.SetValue( "_objDir_set", True )
+	projectSettings.currentProject.SetValue( "tempsDirty", True )
 
 
 def EnableProfiling( ):
@@ -760,11 +777,14 @@ def Precompile( *args ):
 	:param args: The files to precompile.
 	"""
 	projectSettings.currentProject.SetValue( "precompileTemp", [] )
+	newArgs = []
 	for arg in list( args ):
 		arg = _utils.FixupRelativePath( arg )
 		arg = _utils.PathWorkingDirPair( arg )
-		projectSettings.currentProject.AppendList( "precompileTemp",  arg )
+		newArgs.append( arg )
+	projectSettings.currentProject.ExtendList( "precompileTemp",  newArgs )
 	projectSettings.currentProject.SetValue( "chunkedPrecompile", False )
+	projectSettings.currentProject.SetValue( "tempsDirty", True )
 
 
 def PrecompileAsC( *args ):
@@ -775,10 +795,13 @@ def PrecompileAsC( *args ):
 	:param args: The files to specify as C files.
 	"""
 	projectSettings.currentProject.SetValue( "precompileAsCTemp", [] )
+	newArgs = []
 	for arg in list( args ):
 		arg = _utils.FixupRelativePath( arg )
 		arg = _utils.PathWorkingDirPair( arg )
-		projectSettings.currentProject.AppendList( "precompileAsCTemp", arg )
+		newArgs.append( arg )
+	projectSettings.currentProject.AppendList( "precompileAsCTemp", newArgs )
+	projectSettings.currentProject.SetValue( "tempsDirty", True )
 
 
 def EnableChunkedPrecompile():
@@ -798,16 +821,18 @@ def DisablePrecompile( *args ):
 	"""
 	args = list( args )
 	if args:
-		newargs = []
+		newArgs = []
 		for arg in args:
 			arg = _utils.FixupRelativePath( arg )
 			arg = _utils.PathWorkingDirPair( arg )
-			newargs.append( arg )
-		projectSettings.currentProject.ExtendList( "precompileExcludeFilesTemp", newargs )
+			newArgs.append( arg )
+		projectSettings.currentProject.ExtendList( "precompileExcludeFilesTemp", newArgs )
 	else:
 		projectSettings.currentProject.SetValue( "chunkedPrecompile", False )
 		projectSettings.currentProject.SetValue( "precompileTemp", [] )
 		projectSettings.currentProject.SetValue( "precompileAsCTemp", [] )
+
+	projectSettings.currentProject.SetValue( "tempsDirty", True )
 
 
 def EnableUnityBuild( ):
@@ -848,18 +873,22 @@ def AddExtraFiles( *args ):
 	:type args: an arbitrary number of strings
 	:param args: A list of files to add.
 	"""
+	newArgs = []
 	for arg in list( args ):
 		for file in glob.glob( arg ):
 			file = _utils.FixupRelativePath( file )
 			file = _utils.PathWorkingDirPair( file )
-			projectSettings.currentProject.AppendList("extraFilesTemp",  file )
+			newArgs.append( file )
+	projectSettings.currentProject.ExtendList( "extraFilesTemp", newArgs )
+	projectSettings.currentProject.SetValue( "tempsDirty", True )
 
 
 def ClearExtraFiles():
 	"""
 	Clear the list of external files to compile.
 	"""
-	projectSettings.currentProject.SetValue("extraFilesTemp", [])
+	projectSettings.currentProject.SetValue( "extraFilesTemp", [] )
+	projectSettings.currentProject.SetValue( "tempsDirty", True )
 
 
 def AddExtraDirectories( *args ):
@@ -869,17 +898,21 @@ def AddExtraDirectories( *args ):
 	:type args: an arbitrary number of strings
 	:param args: A list of directories to search.
 	"""
+	newArgs = []
 	for arg in list( args ):
 		arg = _utils.FixupRelativePath( arg )
 		arg = _utils.PathWorkingDirPair( arg )
-		projectSettings.currentProject.AppendList("extraDirsTemp",  arg )
+		newArgs.append( arg )
+	projectSettings.currentProject.ExtendList( "extraDirsTemp", newArgs )
+	projectSettings.currentProject.SetValue( "tempsDirty", True )
 
 
 def ClearExtraDirectories():
 	"""
 	Clear the list of external directories to search.
 	"""
-	projectSettings.currentProject.SetValue("extraDirsTemp", [])
+	projectSettings.currentProject.SetValue( "extraDirsTemp", [] )
+	projectSettings.currentProject.SetValue( "tempsDirty", True )
 
 
 def AddExtraObjects( *args ):
@@ -889,18 +922,22 @@ def AddExtraObjects( *args ):
 	:type args: an arbitrary number of strings
 	:param args: A list of objects to add.
 	"""
+	newArgs = []
 	for arg in list( args ):
 		for file in glob.glob( arg ):
 			file = _utils.FixupRelativePath( file )
 			file = _utils.PathWorkingDirPair( file )
-			projectSettings.currentProject.AppendList( "extraObjsTemp", file )
+			newArgs.append( file )
+	projectSettings.currentProject.ExtendList( "extraObjsTemp", newArgs )
+	projectSettings.currentProject.SetValue( "tempsDirty", True )
 
 
 def ClearExtraObjects():
 	"""
 	Clear the list of external objects to link.
 	"""
-	projectSettings.currentProject.SetValue( "extraObjs", [] )
+	projectSettings.currentProject.SetValue( "extraObjsTemp", [] )
+	projectSettings.currentProject.SetValue( "tempsDirty", True )
 
 
 def EnableWarningsAsErrors( ):
