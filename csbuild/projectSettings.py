@@ -677,6 +677,7 @@ class projectSettings( object ):
 		for buildStep in self.prePrepareBuildSteps:
 			_utils.CheckRunBuildStep(self, buildStep, "project pre-PrepareBuild")
 
+		# Run the initial pass to resolve file and directory paths.
 		self.ResolveFilesAndDirectories()
 
 		self.activeToolchain.SetActiveTool("linker")
@@ -720,6 +721,7 @@ class projectSettings( object ):
 
 		self.parentGroup.projects[self.name][self.activeToolchainName][self.targetName][self.outputArchitecture] = self
 
+		# Run the stand-alone file discovery.
 		self.RunFileDiscovery()
 
 		for plugin in self.plugins:
@@ -728,6 +730,7 @@ class projectSettings( object ):
 		for buildStep in self.postPrepareBuildSteps:
 			_utils.CheckRunBuildStep(self, buildStep, "project post-PrepareBuild")
 
+		# Make sure the paths are up-to-date in case the previous build step added/changed any of them.
 		self.ResolveFilesAndDirectories()
 
 		# Make output directories for all of the source files

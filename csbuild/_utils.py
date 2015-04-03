@@ -916,6 +916,9 @@ def ResolveProjectMacros(_path, _project):
 
 
 def FixupRelativePath( arg ):
+	"""
+	Convert a non-absolute path to a posix relative path.
+	"""
 	isWindowsAbsPath = False
 	if platform.system() == "Windows":
 		splitPath = os.path.splitdrive( arg )
@@ -926,6 +929,10 @@ def FixupRelativePath( arg ):
 
 
 class PathWorkingDirPair( object ):
+	"""
+	Keep track of a path set from a makefile along with the working directory at the time that path was set.
+	This will allow us to resolve paths from the context of where they were originally set.
+	"""
 	def __init__( self, _path ):
 		self.path = _path
 		self.workingDir = os.getcwd()
