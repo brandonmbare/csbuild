@@ -51,8 +51,6 @@ class GccDarwinBase( object ):
 			global DEFAULT_OSX_SDK_DIR
 			global DEFAULT_OSX_SDK_VERSION
 
-			xcrunFailure = False
-
 			# Default the target SDK version to the version of OSX we're currently running on.
 			try:
 				DEFAULT_OSX_SDK_DIR = subprocess.check_output( ["xcrun", "--sdk", "macosx", "--show-sdk-path"] )
@@ -65,9 +63,6 @@ class GccDarwinBase( object ):
 				DEFAULT_OSX_SDK_DIR = DEFAULT_OSX_SDK_DIR.strip("\n")
 				DEFAULT_OSX_SDK_VERSION = DEFAULT_OSX_SDK_VERSION.strip("\n")
 			except:
-				xcrunFailure = True
-
-			if xcrunFailure:
 				# Otherwise, fallback to a best guess.
 				macVersion = platform.mac_ver()[0]
 				DEFAULT_OSX_SDK_VERSION = ".".join( macVersion.split( "." )[:2] )
