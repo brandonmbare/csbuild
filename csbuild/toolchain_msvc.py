@@ -72,7 +72,6 @@ class VisualStudioPackage( object ):
 
 
 class MsvcBase( object ):
-
 	def __init__(self):
 		self.shared._project_settings = None
 		self.shared.debug_runtime = False
@@ -86,6 +85,7 @@ class MsvcBase( object ):
 		self.shared._lib_path = []
 		self.shared._platform_arch = ""
 		self.shared._build_64_bit = False
+
 
 	def _copyTo(self, other):
 		other.shared._project_settings = self.shared._project_settings
@@ -101,6 +101,7 @@ class MsvcBase( object ):
 		other.shared._platform_arch = self.shared._platform_arch
 		other.shared._build_64_bit = self.shared._build_64_bit
 
+
 	def SetMsvcVersion( self, msvc_version ):
 		"""
 		Set the MSVC version
@@ -109,6 +110,7 @@ class MsvcBase( object ):
 		:type msvc_version: int
 		"""
 		self.shared.msvc_version = msvc_version
+
 
 	def GetMsvcVersion( self ):
 		"""
@@ -122,8 +124,14 @@ class MsvcBase( object ):
 	def GetValidArchitectures(self):
 		return ['x86', 'x64']
 
+
 	def GetMsvcBinPath(self):
 		return self.shared._bin_path
+
+
+	def GetWinSdkPath(self):
+		return self.shared.winSdkPath
+
 
 	def _setupForProject( self, project ):
 		platform_architectures = {
@@ -188,7 +196,8 @@ class MsvcBase( object ):
 
 			HAS_SET_VC_VARS = True
 
-		sdkInclude = os.path.join( WINDOWS_SDK_DIR, "include" )
+		self.shared.winSdkPath = WINDOWS_SDK_DIR
+		sdkInclude = os.path.join( self.shared.winSdkPath, "include" )
 		self.shared._include_path.append( sdkInclude )
 		includeShared = os.path.join( sdkInclude, "Shared" )
 		includeUm = os.path.join( sdkInclude, "um" )
@@ -201,9 +210,9 @@ class MsvcBase( object ):
 		if os.access(includeWinRT, os.F_OK):
 			self.shared._include_path.append(includeWinRT)
 
-		libPath = os.path.join( WINDOWS_SDK_DIR, "lib", "x64" if self.shared._build_64_bit else "" )
-		#sdk8path = os.path.join( WINDOWS_SDK_DIR, "lib", "win8", "um", "x64" if self.shared._build_64_bit else "x86" )
-		sdkLibPath = os.path.join( WINDOWS_SDK_DIR, "lib", "win*" )
+		libPath = os.path.join( self.shared.winSdkPath, "lib", "x64" if self.shared._build_64_bit else "" )
+		#sdk8path = os.path.join( self.shared.winSdkPath, "lib", "win8", "um", "x64" if self.shared._build_64_bit else "x86" )
+		sdkLibPath = os.path.join( self.shared.winSdkPath, "lib", "win*" )
 		sdkLibPathList = glob.glob( sdkLibPath )
 
 		# Use the first globbed path and use that to construct the rest of the path.

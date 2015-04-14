@@ -100,10 +100,6 @@ class SettingsOverrider( object ):
 		Enables installation of the compiled output file.
 		Default target is /usr/local/lib, unless the --prefix option is specified.
 		If --prefix is specified, the target will be *{prefix*}/lib
-
-		:type s: str
-		:param s: Override directory - i.e., if you specify this as "libraries", the libraries will be installed
-		to *{prefix*}/libraries.
 		"""
 		self._settingsOverrides["installOutput"] = True
 
@@ -113,10 +109,6 @@ class SettingsOverrider( object ):
 		Enables installation of the project's headers
 		Default target is /usr/local/include, unless the --prefix option is specified.
 		If --prefix is specified, the target will be *{prefix*}/include
-
-		:type s: str
-		:param s: Override directory - i.e., if you specify this as "headers", the headers will be installed
-		to *{prefix*}/headers.
 		"""
 		self._settingsOverrides["installHeaders"] = True
 
@@ -129,7 +121,10 @@ class SettingsOverrider( object ):
 		:param s: The desired subdirectory; i.e., if you specify this as "myLib", the headers will be
 		installed under *{prefix*}/include/myLib.
 		"""
-		self._settingsOverrides["headerInstallSubdir"] = s
+		s = _utils.FixupRelativePath( s )
+		s = _utils.PathWorkingDirPair( s )
+		self._settingsOverrides["headerInstallSubdirTemp"] = s
+		self._settingsOverrides["tempsDirty"] = True
 
 
 	def AddExcludeDirectories( self, *args ):
@@ -140,19 +135,17 @@ class SettingsOverrider( object ):
 		:type args: an arbitrary number of strings
 		:param args: The list of directories to be excluded.
 		"""
-		if "excludeDirs" not in self._settingsOverrides:
-			self._settingsOverrides["excludeDirs"] = []
+		if "excludeDirsTemp" not in self._settingsOverrides:
+			self._settingsOverrides["excludeDirsTemp"] = []
+
 		args = list( args )
 		newargs = []
 		for arg in args:
-			isWindowsAbsPath = False
-			if platform.system() == "Windows":
-				splitPath = os.path.splitdrive(arg)
-				isWindowsAbsPath = (splitPath[0] != '')
-			if not isWindowsAbsPath and arg[0] != '/' and not arg.startswith( "./" ):
-				arg = "./" + arg
-			newargs.append( os.path.abspath( arg ) )
-		self._settingsOverrides["excludeDirs"] += newargs
+			arg = _utils.FixupRelativePath( arg )
+			arg = _utils.PathWorkingDirPair( arg )
+			newargs.append( arg )
+		self._settingsOverrides["excludeDirsTemp"] += newargs
+		self._settingsOverrides["tempsDirty"] = True
 
 
 	def AddExcludeFiles( self, *args ):
@@ -163,20 +156,17 @@ class SettingsOverrider( object ):
 		:type args: an arbitrary number of strings
 		:param args: The list of files to be excluded.
 		"""
-		if "excludeFiles" not in self._settingsOverrides:
-			self._settingsOverrides["excludeFiles"] = []
+		if "excludeFilesTempTemp" not in self._settingsOverrides:
+			self._settingsOverrides["excludeFilesTempTemp"] = []
 
 		args = list( args )
 		newargs = []
 		for arg in args:
-			isWindowsAbsPath = False
-			if platform.system() == "Windows":
-				splitPath = os.path.splitdrive(arg)
-				isWindowsAbsPath = (splitPath[0] != '')
-			if not isWindowsAbsPath and arg[0] != '/' and not arg.startswith( "./" ):
-				arg = "./" + arg
-			newargs.append( os.path.abspath( arg ) )
-		self._settingsOverrides["excludeFiles"] += newargs
+			arg = _utils.FixupRelativePath( arg )
+			arg = _utils.PathWorkingDirPair( arg )
+			newargs.append( arg )
+		self._settingsOverrides["excludeFilesTempTemp"] += newargs
+		self._settingsOverrides["tempsDirty"] = True
 
 
 	def AddLibraries( self, *args ):
@@ -251,12 +241,16 @@ class SettingsOverrider( object ):
 		:type args: an arbitrary number of strings
 		:param args: The list of directories to be searched.
 		"""
-		if "includeDirs" not in self._settingsOverrides:
-			self._settingsOverrides["includeDirs"] = []
+		if "includeDirsTemp" not in self._settingsOverrides:
+			self._settingsOverrides["includeDirsTemp"] = []
 
+		newArgs = []
 		for arg in args:
-			arg = os.path.abspath( arg )
-			self._settingsOverrides["includeDirs"].append( arg )
+			arg = _utils.FixupRelativePath( arg )
+			arg = _utils.PathWorkingDirPair( arg )
+			newArgs.append( arg )
+		self._settingsOverrides["includeDirsTemp"] += newArgs
+		self._settingsOverrides["tempsDirty"] = True
 
 
 	def AddLibraryDirectories( self, *args ):
@@ -270,12 +264,16 @@ class SettingsOverrider( object ):
 		:type args: an arbitrary number of strings
 		:param args: The list of directories to be searched.
 		"""
-		if "libraryDirs" not in self._settingsOverrides:
-			self._settingsOverrides["libraryDirs"] = []
+		if "libraryDirsTemp" not in self._settingsOverrides:
+			self._settingsOverrides["libraryDirsTemp"] = []
 
+		newArgs = []
 		for arg in args:
-			arg = os.path.abspath( arg )
-			self._settingsOverrides["libraryDirs"].append( arg )
+			arg = _utils.FixupRelativePath( arg )
+			arg = _utils.PathWorkingDirPair( arg )
+			newArgs.append( arg )
+		self._settingsOverrides["libraryDirsTemp"] += newArgs
+		self._settingsOverrides["tempsDirty"] = True
 
 
 	def AddFrameworkDirectories( self, *args ):
@@ -286,16 +284,21 @@ class SettingsOverrider( object ):
 		:type args: an arbitrary number of strings
 		:param args: The list of directories to be searched.
 		"""
-		if "frameworkDirs" not in self._settingsOverrides:
-			self._settingsOverrides["frameworkDirs"] = set()
+		if "frameworkDirsTemp" not in self._settingsOverrides:
+			self._settingsOverrides["frameworkDirsTemp"] = []
 
+		newArgs = []
 		for arg in args:
-			arg = os.path.abspath( arg )
-			self._settingsOverrides["frameworkDirs"].add( arg )
+			arg = _utils.FixupRelativePath( arg )
+			arg = _utils.PathWorkingDirPair( arg )
+			newArgs.append( arg )
+		self._settingsOverrides["frameworkDirsTemp"] += newArgs
+		self._settingsOverrides["tempsDirty"] = True
 
 
 	def AddAppleStoryboardFiles( self, *args ):
 		"""
+		DEPRECATED - This will be removed when tool plugins are able to register file extensions.
 		Add a list of storyboard files to be compiled. Only applies to builds for Apple platforms.
 
 		:param args: List of storyboard files.
@@ -309,6 +312,7 @@ class SettingsOverrider( object ):
 
 	def AddAppleInterfaceFiles( self, *args ):
 		"""
+		DEPRECATED - This will be removed when tool plugins are able to register file extensions.
 		Add a list of interface files to be compiled. Only applies to builds for Apple platforms.
 
 		:param args: List of interface files.
@@ -322,6 +326,7 @@ class SettingsOverrider( object ):
 
 	def AddAppleAssetCatalogs( self, *args ):
 		"""
+		DEPRECATED - This will be removed when tool plugins are able to register file extensions.
 		Add a list of asset catalogs to be compiled. Only applies to builds for Apple platforms.
 
 		:param args: List of asset catalogs.
@@ -355,17 +360,20 @@ class SettingsOverrider( object ):
 
 	def ClearIncludeDirectories( self ):
 		"""Clears the include directories, including the defaults."""
-		self._settingsOverrides["includeDirs"] = []
+		self._settingsOverrides["includeDirsTemp"] = []
+		self._settingsOverrides["tempsDirty"] = True
 
 
 	def ClearLibDirectories( self ):
 		"""Clears the library directories, including the defaults"""
-		self._settingsOverrides["libraryDirs"] = []
+		self._settingsOverrides["libraryDirsTemp"] = []
+		self._settingsOverrides["tempsDirty"] = True
 
 
 	def ClearFrameworkDirectories( self ):
 		"""Clears the framework directories, including the defaults."""
-		self._settingsOverrides["frameworkDirs"] = set()
+		self._settingsOverrides["frameworkDirsTemp"] = []
+		self._settingsOverrides["tempsDirty"] = True
 
 
 	def ClearAppleStoryboardFiles(self ):
@@ -517,8 +525,11 @@ class SettingsOverrider( object ):
 		:type s: str
 		:param s: The output directory, relative to the current script location, NOT to the project working directory.
 		"""
-		self._settingsOverrides["outputDir"] = os.path.abspath( s )
+		s = _utils.FixupRelativePath( s )
+		s = _utils.PathWorkingDirPair( s )
+		self._settingsOverrides["outputDirTemp"] = s
 		self._settingsOverrides["_outputDir_set"] = True
+		self._settingsOverrides["tempsDirty"] = True
 
 
 	def SetIntermediateDirectory( self, s ):
@@ -528,8 +539,11 @@ class SettingsOverrider( object ):
 		:type s: str
 		:param s: The object directory, relative to the current script location, NOT to the project working directory.
 		"""
-		self._settingsOverrides["objDir"] = os.path.abspath( s )
+		s = _utils.FixupRelativePath( s )
+		s = _utils.PathWorkingDirPair( s )
+		self._settingsOverrides["objDirTemp"] = s
 		self._settingsOverrides["_objDir_set"] = True
+		self._settingsOverrides["tempsDirty"] = True
 
 
 	def EnableProfiling( self ):
@@ -769,10 +783,15 @@ class SettingsOverrider( object ):
 		:type args: an arbitrary number of strings
 		:param args: The files to precompile.
 		"""
-		self._settingsOverrides["precompile"] = []
+		self._settingsOverrides["precompileTemp"] = []
+		newArgs = []
 		for arg in list( args ):
-			self._settingsOverrides["precompile"].append( os.path.abspath( arg ) )
+			arg = _utils.FixupRelativePath( arg )
+			arg = _utils.PathWorkingDirPair( arg )
+			newArgs.append( arg )
+		self._settingsOverrides["precompileTemp"] += newArgs
 		self._settingsOverrides["chunkedPrecompile"] = False
+		self._settingsOverrides["tempsDirty"] = True
 
 
 	def PrecompileAsC( self, *args ):
@@ -782,9 +801,14 @@ class SettingsOverrider( object ):
 		:type args: an arbitrary number of strings
 		:param args: The files to specify as C files.
 		"""
-		self._settingsOverrides["precompileAsC"] = []
+		self._settingsOverrides["precompileAsCTemp"] = []
+		newArgs = []
 		for arg in list( args ):
-			self._settingsOverrides["precompileAsC"].append( os.path.abspath( arg ) )
+			arg = _utils.FixupRelativePath( arg )
+			arg = _utils.PathWorkingDirPair( arg )
+			newArgs.append( arg )
+		self._settingsOverrides["precompileAsCTemp"] += newArgs
+		self._settingsOverrides["tempsDirty"] = True
 
 
 	def EnableChunkedPrecompile( self ):
@@ -802,21 +826,22 @@ class SettingsOverrider( object ):
 		:param args: A list of files to disable precompilation for.
 		If this list is empty, it will disable precompilation entirely.
 		"""
-		if "precompileExcludeFiles" not in self._settingsOverrides:
-			self._settingsOverrides["precompileExcludeFiles"] = []
+		if "precompileExcludeFilesTemp" not in self._settingsOverrides:
+			self._settingsOverrides["precompileExcludeFilesTemp"] = []
 
 		args = list( args )
 		if args:
 			newargs = []
 			for arg in args:
-				if arg[0] != '/' and not arg.startswith( "./" ):
-					arg = "./" + arg
-				newargs.append( os.path.abspath( arg ) )
-				self._settingsOverrides["precompileExcludeFiles"] += newargs
+				arg = _utils.FixupRelativePath( arg )
+				arg = _utils.PathWorkingDirPair( arg )
+				newargs.append( arg )
+			self._settingsOverrides["precompileExcludeFilesTemp"] += newargs
 		else:
 			self._settingsOverrides["chunkedPrecompile"] = False
-			self._settingsOverrides["precompile"] = []
-			self._settingsOverrides["precompileAsC"] = []
+			self._settingsOverrides["precompileTemp"] = []
+			self._settingsOverrides["precompileAsCTemp"] = []
+		self._settingsOverrides["tempsDirty"] = True
 
 
 	def EnableUnityBuild( self ):
@@ -856,18 +881,23 @@ class SettingsOverrider( object ):
 		:type args: an arbitrary number of strings
 		:param args: A list of files to add.
 		"""
-		if "extraFiles" not in self._settingsOverrides:
-			self._settingsOverrides["extraFiles"] = []
+		if "extraFilesTemp" not in self._settingsOverrides:
+			self._settingsOverrides["extraFilesTemp"] = []
+		newArgs = []
 		for arg in list( args ):
 			for file in glob.glob( arg ):
-				self._settingsOverrides["extraFiles"].append( os.path.abspath( file ) )
+				file = _utils.FixupRelativePath( file )
+				file = _utils.PathWorkingDirPair( file )
+				newArgs.append( file )
+		self._settingsOverrides["extraFilesTemp"] += newArgs
+		self._settingsOverrides["tempsDirty"] = True
 
 
 	def ClearExtraFiles(self):
 		"""
 		Clear the list of external files to compile.
 		"""
-		self._settingsOverrides["extraFiles"] = []
+		self._settingsOverrides["extraFilesTemp"] = []
 
 
 	def AddExtraDirectories( self, *args ):
@@ -877,10 +907,15 @@ class SettingsOverrider( object ):
 		:type args: an arbitrary number of strings
 		:param args: A list of directories to search.
 		"""
-		if "extraDirs" not in self._settingsOverrides:
-			self._settingsOverrides["extraDirs"] = []
+		if "extraDirsTemp" not in self._settingsOverrides:
+			self._settingsOverrides["extraDirsTemp"] = []
+		newArgs = []
 		for arg in list( args ):
-			self._settingsOverrides["extraDirs"].append( os.path.abspath( arg ) )
+			arg = _utils.FixupRelativePath( arg )
+			arg = _utils.PathWorkingDirPair( arg )
+			newArgs.append( arg )
+		self._settingsOverrides["extraDirsTemp"] += newArgs
+		self._settingsOverrides["tempsDirty"] = True
 
 
 	def AddExtraObjects( self, *args ):
@@ -891,27 +926,34 @@ class SettingsOverrider( object ):
 		:param args: A list of objects to add.
 		"""
 		# Make sure the set exists before adding anything to it.
-		if not "extraObjs" in self._settingsOverrides:
-			self._settingsOverrides["extraObjs"] = set()
+		if not "extraObjsTemp" in self._settingsOverrides:
+			self._settingsOverrides["extraObjsTemp"] = []
 
+		newArgs = []
 		for arg in list( args ):
 			for file in glob.glob( arg ):
-				self._settingsOverrides["extraObjs"].add( os.path.abspath( file ) )
+				file = _utils.FixupRelativePath( file )
+				file = _utils.PathWorkingDirPair( file )
+				newArgs.append( file )
+		self._settingsOverrides["extraObjsTemp"] += newArgs
+		self._settingsOverrides["tempsDirty"] = True
 
 
 	def ClearExtraObjects( self ):
 		"""
 		Clear the list of external objects to link.
 		"""
-		if "extraObjs" in self._settingsOverrides:
-			self._settingsOverrides["extraObjs"] = set()
+		if "extraObjsTemp" in self._settingsOverrides:
+			self._settingsOverrides["extraObjsTemp"] = []
+			self._settingsOverrides["tempsDirty"] = True
 
 
 	def ClearExtraDirectories(self):
 		"""
 		Clear the list of external directories to search.
 		"""
-		self._settingsOverrides["extraDirs"] = []
+		self._settingsOverrides["extraDirsTemp"] = []
+		self._settingsOverrides["tempsDirty"] = True
 
 	def EnableWarningsAsErrors( self ):
 		"""
