@@ -39,12 +39,44 @@ from . import log
 from .plugin_plist_generator import *
 
 
+HAS_RUN_XCRUN = False
+DEFAULT_OSX_SDK_DIR = None
+DEFAULT_OSX_SDK_VERSION = None
+
+
 class GccDarwinBase( object ):
 	def __init__( self ):
-		# Default the target SDK version to the version of OSX we're currently running on.
-		macVersion = platform.mac_ver()[0]
-		defaultSdkVersion = ".".join( macVersion.split( "." )[:2] )
-		self.SetTargetMacVersion( defaultSdkVersion )
+		global HAS_RUN_XCRUN
+		if not HAS_RUN_XCRUN:
+			global DEFAULT_OSX_SDK_DIR
+			global DEFAULT_OSX_SDK_VERSION
+
+			xcrunFailure = False
+
+			# Default the target SDK version to the version of OSX we're currently running on.
+			try:
+				DEFAULT_OSX_SDK_DIR = subprocess.check_output( ["xcrun", "--sdk", "macosx", "--show-sdk-path"] )
+				DEFAULT_OSX_SDK_VERSION = subprocess.check_output( ["xcrun", "--sdk", "macosx", "--show-sdk-version"] )
+
+				if sys.version_info >= (3, 0):
+					DEFAULT_OSX_SDK_DIR = DEFAULT_OSX_SDK_DIR.decode("utf-8")
+					DEFAULT_OSX_SDK_VERSION = DEFAULT_OSX_SDK_VERSION.decode("utf-8")
+
+				DEFAULT_OSX_SDK_DIR = DEFAULT_OSX_SDK_DIR.strip("\n")
+				DEFAULT_OSX_SDK_VERSION = DEFAULT_OSX_SDK_VERSION.strip("\n")
+			except:
+				xcrunFailure = True
+
+			if xcrunFailure:
+				# Otherwise, fallback to a best guess.
+				macVersion = platform.mac_ver()[0]
+				DEFAULT_OSX_SDK_VERSION = ".".join( macVersion.split( "." )[:2] )
+				DEFAULT_OSX_SDK_DIR = "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX{}.sdk".format( DEFAULT_OSX_SDK_VERSION )
+
+			HAS_RUN_XCRUN = True
+
+		self.shared._targetMacVersion = DEFAULT_OSX_SDK_VERSION
+		self.shared._sysroot = DEFAULT_OSX_SDK_DIR
 
 
 	def _copyTo( self, other ):
@@ -184,7 +216,7 @@ class GccLinkerDarwin( GccDarwinBase, toolchain_gcc.GccLinker ):
 
 
 	def _getLibraryDirs( self, libDirs, forLinker ):
-		"""Libraries are linked with full paths on Mac, so library directories are unnecessary."""
+		# Libraries are linked with full paths on Mac, so library directories are unnecessary.
 		return ""
 
 
@@ -194,11 +226,11 @@ class GccLinkerDarwin( GccDarwinBase, toolchain_gcc.GccLinker ):
 
 
 	def _getEndGroupFlags(self):
-		# OSX doesn't support he start/end group flags.
+		# OSX doesn't support the start/end group flags.
 		return ""
 
 	def _getObjcAbiVersionArg(self):
-		return "-Xlinker -objc_abi_version -Xlinker {} ".format( self._objcAbiVersion )
+		return "-Xlinker -objc_abi_version -Xlinker {} ".format( self.shared._objcAbiVersion )
 
 
 	def GetLinkCommand( self, project, outputFile, objList ):

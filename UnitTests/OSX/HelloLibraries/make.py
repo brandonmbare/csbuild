@@ -1,10 +1,8 @@
 #!/usr/bin/python
 
 import os
-import sys
-sys.path = [os.path.abspath(os.path.join(os.path.dirname(sys.modules['__main__'].__file__), "..", "..", ".."))] + sys.path
-
 import csbuild
+
 from csbuild.toolchain_msvc import VisualStudioPackage
 
 csbuild.Toolchain("gcc", "ios").Compiler().SetCppStandard("c++11")
