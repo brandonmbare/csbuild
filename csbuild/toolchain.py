@@ -156,8 +156,8 @@ class SettingsOverrider( object ):
 		:type args: an arbitrary number of strings
 		:param args: The list of files to be excluded.
 		"""
-		if "excludeFilesTempTemp" not in self._settingsOverrides:
-			self._settingsOverrides["excludeFilesTempTemp"] = []
+		if "excludeFilesTemp" not in self._settingsOverrides:
+			self._settingsOverrides["excludeFilesTemp"] = []
 
 		args = list( args )
 		newargs = []
@@ -165,7 +165,7 @@ class SettingsOverrider( object ):
 			arg = _utils.FixupRelativePath( arg )
 			arg = _utils.PathWorkingDirPair( arg )
 			newargs.append( arg )
-		self._settingsOverrides["excludeFilesTempTemp"] += newargs
+		self._settingsOverrides["excludeFilesTemp"] += newargs
 		self._settingsOverrides["tempsDirty"] = True
 
 
