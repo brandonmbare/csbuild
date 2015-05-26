@@ -163,10 +163,7 @@ def SetHeaderInstallSubdirectory( s ):
 	:param s: The desired subdirectory; i.e., if you specify this as "myLib", the headers will be
 	installed under *{prefix*}/include/myLib.
 	"""
-	s = _utils.FixupRelativePath( s )
-	s = _utils.PathWorkingDirPair( s )
-	projectSettings.currentProject.SetValue( "headerInstallSubdirTemp", s)
-	projectSettings.currentProject.SetValue( "tempsDirty", True )
+	projectSettings.currentProject.SetValue( "headerInstallSubdir", s)
 
 
 def AddExcludeDirectories( *args ):
@@ -1557,6 +1554,16 @@ def _build( ):
 	global _building
 	_building = True
 
+	for project in _shared_globals.sortedProjects:
+		for chunk in project.chunks:
+			if project.activeToolchain.Compiler().SupportsDummyObjects():
+				objs = []
+				for source in chunk:
+					obj = _utils.GetSourceObjPath(project, source)
+					if not os.access(obj, os.F_OK):
+						objs.append(obj)
+				project.activeToolchain.Compiler().MakeDummyObjects(objs)
+
 	linker_threads_blocked = _shared_globals.max_linker_threads - 1
 	for i in range( linker_threads_blocked ):
 		_shared_globals.link_semaphore.acquire(True)
@@ -1907,28 +1914,39 @@ def _performLink(project, objs):
 
 	if not objs:
 		for chunk in project.chunks:
+			hasChunk = False
 			if not project.unity:
-				obj = _utils.GetChunkedObjPath(project, chunk)
+				chunkObj = _utils.GetChunkedObjPath(project, chunk)
 			else:
-				obj = _utils.GetUnityChunkObjPath(project)
-			if project.useChunks and not _shared_globals.disable_chunks and os.access(obj , os.F_OK):
-				objs.append( obj )
-			else:
+				chunkObj = _utils.GetUnityChunkObjPath(project)
+			if project.useChunks and not _shared_globals.disable_chunks and os.access(chunkObj , os.F_OK):
+				objs.append( chunkObj )
+				hasChunk = True
+
+			if not hasChunk or project.activeToolchain.Compiler().SupportsObjectScraping():
+				objsToScrape = []
 				if type( chunk ) == list:
 					for source in chunk:
 						obj = _utils.GetSourceObjPath(project, source)
 						if os.access(obj , os.F_OK):
 							objs.append( obj )
-						else:
+							if source in project._finalChunkSet:
+								objsToScrape.append( obj )
+						elif not hasChunk or project.activeToolchain.Compiler().SupportsDummyObjects():
 							log.LOG_ERROR( "Could not find {} for linking. Something went wrong here.".format(obj) )
 							return _LinkStatus.Fail
 				else:
 					obj = _utils.GetSourceObjPath(project, chunk)
 					if os.access(obj , os.F_OK):
 						objs.append( obj )
-					else:
+						if source in project._finalChunkSet:
+							objsToScrape.append( obj )
+					elif not hasChunk or project.activeToolchain.Compiler().SupportsDummyObjects():
 						log.LOG_ERROR( "Could not find {} for linking. Something went wrong here.".format(obj) )
 						return _LinkStatus.Fail
+
+				if hasChunk and objsToScrape:
+					project.activeToolchain.Compiler().GetObjectScraper().RemoveSharedSymbols(objsToScrape, chunkObj)
 
 	if not objs:
 		return _LinkStatus.UpToDate
@@ -1990,26 +2008,29 @@ def _performLink(project, objs):
 		proj = _shared_globals.projects[dep]
 		if proj.type == ProjectType.StaticLibrary and project.linkMode == StaticLinkMode.LinkIntermediateObjects:
 			for chunk in proj.chunks:
+				hasChunk = False
 				if not proj.unity:
-					obj = _utils.GetChunkedObjPath(proj, chunk)
+					chunkObj = _utils.GetChunkedObjPath(proj, chunk)
 				else:
-					obj = _utils.GetUnityChunkObjPath(proj)
-				if proj.useChunks and not _shared_globals.disable_chunks and os.access(obj , os.F_OK):
-					objs.append( obj )
-				else:
+					chunkObj = _utils.GetUnityChunkObjPath(proj)
+				if proj.useChunks and not _shared_globals.disable_chunks and os.access(chunkObj , os.F_OK):
+					objs.append( chunkObj )
+					hasChunk = True
+
+				if not hasChunk or proj.activeToolchain.Compiler().SupportsObjectScraping():
 					if type( chunk ) == list:
 						for source in chunk:
 							obj = _utils.GetSourceObjPath(proj, source)
 							if os.access(obj , os.F_OK):
 								objs.append( obj )
-							else:
+							elif not hasChunk or proj.activeToolchain.Compiler().SupportsDummyObjects():
 								log.LOG_ERROR( "Could not find {} for linking. Something went wrong here.".format(obj) )
 								return _LinkStatus.Fail
 					else:
 						obj = _utils.GetSourceObjPath(proj, chunk)
 						if os.access(obj , os.F_OK):
 							objs.append( obj )
-						else:
+						elif not hasChunk or proj.activeToolchain.Compiler().SupportsDummyObjects():
 							log.LOG_ERROR( "Could not find {} for linking. Something went wrong here.".format(obj) )
 							return _LinkStatus.Fail
 			objs += proj.extraObjs
@@ -2236,28 +2257,32 @@ def _clean( silent = False ):
 def _installHeaders( ):
 	log.LOG_INSTALL("Installing headers...")
 
+	installed_headers = set()
 	for project in _shared_globals.sortedProjects:
+
 		os.chdir( project.workingDirectory )
 		#install headers
 		subdir = project.headerInstallSubdir
 		if not subdir:
 			subdir = _utils.GetBaseName( project.outputName )
 		if project.installHeaders:
-			install_dir = os.path.join( _shared_globals.install_incdir, subdir )
+			incdir = _utils.ResolveProjectMacros(_shared_globals.install_incdir, project)
+			install_dir = os.path.join( incdir, subdir )
 			if not os.access(install_dir , os.F_OK):
 				os.makedirs( install_dir )
 			headers = []
 			cHeaders = []
 			project.get_files( headers = headers, cHeaders = cHeaders )
-			for header in headers:
+			for header in (headers + cHeaders):
 				this_header_dir = os.path.dirname( os.path.join( install_dir, os.path.relpath( header, project.workingDirectory ) ) )
+				this_header = os.path.join( this_header_dir, header )
+				if this_header in installed_headers:
+					continue
+				installed_headers.add(this_header)
 				if not os.access(this_header_dir , os.F_OK):
 					os.makedirs( this_header_dir )
 				log.LOG_INSTALL( "Installing {0} to {1}...".format( header, this_header_dir ) )
 				shutil.copy( header, this_header_dir )
-			for header in cHeaders:
-				log.LOG_INSTALL( "Installing {0} to {1}...".format( header, install_dir ) )
-				shutil.copy( header, install_dir )
 			install_something = True
 
 def _installOutput( ):
@@ -2271,7 +2296,7 @@ def _installOutput( ):
 		if project.installOutput:
 			#install output file
 			if os.access(output , os.F_OK):
-				outputDir = _shared_globals.install_libdir
+				outputDir = _utils.ResolveProjectMacros(_shared_globals.install_libdir, project)
 				if not os.access(outputDir , os.F_OK):
 					os.makedirs( outputDir )
 				log.LOG_INSTALL( "Installing {0} to {1}...".format( output, outputDir ) )
@@ -2830,8 +2855,15 @@ def _run( ):
 	if args.incdir:
 		_shared_globals.install_incdir = args.incdir
 
-	_shared_globals.install_libdir = os.path.abspath(_shared_globals.install_libdir.format(prefix=_shared_globals.install_prefix))
-	_shared_globals.install_incdir = os.path.abspath(_shared_globals.install_incdir.format(prefix=_shared_globals.install_prefix))
+	#This allows a first pass to pick up prefix, while keeping project macros for a later pass.
+	class DummyProj(object):
+		def __getattr__(self, name):
+			return "{{project.{}}}".format(name)
+
+	proj = DummyProj()
+
+	_shared_globals.install_libdir = os.path.abspath(_shared_globals.install_libdir.format(prefix=_shared_globals.install_prefix, project=proj))
+	_shared_globals.install_incdir = os.path.abspath(_shared_globals.install_incdir.format(prefix=_shared_globals.install_prefix, project=proj))
 
 	if args.jobs:
 		_shared_globals.max_threads = args.jobs
@@ -2861,6 +2893,25 @@ def _run( ):
 	_execfile( mainFile, _shared_globals.makefile_dict, _shared_globals.makefile_dict )
 
 	parser.parse_args(args.remainder)
+
+	validArchList = set()
+
+	if args.ao:
+		_shared_globals.selectedToolchains = set( ) # Reset the selected toolchains.
+		for chain in _shared_globals.alltoolchains:
+			validArchList |= set(_shared_globals.alltoolchains[chain.lower()]().GetValidArchitectures())
+	elif args.toolchain:
+		_shared_globals.selectedToolchains = set( ) # Reset the selected toolchains.
+		for chain in args.toolchain:
+			if chain.lower() not in _shared_globals.alltoolchains:
+				log.LOG_ERROR( "Unknown toolchain: {}".format( chain ) )
+				return
+			validArchList |= set(_shared_globals.alltoolchains[chain.lower()]().GetValidArchitectures())
+	else:
+		if platform.system( ) == "Windows":
+			validArchList |= set(_shared_globals.alltoolchains["msvc"]().GetValidArchitectures())
+		else:
+			validArchList |= set(_shared_globals.alltoolchains["gcc"]().GetValidArchitectures())
 
 	def BuildWithToolchain( chain ):
 
@@ -3000,7 +3051,6 @@ def _run( ):
 
 				project.activeToolchain = project.toolchains[project.activeToolchainName]
 
-				validArchList = set(project.activeToolchain.GetValidArchitectures())
 				cmdLineGlobalArchList = args.architecture
 				cmdLineToolchainArchList = args.__dict__[_shared_globals.allToolchainArchStrings[project.activeToolchainName][0].replace("-", "_")]
 				cmdLineArchList = set()
@@ -3008,10 +3058,6 @@ def _run( ):
 					cmdLineArchList.update(cmdLineGlobalArchList)
 				if cmdLineToolchainArchList:
 					cmdLineArchList.update(cmdLineToolchainArchList)
-				if project.supportedArchitectures:
-					validArchList &= project.supportedArchitectures
-				if not validArchList:
-					log.LOG_ERROR("Project {} does not support any architectures supported by toolchain {}".format(project.name, project.activeToolchainName))
 				if cmdLineArchList:
 					for arch in cmdLineArchList:
 						if arch not in validArchList:

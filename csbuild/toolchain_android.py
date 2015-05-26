@@ -476,6 +476,7 @@ class AndroidLinker(AndroidBase, toolchain_gcc.GccLinker):
 					"libs",
 					project.outputArchitecture)
 				)
+				#TODO: Differentiate between the static and shared runtime for libstdc++.
 				if project.useStaticRuntime:
 					ret += "-lstdc++ "
 				else:

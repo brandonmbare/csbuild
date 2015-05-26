@@ -121,10 +121,7 @@ class SettingsOverrider( object ):
 		:param s: The desired subdirectory; i.e., if you specify this as "myLib", the headers will be
 		installed under *{prefix*}/include/myLib.
 		"""
-		s = _utils.FixupRelativePath( s )
-		s = _utils.PathWorkingDirPair( s )
-		self._settingsOverrides["headerInstallSubdirTemp"] = s
-		self._settingsOverrides["tempsDirty"] = True
+		self._settingsOverrides["headerInstallSubdir"] = s
 
 
 	def AddExcludeDirectories( self, *args ):
@@ -1457,8 +1454,14 @@ class compilerBase( toolBase ):
 		"""
 		pass
 
+	def SupportsObjectScraping(self):
+		return False
+
 	def GetObjectScraper(self):
 		return None
+
+	def SupportsDummyObjects(self):
+		return False
 
 	def MakeDummyObjects(self, objList):
 		pass

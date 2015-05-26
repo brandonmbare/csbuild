@@ -352,9 +352,6 @@ class projectSettings( object ):
 	:ivar outputDirTemp: Output directory for the final output file
 	:type outputDirTemp: :class:`_utils.PathWorkingDir`
 
-	:ivar headerInstallSubdirTemp: Subdirectory that headers live in for this project
-	:type headerInstallSubdirTemp: :class:`_utils.PathWorkingDir`
-
 	:ivar includeDirsTemp: Directories to search for included headers in
 	:type includeDirsTemp: list[:class:`_utils.PathWorkingDir`]
 
@@ -575,7 +572,6 @@ class projectSettings( object ):
 		self.tempsDirty = True # Default to true so the first call to resolve paths is forced to run.
 		self.objDirTemp = None
 		self.outputDirTemp = None
-		self.headerInstallSubdirTemp = None
 		self.includeDirsTemp = []
 		self.libraryDirsTemp = []
 		self.precompileTemp = []
@@ -748,22 +744,18 @@ class projectSettings( object ):
 		if not self.tempsDirty:
 			return
 
-		# Save the current working directory because we're going to be changing it when fixing up paths.
-		oldWorkingDir = os.getcwd()
-
 		def resolvePath( _tempPath, _proj ):
-			os.chdir( _tempPath.workingDir )
-			return os.path.abspath( _utils.ResolveProjectMacros( _tempPath.path, _proj ) )
+			return os.path.normpath( os.path.join( _tempPath.workingDir, _utils.ResolveProjectMacros( _tempPath.path, _proj ) ) )
 
 		if self.outputDirTemp:
 			self.outputDir = resolvePath( self.outputDirTemp, self )
 		else:
-			self.outputDir = oldWorkingDir
+			self.outputDir = os.path.join(self.workingDirectory, "out")
 
 		if self.objDirTemp:
 			self.objDir = resolvePath( self.objDirTemp, self )
 		else:
-			self.objDir = oldWorkingDir
+			self.outputDir = os.path.join(self.workingDirectory, "obj")
 
 		# Create the executable/library output directory if it doesn't exist.
 		if not os.access(self.outputDir, os.F_OK):
@@ -811,27 +803,22 @@ class projectSettings( object ):
 			for s in l:
 				s = resolvePath( s, self )
 				alteredList.append(s)
+			del l[:]
 			return alteredList
 
-		self.excludeDirs = apply_macro( self.excludeDirsTemp )
-		self.extraFiles = apply_macro( self.extraFilesTemp )
-		self.extraDirs = apply_macro( self.extraDirsTemp )
-		self.extraObjs = set( apply_macro( list( self.extraObjsTemp ) ) )
-		self.excludeFiles = apply_macro(self.excludeFilesTemp )
-		self.precompile = apply_macro( self.precompileTemp )
-		self.precompileAsC = apply_macro( self.precompileAsCTemp )
-		self.precompileExcludeFiles = apply_macro( self.precompileExcludeFilesTemp )
-		self.frameworkDirs = apply_macro( self.frameworkDirsTemp )
+		self.excludeDirs.extend(apply_macro( self.excludeDirsTemp ))
+		self.extraFiles.extend(apply_macro( self.extraFilesTemp ))
+		self.extraDirs.extend(apply_macro( self.extraDirsTemp ))
+		self.extraObjs.update(set( apply_macro( list( self.extraObjsTemp ) ) ))
+		self.excludeFiles.extend(apply_macro(self.excludeFilesTemp ))
+		self.precompile.extend(apply_macro( self.precompileTemp ))
+		self.precompileAsC.extend(apply_macro( self.precompileAsCTemp ))
+		self.precompileExcludeFiles.extend(apply_macro( self.precompileExcludeFilesTemp ))
+		self.frameworkDirs.update(set(apply_macro( self.frameworkDirsTemp )))
 
-		if self.headerInstallSubdirTemp:
-			self.headerInstallSubdir = resolvePath( self.headerInstallSubdirTemp, self )
-		else:
-			self.headerInstallSubdir = oldWorkingDir
+		self.headerInstallSubdir = _utils.ResolveProjectMacros(self.headerInstallSubdir, self)
 
 		self.excludeDirs.append( self.csbuildDir )
-
-		# Restore the old working directory.
-		os.chdir( oldWorkingDir )
 
 
 	def RunFileDiscovery( self ):
@@ -1261,21 +1248,20 @@ class projectSettings( object ):
 			"linkOutput" : self.linkOutput,
 			"linkErrors" : self.linkErrors,
 			"parsedLinkErrors" : self.parsedLinkErrors,
-		    "tempsDirty" : self.tempsDirty,
+			"tempsDirty" : self.tempsDirty,
 			"objDirTemp" : self.objDirTemp,
 			"outputDirTemp" : self.outputDirTemp,
-			"headerInstallSubdirTemp" : self.headerInstallSubdirTemp,
-			"includeDirsTemp" : self.includeDirsTemp,
-			"libraryDirsTemp" : self.libraryDirsTemp,
-			"precompileTemp" : self.precompileTemp,
-			"precompileAsCTemp" : self.precompileAsCTemp,
-			"precompileExcludeFilesTemp" : self.precompileExcludeFilesTemp,
-			"extraFilesTemp" : self.extraFilesTemp,
-			"extraDirsTemp" : self.extraDirsTemp,
-			"extraObjsTemp" : self.extraObjsTemp,
-			"excludeDirsTemp" : self.excludeDirsTemp,
-			"excludeFilesTemp" : self.excludeFilesTemp,
-			"frameworkDirsTemp" : self.frameworkDirsTemp,
+			"includeDirsTemp" : list(self.includeDirsTemp),
+			"libraryDirsTemp" : list(self.libraryDirsTemp),
+			"precompileTemp" : list(self.precompileTemp),
+			"precompileAsCTemp" : list(self.precompileAsCTemp),
+			"precompileExcludeFilesTemp" : list(self.precompileExcludeFilesTemp),
+			"extraFilesTemp" : list(self.extraFilesTemp),
+			"extraDirsTemp" : list(self.extraDirsTemp),
+			"extraObjsTemp" : list(self.extraObjsTemp),
+			"excludeDirsTemp" : list(self.excludeDirsTemp),
+			"excludeFilesTemp" : list(self.excludeFilesTemp),
+			"frameworkDirsTemp" : list(self.frameworkDirsTemp),
 			"cExtensions" : set(self.cExtensions),
 			"cppExtensions" : set(self.cppExtensions),
 			"asmExtensions" : set(self.asmExtensions),
@@ -1453,7 +1439,8 @@ class projectSettings( object ):
 			f = open( headerFile )
 		with f:
 			for line in f:
-				if line[0] != '#':
+				line = line.strip()
+				if not line or line[0] != '#':
 					continue
 
 				RMatch = re.search( r"#\s*include\s*[<\"](.*?)[\">]", line )
