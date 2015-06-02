@@ -67,10 +67,11 @@ class AndroidBase( object ):
 		#self.shared._maxSdkVersion = 19
 		#TODO: Determine this from highest number in the filesystem.
 		self.shared._targetSdkVersion = 19
-		self.shared._minSdkVersion = 1
+		self.shared._minSdkVersion = 9
 		self.shared._packageName = "csbuild.autopackage"
 		self.shared._activityName = None
 		self.shared._usedFeatures = []
+		self.shared._usedPermissions = [ "INTERNET", "READ_EXTERNAL_STORAGE", "WRITE_EXTERNAL_STORAGE" ]
 		self.shared._sysRootDir = ""
 		self.shared._keystoreLocation = ""
 		self.shared._keystorePwFile = ""
@@ -90,6 +91,7 @@ class AndroidBase( object ):
 		other.shared._packageName = self.shared._packageName
 		other.shared._activityName = self.shared._activityName
 		other.shared._usedFeatures = list(self.shared._usedFeatures)
+		other.shared._usedPermissions = list(self.shared._usedPermissions)
 		other.shared._sysRootDir = self.shared._sysRootDir
 		other.shared._keystoreLocation = self.shared._keystoreLocation
 		other.shared._keystorePwFile = self.shared._keystorePwFile
@@ -142,6 +144,9 @@ class AndroidBase( object ):
 	def AddUsedFeatures(self, *args):
 		self.shared._usedFeatures += list(args)
 
+	def AddUsedPermissions(self, *args):
+		self.shared._usedPermissions += list(args)
+
 	def SetNativeAppGlue(self, addGlue):
 		self.shared._addNativeAppGlue = addGlue
 
@@ -167,33 +172,14 @@ class AndroidBase( object ):
 		return project.outputArchitecture
 
 	def _setSysRootDir(self, project):
-		toolchainsDir = os.path.join(self.shared._ndkHome, "toolchains")
-		arch = self._getSimplifiedArch(project)
+		self.shared._sysRootDir = os.path.join(
+			self.shared._ndkHome,
+			"platforms",
+			"android-{}".format(self.shared._targetSdkVersion),
+			"arch-{}".format(self._getSimplifiedArch(project)),
+		)
+		return
 
-		dirs = glob.glob(os.path.join(toolchainsDir, "{}*".format(arch)))
-
-		bestCompilerVersion = ""
-
-		for dirname in dirs:
-			prebuilt = os.path.join(toolchainsDir, dirname, "prebuilt")
-			if not os.access(prebuilt, os.F_OK):
-				continue
-
-			if dirname > bestCompilerVersion:
-				bestCompilerVersion = dirname
-
-		if not bestCompilerVersion:
-			log.LOG_ERROR("Couldn't find compiler for architecture {}.".format(project.outputArchitecture))
-			csbuild.Exit(1)
-
-		if platform.system() == "Windows":
-			platformName = "windows"
-		else:
-			platformName = "linux"
-
-		sysRootDir = os.path.join(toolchainsDir, bestCompilerVersion, "prebuilt", platformName)
-		dirs = list(glob.glob("{}*".format(sysRootDir)))
-		self.shared._sysRootDir = dirs[0]
 
 	def _getCommands(self, project, cmd1, cmd2, searchInLlvmPath = False):
 		toolchainsDir = os.path.join(self.shared._ndkHome, "toolchains")
@@ -296,6 +282,8 @@ class AndroidCompiler(AndroidBase, toolchain_gcc.GccCompiler):
 			project.type = csbuild.ProjectType.SharedLibrary
 			if not project.outputName.startswith("lib"):
 				project.outputName = "lib{}".format(project.outputName)
+		elif project.type == csbuild.ProjectType.SharedLibrary:
+			project.type = csbuild.ProjectType.StaticLibrary
 
 	def _getSystemDirectories(self, project, isCpp):
 		ret = ""
@@ -356,7 +344,7 @@ class AndroidCompiler(AndroidBase, toolchain_gcc.GccCompiler):
 		else:
 			picFlag = ""
 
-		return "\"{}\" {} -Winvalid-pch -c {}-g{} -O{} {}{}{} {} {} {}".format(
+		cmds = "\"{}\" {} -Winvalid-pch -c {}-g{} -O{} {}{}{} {} {} {}".format(
 			compiler,
 			exitcodes,
 			self._getDefines( project.defines, project.undefines ),
@@ -369,6 +357,8 @@ class AndroidCompiler(AndroidBase, toolchain_gcc.GccCompiler):
 			self._getSystemDirectories(project, isCpp),
 			self._getTargetTriple(project)
 		)
+
+		return cmds.replace("\\", "/")
 
 	def _getIncludeDirs( self, includeDirs ):
 		"""Returns a string containing all of the passed include directories, formatted to be passed to gcc/g++."""
@@ -460,49 +450,53 @@ class AndroidLinker(AndroidBase, toolchain_gcc.GccLinker):
 		ret = ""
 		if project.hasCppFiles:
 			if self.shared._stlVersion == "GNU":
-				ret += "-L\"{}\" ".format(os.path.join(
+				ret += "\"-l:{}\" ".format(os.path.join(
 					self.shared._ndkHome,
 					"sources",
 					"cxx-stl",
 					"gnu-libstdc++",
 					"4.8",
 					"libs",
-					project.outputArchitecture)
+					project.outputArchitecture,
+					"libgnustl_static.a" if project.useStaticRuntime else "libgnustl_shared.so")
 				)
-				if project.useStaticRuntime:
-					ret += "-lgnustl_static "
-				else:
-					ret += "-lgnustl_shared "
 			elif self.shared._stlVersion == "stlport":
-				ret += "-L\"{}\" ".format(os.path.join(
+				ret += "\"-l:{}\" ".format(os.path.join(
 					self.shared._ndkHome,
 					"sources",
 					"cxx-stl",
 					"stlport",
 					"libs",
-					project.outputArchitecture)
+					project.outputArchitecture,
+					"libstlport_static.a" if project.useStaticRuntime else "libstlport_shared.so")
 				)
-				if project.useStaticRuntime:
-					ret += "-lstlport_static "
-				else:
-					ret += "-lstlport_shared "
 			elif self.shared._stlVersion == "libc++":
-				ret += "-L\"{}\" ".format(os.path.join(
+				ret += "\"-l:{}\" ".format(os.path.join(
 					self.shared._ndkHome,
 					"sources",
 					"cxx-stl",
 					"llvm-libc++",
 					"libs",
-					project.outputArchitecture)
+					project.outputArchitecture,
+					"libc++_static.a" if project.useStaticRuntime else "libc++_shared.so")
 				)
-				if project.useStaticRuntime:
-					ret += "-lc++_static "
-				else:
-					ret += "-lc++_shared "
 
-		ret += "--sysroot \"{}\"".format(self.shared._sysRootDir)
+		ret += '"-lc" "-lm" "-llog" "-lgcc" "-landroid" '
+		ret += "--sysroot \"{}\" ".format(self.shared._sysRootDir)
+		ret += "-Wl,-rpath-link=\"{}/usr/lib\" ".format(self.shared._sysRootDir)
 		return ret
 
+
+	def _getLibraryArg(self, lib):
+		for depend in self._project_settings.reconciledLinkDepends:
+			dependProj = _shared_globals.projects[depend]
+			if dependProj.type == csbuild.ProjectType.Application:
+				continue
+			dependLibName = dependProj.outputName
+			splitName = os.path.splitext(dependLibName)[0]
+			if splitName == lib or splitName == "lib{}".format( lib ):
+				return '\"-l:{}\" '.format( dependLibName )
+		return "\"-l:{}\" ".format( self._actual_library_names[lib] )
 
 
 	def GetLinkCommand( self, project, outputFile, objList ):
@@ -510,7 +504,7 @@ class AndroidLinker(AndroidBase, toolchain_gcc.GccLinker):
 
 		linkFile = os.path.join(self._project_settings.csbuildDir, "{}.cmd".format(self._project_settings.name))
 
-		data = " ".join( objList )
+		data = " ".join( objList ).replace("\\", "/")
 		if sys.version_info >= (3, 0):
 			data = data.encode("utf-8")
 
@@ -524,7 +518,7 @@ class AndroidLinker(AndroidBase, toolchain_gcc.GccLinker):
 		os.close(fd)
 
 		if project.type == csbuild.ProjectType.StaticLibrary:
-			return "\"{}\" rcs {} {}".format( self._ar, outputFile, " ".join( objList ) )
+			cmds = "\"{}\" rcs {} {}".format( self._ar, outputFile, " ".join( objList ) )
 		else:
 			if project.hasCppFiles:
 				cmd = project.activeToolchain.Compiler()._settingsOverrides["cxx"]
@@ -546,9 +540,10 @@ class AndroidLinker(AndroidBase, toolchain_gcc.GccLinker):
 			else:
 				sharedFlag = ""
 
-			return "\"{}\" {}-o{} {} {} {}{}{} {} {}-g{} -O{} {} {} {} {} -L\"{}\"".format(
+			cmds = "\"{}\" -Wl,--no-undefined -fuse-ld=bfd -Wl,-z,noexecstack -Wl,-z,relro -Wl,-z,now {}-Wl,-soname,{} -o{} {} {} {}{}{} {} {}-g{} -O{} {} {} {} {} -L\"{}\"".format(
 				cmd,
 				"-pg " if project.profile else "",
+				os.path.basename(outputFile),
 				outputFile,
 				"@{}".format(linkFile),
 				"-Wl,--no-as-needed -Wl,--start-group" if not self.strictOrdering else "",
@@ -565,6 +560,8 @@ class AndroidLinker(AndroidBase, toolchain_gcc.GccLinker):
 				self._getTargetTriple(project),
 				libDir
 			)
+
+		return cmds.replace("\\", "/")
 
 	def FindLibrary( self, project, library, libraryDirs, force_static, force_shared ):
 		success = True
@@ -648,6 +645,11 @@ class APKBuilder(AndroidBase, toolchain.toolBase):
 		toolchain.toolBase.__init__(self, shared)
 		AndroidBase.__init__(self)
 
+	def copy(self, shared):
+		ret = toolchain.toolBase.copy(self, shared)
+		AndroidBase._copyTo(self, ret)
+		return ret
+
 	def postBuildStep(self, project):
 		log.LOG_BUILD("Generating APK for {} ({} {}/{})".format(project.outputName, project.targetName, project.outputArchitecture, project.activeToolchainName))
 		if project.metaType != csbuild.ProjectType.Application:
@@ -703,7 +705,7 @@ class APKBuilder(AndroidBase, toolchain.toolBase):
 				continue
 			shutil.copyfile(library, os.path.join(libDir, os.path.basename(library)))
 
-		for dep in project.linkDepends:
+		for dep in project.reconciledLinkDepends:
 			depProj = _shared_globals.projects[dep]
 			libFile = os.path.join(depProj.outputDir, depProj.outputName)
 			shutil.copyfile(libFile, os.path.join(libDir, os.path.basename(libFile)))
@@ -711,26 +713,29 @@ class APKBuilder(AndroidBase, toolchain.toolBase):
 		shutil.copyfile(os.path.join(project.outputDir, project.outputName), os.path.join(libDir, os.path.basename(project.outputName)))
 
 		with open(os.path.join(appDir, "AndroidManifest.xml"), "w") as f:
-			f.write("<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\"\n")
-			f.write("  package=\"com.csbuild.autopackage.{}\"\n".format(project.name))
-			f.write("  android:versionCode=\"1\"\n")
-			f.write("  android:versionName=\"1.0\">\n")
-			f.write("  <uses-sdk android:minSdkVersion=\"{}\" android:targetSdkVersion=\"{}\"/>\n".format(self.shared._minSdkVersion, self.shared._targetSdkVersion))
+			f.write('<?xml version="1.0" encoding="utf-8"?>\n')
+			f.write('<manifest xmlns:android="http://schemas.android.com/apk/res/android"\n')
+			f.write('  package="com.{}.{}"\n'.format(self.shared._packageName, project.name))
+			f.write('  android:versionCode="1"\n')
+			f.write('  android:versionName="1.0">\n')
+			f.write('  <uses-sdk android:minSdkVersion="{}" android:targetSdkVersion="{}"/>\n'.format(self.shared._minSdkVersion, self.shared._targetSdkVersion))
 			for feature in self.shared._usedFeatures:
 				#example: android:glEsVersion=\"0x00020000\"
-				f.write("  <uses-feature {}></uses-feature>".format(feature))
-			f.write("  <application android:label=\"{}\" android:hasCode=\"false\">\n".format(project.name))
-			f.write("    <activity android:name=\"android.app.NativeActivity\"\n")
-			f.write("      android:label=\"{}\">\n".format(project.name))
-			f.write("      android:configChanges=\"orientation|keyboardHidden\">\n")
-			f.write("      <meta-data android:name=\"android.app.lib_name\" android:value=\"{}\"/>\n".format(project.outputName[3:-3]))
-			f.write("      <intent-filter>\n")
-			f.write("        <action android:name=\"android.intent.action.MAIN\"/>\n")
-			f.write("        <category android:name=\"android.intent.category.LAUNCHER\"/>\n")
-			f.write("      </intent-filter>\n")
-			f.write("    </activity>\n")
-			f.write("  </application>\n")
-			f.write("</manifest>\n")
+				f.write('  <uses-feature android{}></uses-feature>'.format(feature))
+			for permission in self.shared._usedPermissions:
+				f.write('  <uses-permission android:name="android.permission.{}"/>\n'.format(permission))
+			f.write('  <application android:label="@string/app_name" android:hasCode="false" android:debuggable="true">\n')
+			f.write('    <activity android:name="android.app.NativeActivity"\n')
+			f.write('      android:label="@string/app_name"\n'.format(project.name))
+			f.write('      android:configChanges="orientation|keyboardHidden">\n')
+			f.write('      <meta-data android:name="android.app.lib_name" android:value="{}"/>\n'.format(project.outputName[3:-3]))
+			f.write('      <intent-filter>\n"')
+			f.write('        <action android:name="android.intent.action.MAIN"/>\n')
+			f.write('        <category android:name="android.intent.category.LAUNCHER"/>\n')
+			f.write('      </intent-filter>\n')
+			f.write('    </activity>\n')
+			f.write('  </application>\n')
+			f.write('</manifest>\n')
 
 		if project.optLevel != csbuild.OptimizationLevel.Max:
 			antBuildType = "debug"

@@ -121,10 +121,7 @@ class SettingsOverrider( object ):
 		:param s: The desired subdirectory; i.e., if you specify this as "myLib", the headers will be
 		installed under *{prefix*}/include/myLib.
 		"""
-		s = _utils.FixupRelativePath( s )
-		s = _utils.PathWorkingDirPair( s )
-		self._settingsOverrides["headerInstallSubdirTemp"] = s
-		self._settingsOverrides["tempsDirty"] = True
+		self._settingsOverrides["headerInstallSubdir"] = s
 
 
 	def AddExcludeDirectories( self, *args ):
@@ -156,8 +153,8 @@ class SettingsOverrider( object ):
 		:type args: an arbitrary number of strings
 		:param args: The list of files to be excluded.
 		"""
-		if "excludeFilesTempTemp" not in self._settingsOverrides:
-			self._settingsOverrides["excludeFilesTempTemp"] = []
+		if "excludeFilesTemp" not in self._settingsOverrides:
+			self._settingsOverrides["excludeFilesTemp"] = []
 
 		args = list( args )
 		newargs = []
@@ -165,7 +162,7 @@ class SettingsOverrider( object ):
 			arg = _utils.FixupRelativePath( arg )
 			arg = _utils.PathWorkingDirPair( arg )
 			newargs.append( arg )
-		self._settingsOverrides["excludeFilesTempTemp"] += newargs
+		self._settingsOverrides["excludeFilesTemp"] += newargs
 		self._settingsOverrides["tempsDirty"] = True
 
 
@@ -1457,8 +1454,14 @@ class compilerBase( toolBase ):
 		"""
 		pass
 
+	def SupportsObjectScraping(self):
+		return False
+
 	def GetObjectScraper(self):
 		return None
+
+	def SupportsDummyObjects(self):
+		return False
 
 	def MakeDummyObjects(self, objList):
 		pass
