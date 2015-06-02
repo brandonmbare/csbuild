@@ -180,7 +180,7 @@ class AndroidBase( object ):
 		)
 		return
 
-		
+
 	def _getCommands(self, project, cmd1, cmd2, searchInLlvmPath = False):
 		toolchainsDir = os.path.join(self.shared._ndkHome, "toolchains")
 		arch = self._getSimplifiedArch(project)
@@ -357,7 +357,7 @@ class AndroidCompiler(AndroidBase, toolchain_gcc.GccCompiler):
 			self._getSystemDirectories(project, isCpp),
 			self._getTargetTriple(project)
 		)
-		
+
 		return cmds.replace("\\", "/")
 
 	def _getIncludeDirs( self, includeDirs ):
@@ -516,7 +516,7 @@ class AndroidLinker(AndroidBase, toolchain_gcc.GccLinker):
 		os.write(fd, data)
 		os.fsync(fd)
 		os.close(fd)
-		
+
 		if project.type == csbuild.ProjectType.StaticLibrary:
 			cmds = "\"{}\" rcs {} {}".format( self._ar, outputFile, " ".join( objList ) )
 		else:
@@ -560,7 +560,7 @@ class AndroidLinker(AndroidBase, toolchain_gcc.GccLinker):
 				self._getTargetTriple(project),
 				libDir
 			)
-			
+
 		return cmds.replace("\\", "/")
 
 	def FindLibrary( self, project, library, libraryDirs, force_static, force_shared ):
@@ -644,6 +644,11 @@ class APKBuilder(AndroidBase, toolchain.toolBase):
 	def __init__(self, shared):
 		toolchain.toolBase.__init__(self, shared)
 		AndroidBase.__init__(self)
+
+	def copy(self, shared):
+		ret = toolchain.toolBase.copy(self, shared)
+		AndroidBase._copyTo(self, ret)
+		return ret
 
 	def postBuildStep(self, project):
 		log.LOG_BUILD("Generating APK for {} ({} {}/{})".format(project.outputName, project.targetName, project.outputArchitecture, project.activeToolchainName))
