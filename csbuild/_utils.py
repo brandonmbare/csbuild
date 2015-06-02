@@ -801,19 +801,18 @@ def ChunkedBuild( ):
 					#The next time any of these files changes, only that section of the chunk will get built.
 					#This keeps large builds fast through the chunked build, without sacrificing the speed of smaller
 					#incremental builds (except on the first build after the chunk)
-					os.remove( obj )
 					if owningProject.activeToolchain.Compiler().SupportsObjectScraping():
 						add_chunk = sources_in_this_chunk
 					else:
+						os.remove( obj )
 						add_chunk = chunk
-					if project.useChunks and not _shared_globals.disable_chunks:
-						if owningProject.activeToolchain.Compiler().SupportsObjectScraping():
+						if project.useChunks and not _shared_globals.disable_chunks:
 							log.LOG_WARN_NOPUSH(
 								"Breaking chunk ({0}) into individual files to improve future iteration turnaround.".format(
 									chunk ) )
 
-						for filename in chunk:
-							owningProject.splitChunks[filename] = chunkname
+							for filename in chunk:
+								owningProject.splitChunks[filename] = chunkname
 				else:
 					add_chunk = sources_in_this_chunk
 					if project.useChunks and not _shared_globals.disable_chunks:
