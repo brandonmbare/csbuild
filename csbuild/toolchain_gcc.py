@@ -277,7 +277,7 @@ class GccCompiler( gccBase, toolchain.compilerBase ):
 		"""Returns a string containing all of the passed include directories, formatted to be passed to gcc/g++."""
 		ret = ""
 		for inc in includeDirs:
-			ret += "-I{} ".format( os.path.abspath( inc ) )
+			ret += '-I"{}" '.format( os.path.abspath( inc ) )
 		ret += "-I/usr/include -I/usr/local/include "
 		return ret
 
@@ -546,7 +546,10 @@ class GccLinker( gccBase, toolchain.linkerBase ):
 		self._setupForProject( project )
 		linkFile = os.path.join(self._project_settings.csbuildDir, "{}.cmd".format(self._project_settings.name))
 
-		data = " ".join( objList )
+		data = ""
+		for objFile in objList:
+			data += '"{}" '.format( objFile )
+
 		if sys.version_info >= (3, 0):
 			data = data.encode("utf-8")
 
@@ -560,7 +563,7 @@ class GccLinker( gccBase, toolchain.linkerBase ):
 		os.close(fd)
 
 		if project.type == csbuild.ProjectType.StaticLibrary:
-			return "\"{}\" rcs {} {}".format( self._ar, outputFile, " ".join( objList ) )
+			return "\"{}\" rcs \"{}\" {}".format( self._ar, outputFile, " ".join( objList ) )
 		else:
 			if project.hasCppFiles:
 				cmd = project.cxx

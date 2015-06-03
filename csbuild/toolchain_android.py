@@ -319,7 +319,7 @@ class AndroidCompiler(AndroidBase, toolchain_gcc.GccCompiler):
 			)
 		)
 
-		ret += "-I {} ".format(self.shared._ndkHome)
+		ret += '-I "{}" '.format(self.shared._ndkHome)
 		return ret
 
 	def _getBaseCommand( self, compiler, project, isCpp ):
@@ -364,7 +364,7 @@ class AndroidCompiler(AndroidBase, toolchain_gcc.GccCompiler):
 		"""Returns a string containing all of the passed include directories, formatted to be passed to gcc/g++."""
 		ret = ""
 		for inc in includeDirs:
-			ret += "-I{} ".format( os.path.abspath( inc ) )
+			ret += '-I"{}" '.format( os.path.abspath( inc ) )
 		return ret
 
 
@@ -504,9 +504,13 @@ class AndroidLinker(AndroidBase, toolchain_gcc.GccLinker):
 
 		linkFile = os.path.join(self._project_settings.csbuildDir, "{}.cmd".format(self._project_settings.name))
 
-		data = " ".join( objList ).replace("\\", "/")
+		objListData = ""
+		for objFile in objList:
+			objListData += '"{}" '.format( objFile )
+
+		data = objListData.replace("\\", "/")
 		if sys.version_info >= (3, 0):
-			data = data.encode("utf-8")
+			data = objListData.encode("utf-8")
 
 		file_mode = 438 # Octal 0666
 		flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
@@ -518,7 +522,7 @@ class AndroidLinker(AndroidBase, toolchain_gcc.GccLinker):
 		os.close(fd)
 
 		if project.type == csbuild.ProjectType.StaticLibrary:
-			cmds = "\"{}\" rcs {} {}".format( self._ar, outputFile, " ".join( objList ) )
+			cmds = "\"{}\" rcs \"{}\" {}".format( self._ar, outputFile, objListData )
 		else:
 			if project.hasCppFiles:
 				cmd = project.activeToolchain.Compiler()._settingsOverrides["cxx"]
@@ -567,7 +571,7 @@ class AndroidLinker(AndroidBase, toolchain_gcc.GccLinker):
 		success = True
 		out = ""
 		self._setupForProject( project )
-		nullOut = os.path.join(project.csbuildDir, "null")
+		nullOut = '"{}"'.format( os.path.join(project.csbuildDir, "null") )
 		try:
 			cmd = [self._ld, "-o", nullOut, "--verbose",
 				   "-static" if force_static else "-shared" if force_shared else "", "-l{}".format( library ),
