@@ -546,10 +546,11 @@ class GccLinker( gccBase, toolchain.linkerBase ):
 		self._setupForProject( project )
 		linkFile = os.path.join(self._project_settings.csbuildDir, "{}.cmd".format(self._project_settings.name))
 
-		data = ""
+		objListData = ""
 		for objFile in objList:
-			data += '"{}" '.format( objFile )
+			objListData += '"{}" '.format( objFile )
 
+		data = objListData
 		if sys.version_info >= (3, 0):
 			data = data.encode("utf-8")
 
@@ -563,7 +564,7 @@ class GccLinker( gccBase, toolchain.linkerBase ):
 		os.close(fd)
 
 		if project.type == csbuild.ProjectType.StaticLibrary:
-			return "\"{}\" rcs \"{}\" {}".format( self._ar, outputFile, " ".join( objList ) )
+			return "\"{}\" rcs \"{}\" {}".format( self._ar, outputFile, objListData )
 		else:
 			if project.hasCppFiles:
 				cmd = project.cxx

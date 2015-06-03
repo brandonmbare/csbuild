@@ -510,7 +510,7 @@ class AndroidLinker(AndroidBase, toolchain_gcc.GccLinker):
 
 		data = objListData.replace("\\", "/")
 		if sys.version_info >= (3, 0):
-			data = objListData.encode("utf-8")
+			data = data.encode("utf-8")
 
 		file_mode = 438 # Octal 0666
 		flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
