@@ -508,7 +508,8 @@ class AndroidLinker(AndroidBase, toolchain_gcc.GccLinker):
 		for objFile in objList:
 			objListData += '"{}" '.format( objFile )
 
-		data = objListData.replace("\\", "/")
+		objListData = objListData.replace("\\", "/")
+		data = objListData
 		if sys.version_info >= (3, 0):
 			data = data.encode("utf-8")
 
