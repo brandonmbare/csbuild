@@ -717,7 +717,7 @@ class MsvcLinker( MsvcBase, toolchain.linkerBase ):
 		return "{}{}{}{}".format(
 			self._getLinkerExe( ),
 			"/NXCOMPAT /DYNAMICBASE " if self.shared._project_settings.type != csbuild.ProjectType.StaticLibrary else "",
-			"@{}".format(linkFile),
+			'@"{}"'.format(linkFile),
 			" ".join( self.shared._project_settings.linkerFlags ) )
 
 
