@@ -1042,7 +1042,7 @@ def SetApplePropertyList( plistFile ):
 	Set the property list for a project.  This only applies to builds on Apple platforms.
 
 	:param plistFile:
-	:type plistFile: str or class:`csbuild.plugin_plist_generator.PListGenerator`
+	:type plistFile: :class:`csbuild.plugin_plist_generator.PListGenerator`
 	"""
 	projectSettings.currentProject.SetValue( "plistFile", copy.deepcopy( plistFile ) if isinstance( plistFile, plugin_plist_generator.PListGenerator ) else plistFile )
 

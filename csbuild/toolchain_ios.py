@@ -237,3 +237,78 @@ class iOSLinker( iOSBase, toolchain_gcc_darwin.GccLinkerDarwin ):
 		else:
 			ret = originalCmd
 		return ret
+
+
+
+	def GetAppBundleRootPath( self, appBundlePath ):
+		"""
+		Get the root directory under the app bundle. All files contained in the bundles must be somewhere under the root directory.
+
+		:param appBundlePath: Path the to the .app directory.
+		:type appBundlePath: str
+
+		:return: str
+		"""
+		return appBundlePath
+
+
+	def GetAppBundleExePath( self, appBundlePath ):
+		"""
+		Get the app bundle directory where application executables are stored.
+
+		:param appBundlePath: Path the to the .app directory.
+		:type appBundlePath: str
+
+		:return: str
+		"""
+		return appBundlePath
+
+
+	def GetAppBundleResourcePath( self, appBundlePath ):
+		"""
+		Get the app bundle directory where application resources (such as images, NIBs, or localization files) are typically stored.
+
+		:param appBundlePath: Path the to the .app directory.
+		:type appBundlePath: str
+
+		:return: str
+		"""
+		return appBundlePath
+
+
+	def GetAppBundleFrameworksPath( self, appBundlePath ):
+		"""
+		Get the app bundle directory where required application frameworks are stored.  These are private frameworks required
+		for the application to work and will override frameworks installed on the running system.
+
+		:param appBundlePath: Path the to the .app directory.
+		:type appBundlePath: str
+
+		:return: str
+		"""
+		return appBundlePath
+
+
+	def GetAppBundlePlugInsPath( self, appBundlePath ):
+		"""
+		Get the app bundle directory where loadable modules are typically stored.
+
+		:param appBundlePath: Path the to the .app directory.
+		:type appBundlePath: str
+
+		:return: str
+		"""
+		raise appBundlePath
+
+
+	def GetAppBundleSharedSupportPath( self, appBundlePath ):
+		"""
+		Get the app bundle directory where support files are typically stored.  These are files that supplement the application
+		in some way, but are not required for the application to run.
+
+		:param appBundlePath: Path the to the .app directory.
+		:type appBundlePath: str
+
+		:return: str
+		"""
+		return appBundlePath

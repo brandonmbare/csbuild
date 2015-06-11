@@ -1,13 +1,13 @@
 #!/usr/bin/python
 
-import os
-import csbuild
 import sys
-
-from csbuild.toolchain_msvc import VisualStudioPackage
 
 # Force the local copy of csbuild to be used rather than the installed copy.
 sys.path.insert(0, "../../../")
+
+import csbuild
+
+from csbuild.toolchain_msvc import VisualStudioPackage
 
 csbuild.Toolchain("gcc", "ios").Compiler().SetCppStandard("c++11")
 csbuild.Toolchain("gcc", "ios").SetCppStandardLibrary("libc++")

@@ -943,3 +943,36 @@ class PathWorkingDirPair( object ):
 	def __lt__(self, other):
 
 		return ( self.path < other.path ) and ( self.workingDir < other.workingDir )
+
+
+def DeleteTree( pathToDelete ):
+	"""
+	Delete a path on disk recursively (removes both files and directories).
+
+	:param pathToDelete: File or directory path on disk.
+	:type pathToDelete: str
+
+	:return: None
+	"""
+	if os.path.isdir( pathToDelete ):
+		fullDirList = []
+		fullFileList = []
+
+		# Compile a list of each file and directory in the root path.
+		for root, dirList, fileList in os.walk( pathToDelete ):
+			for dirPath in dirList:
+				fullDirList.append( os.path.join( root, dirPath ) )
+			for filePath in fileList:
+				fullFileList.append( os.path.join( root, filePath ) )
+
+		# Delete each file.
+		for filePath in fullFileList:
+			os.remove( filePath )
+
+		# Delete each directory in reverse order. The list needs to be reversed because a directory can only be removed if it's empty.
+		for dirPath in reversed( fullDirList ):
+			os.rmdir( dirPath )
+
+		os.rmdir( pathToDelete )
+	else:
+		os.remove( pathToDelete )
