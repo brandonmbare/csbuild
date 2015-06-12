@@ -226,7 +226,7 @@ class PListGenerator( object ):
 		fd, tempFilePath = tempfile.mkstemp()
 
 		# Write out the substituted plist to a temporary file.
-		with os.fdopen(fd, mode="w") as fileHandle:
+		with os.fdopen(fd, "w") as fileHandle:
 			fileHandle.write(inputFileString)
 
 		return tempFilePath
@@ -310,7 +310,7 @@ class PListGenerator( object ):
 		fd, tempFilePath = tempfile.mkstemp()
 
 		# Write out the plist contents.
-		with os.fdopen(fd, mode="w") as fileHandle:
+		with os.fdopen(fd, "w") as fileHandle:
 			fileHandle.write( finalXmlString )
 
 		return tempFilePath

@@ -293,30 +293,66 @@ class GccLinkerDarwin( GccDarwinBase, toolchain_gcc.GccLinker ):
 		if os.access( project.tempAppDir, os.F_OK ):
 			_utils.DeleteTree( project.tempAppDir )
 
-		# Recreate the temp .app directory.
-		os.makedirs( project.tempAppDir )
+		# Recreate the temp .app directory and any necessary sub-directories underneath it.
+		# This must be a set in case any of these paths point to the same location.
+		appDirs = {
+			project.tempAppDir,
+			self.GetAppBundleRootPath( project.tempAppDir ),
+			self.GetAppBundleExePath( project.tempAppDir ),
+			self.GetAppBundleResourcePath( project.tempAppDir ),
+			self.GetAppBundleFrameworksPath( project.tempAppDir ),
+		}
 
-		# Create the sub-directory structure within the .app.
-		os.makedirs( self.GetAppBundleRootPath( project.tempAppDir ) )
-		os.makedirs( self.GetAppBundleExePath( project.tempAppDir ) )
-		os.makedirs( self.GetAppBundleResourcePath( project.tempAppDir ) )
-		os.makedirs( self.GetAppBundleFrameworksPath( project.tempAppDir ) )
+		for dirPath in sorted( appDirs ):
+			os.makedirs( dirPath )
 
 
-	def _copyNewAppBundle( self, project ):
+	def _createNewAppBundle( self, project ):
 		log.LOG_BUILD( "Generating {}.app...".format( project.name ) )
 
+		inputExePath = os.path.join( project.outputDir, project.outputName )
+		outputExePath = os.path.join( self.GetAppBundleExePath( project.tempAppDir ), project.outputName )
+
+		tempAppDsymDir = "{}.dSYM".format( project.tempAppDir )
+		finalAppDsymDir = "{}.dSYM".format( project.finalAppDir )
+
 		# Move this project's just-built application file into the temp .app directory.
-		shutil.move( os.path.join( project.outputDir, project.outputName ), self.GetAppBundleExePath( project.tempAppDir ) )
+		shutil.move( inputExePath, outputExePath )
 
 		#TODO: Copy any .dylib's to the app bundle exe path.
+
+		dsymCmd = [
+			"dsymutil",
+			outputExePath,
+			"-o", tempAppDsymDir,
+		]
+
+		# Run dsymutil to generate the DWARF debug symbols file.
+		fd = subprocess.Popen( dsymCmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE )
+		( output, errors ) = fd.communicate()
+
+		# Bail out if dsymutil produced any errors.
+		if fd.returncode != 0:
+			if sys.version_info >= ( 3, 0 ):
+				errors = errors.decode( "utf-8" )
+			errorList = errors.split( "\n" )
+			for error in errorList:
+				if error:
+					error = error.replace( "error: ", "" )
+					log.LOG_ERROR( error )
+			return
 
 		# If an existing .app directory exists in the project's output path, remove it.
 		if os.access( project.finalAppDir, os.F_OK ):
 			_utils.DeleteTree( project.finalAppDir )
 
+		# Remove the existing .app.dSYM if one exists.
+		if os.access( finalAppDsymDir, os.F_OK ):
+			_utils.DeleteTree( finalAppDsymDir )
+
 		# Move the .app directory into the project's output path.
 		shutil.move( project.tempAppDir, project.finalAppDir )
+		shutil.move( tempAppDsymDir, finalAppDsymDir )
 
 
 	def GetAppBundleRootPath( self, appBundlePath ):
@@ -409,4 +445,4 @@ class GccLinkerDarwin( GccDarwinBase, toolchain_gcc.GccLinker ):
 			project.plistFile.Output( self.GetAppBundleRootPath( project.tempAppDir ) )
 
 			# Create the new .app bundle.
-			self._copyNewAppBundle( project )
+			self._createNewAppBundle( project )
