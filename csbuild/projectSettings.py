@@ -1779,7 +1779,7 @@ class projectSettings( object ):
 
 		#TODO: Remove this once the source file extension management has been reworked.
 		# Objective-C/C++ files should not be chunked since they won't play nice with C++.
-		if extension == ".m" or extension == ".mm":
+		if newFileExtension == ".m" or newFileExtension == ".mm":
 			return False
 
 		if(
