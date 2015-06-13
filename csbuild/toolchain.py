@@ -1059,7 +1059,7 @@ class SettingsOverrider( object ):
 		:param plistFile:
 		:type plistFile: :class:`csbuild.plugin_plist_generator.PListGenerator`
 		"""
-		self._settingsOverrides["plistFile"] = copy.deepcopy( plistFile ) if isinstance( plistFile, plugin_plist_generator.PListGenerator ) else plistFile
+		self._settingsOverrides["plistFile"] = copy.deepcopy( plistFile )
 
 
 	def SetSupportedArchitectures(self, *architectures):

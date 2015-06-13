@@ -468,7 +468,7 @@ class GccLinkerDarwin( GccDarwinBase, toolchain_gcc.GccLinker ):
 			self._cleanupOldAppBundle( project )
 
 			# Build the project plist.
-			project.plistFile.Output( self.GetAppBundleRootPath( project.tempAppDir ) )
+			project.plistFile.Output( project, self.GetAppBundleRootPath( project.tempAppDir ) )
 
 			# Create the new .app bundle.
 			self._createNewAppBundle( project )

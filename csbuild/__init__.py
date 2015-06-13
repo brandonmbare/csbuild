@@ -1044,7 +1044,7 @@ def SetApplePropertyList( plistFile ):
 	:param plistFile:
 	:type plistFile: :class:`csbuild.plugin_plist_generator.PListGenerator`
 	"""
-	projectSettings.currentProject.SetValue( "plistFile", copy.deepcopy( plistFile ) if isinstance( plistFile, plugin_plist_generator.PListGenerator ) else plistFile )
+	projectSettings.currentProject.SetValue( "plistFile", copy.deepcopy( plistFile ) )
 
 
 def SetSupportedArchitectures(*architectures):

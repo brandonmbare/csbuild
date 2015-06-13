@@ -34,6 +34,7 @@ import time
 import xml.etree.ElementTree as ET
 import xml.dom.minidom as minidom
 
+from . import _utils
 from . import log
 
 
@@ -148,17 +149,19 @@ class PListGenerator( object ):
 		return newNode
 
 
-	def SetExternalPlistFile( self, externalPlistFilePath ):
+	def SetExternalFile( self, filePath ):
 		"""
 		Set an external file path as the ASCII plist file. If this is set before Output() is called, the file this
 		path points to will be used as the input plist rather than generating one.
 
-		:param externalPlistFilePath: File path to the external plist.
-		:type externalPlistFilePath: str
+		:param filePath: File path to the external plist.
+		:type filePath: str
 
 		:return: None
 		"""
-		self._externalPlistPath = externalPlistFilePath
+		filePath = _utils.FixupRelativePath( filePath )
+		filePath = _utils.PathWorkingDirPair( filePath )
+		self._externalPlistPath = filePath
 
 
 	def AddStringSubstitution(self, key, value):
@@ -187,7 +190,7 @@ class PListGenerator( object ):
 		self._substitutionMap[key] = value
 
 
-	def Output( self, outputFilePath ):
+	def Output( self, project, outputFilePath ):
 		"""
 		Create a binary plist file.
 
@@ -198,6 +201,7 @@ class PListGenerator( object ):
 		"""
 		# Process the ascii plist, generating a temporary copy with the string substitutions.
 		if self._externalPlistPath:
+			self._externalPlistPath = os.path.normpath( os.path.join( self._externalPlistPath.workingDir, _utils.ResolveProjectMacros( self._externalPlistPath.path, project ) ) )
 			tempAsciiFilePath = self._processExternalFile()
 		else:
 			tempAsciiFilePath = self._generateTempAsciiFile()
