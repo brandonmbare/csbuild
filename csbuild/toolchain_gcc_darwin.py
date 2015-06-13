@@ -24,6 +24,7 @@ Contains a plugin class for interfacing with GCC/Clang on MacOSX.
 
 import platform
 import shutil
+import sys
 import csbuild
 
 from . import _shared_globals
@@ -35,6 +36,8 @@ from .plugin_plist_generator import *
 HAS_RUN_XCRUN = False
 DEFAULT_OSX_SDK_DIR = None
 DEFAULT_OSX_SDK_VERSION = None
+DEFAULT_XCODE_ACTIVE_DEV_DIR = None
+DEFAULT_XCODE_TOOLCHAIN_DIR = None
 
 
 class GccDarwinBase( object ):
@@ -43,23 +46,31 @@ class GccDarwinBase( object ):
 		if not HAS_RUN_XCRUN:
 			global DEFAULT_OSX_SDK_DIR
 			global DEFAULT_OSX_SDK_VERSION
+			global DEFAULT_XCODE_ACTIVE_DEV_DIR
+			global DEFAULT_XCODE_TOOLCHAIN_DIR
 
 			# Default the target SDK version to the version of OSX we're currently running on.
 			try:
 				DEFAULT_OSX_SDK_DIR = subprocess.check_output( ["xcrun", "--sdk", "macosx", "--show-sdk-path"] )
 				DEFAULT_OSX_SDK_VERSION = subprocess.check_output( ["xcrun", "--sdk", "macosx", "--show-sdk-version"] )
+				DEFAULT_XCODE_ACTIVE_DEV_DIR = subprocess.check_output( ["xcode-select", "-p"] )
 
 				if sys.version_info >= (3, 0):
-					DEFAULT_OSX_SDK_DIR = DEFAULT_OSX_SDK_DIR.decode("utf-8")
-					DEFAULT_OSX_SDK_VERSION = DEFAULT_OSX_SDK_VERSION.decode("utf-8")
+					DEFAULT_OSX_SDK_DIR = DEFAULT_OSX_SDK_DIR.decode( "utf-8" )
+					DEFAULT_OSX_SDK_VERSION = DEFAULT_OSX_SDK_VERSION.decode( "utf-8" )
+					DEFAULT_XCODE_ACTIVE_DEV_DIR = DEFAULT_XCODE_ACTIVE_DEV_DIR.decode( "utf-8" )
 
-				DEFAULT_OSX_SDK_DIR = DEFAULT_OSX_SDK_DIR.strip("\n")
-				DEFAULT_OSX_SDK_VERSION = DEFAULT_OSX_SDK_VERSION.strip("\n")
+				DEFAULT_OSX_SDK_DIR = DEFAULT_OSX_SDK_DIR.strip( "\n" )
+				DEFAULT_OSX_SDK_VERSION = DEFAULT_OSX_SDK_VERSION.strip( "\n" )
+				DEFAULT_XCODE_ACTIVE_DEV_DIR = DEFAULT_XCODE_ACTIVE_DEV_DIR.strip( "\n" )
 			except:
 				# Otherwise, fallback to a best guess.
 				macVersion = platform.mac_ver()[0]
 				DEFAULT_OSX_SDK_VERSION = ".".join( macVersion.split( "." )[:2] )
 				DEFAULT_OSX_SDK_DIR = "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX{}.sdk".format( DEFAULT_OSX_SDK_VERSION )
+				DEFAULT_XCODE_ACTIVE_DEV_DIR = "/Applications/Xcode.app/Contents/Developer"
+
+			DEFAULT_XCODE_TOOLCHAIN_DIR = os.path.join( DEFAULT_XCODE_ACTIVE_DEV_DIR, "Toolchains", "XcodeDefault.xctoolchain" )
 
 			HAS_RUN_XCRUN = True
 
@@ -80,7 +91,7 @@ class GccDarwinBase( object ):
 		:type version: str
 		"""
 		self.shared._targetMacVersion = version
-		self.shared._sysroot = "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX{}.sdk".format( self.shared._targetMacVersion )
+		self.shared._sysroot = "{}/Platforms/MacOSX.platform/Developer/SDKs/MacOSX{}.sdk".format( DEFAULT_XCODE_ACTIVE_DEV_DIR, self.shared._targetMacVersion )
 
 
 	def GetTargetMacVersion( self ):
@@ -125,7 +136,7 @@ class GccCompilerDarwin( GccDarwinBase, toolchain_gcc.GccCompiler ):
 		ret = ""
 		for inc in includeDirs:
 			ret += "-I{} ".format( os.path.abspath( inc ) )
-		ret += "-I/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include "
+		ret += "-I{}/usr/include ".format( DEFAULT_XCODE_TOOLCHAIN_DIR )
 		return ret
 
 
@@ -137,6 +148,7 @@ class GccCompilerDarwin( GccDarwinBase, toolchain_gcc.GccCompiler ):
 			self._getNoCommonFlag( project ),
 		)
 		return ret
+
 
 	def SupportsObjectScraping(self):
 		return False
@@ -201,11 +213,12 @@ class GccLinkerDarwin( GccDarwinBase, toolchain_gcc.GccLinker ):
 	def _getLibraryArg(self, lib):
 		for depend in self._project_settings.reconciledLinkDepends:
 			dependProj = _shared_globals.projects[depend]
-			if dependProj.type == csbuild.ProjectType.Application:
-				continue
 			dependLibName = dependProj.outputName
 			splitName = os.path.splitext(dependLibName)[0]
 			if splitName == lib or splitName == "lib{}".format( lib ):
+				if dependProj.type == csbuild.ProjectType.Application or dependProj.type == csbuild.ProjectType.LoadableModule:
+					# Loadable modules and applications should not be linked into the executables. They are only dependencies so they can be copied into the app bundles.
+					return ""
 				return "{} ".format( os.path.join( dependProj.outputDir, dependLibName ) )
 		return "{} ".format( self._actual_library_names[lib] )
 
@@ -301,6 +314,8 @@ class GccLinkerDarwin( GccDarwinBase, toolchain_gcc.GccLinker ):
 			self.GetAppBundleExePath( project.tempAppDir ),
 			self.GetAppBundleResourcePath( project.tempAppDir ),
 			self.GetAppBundleFrameworksPath( project.tempAppDir ),
+			self.GetAppBundlePlugInsPath( project.tempAppDir ),
+			self.GetAppBundleSharedSupportPath( project.tempAppDir ),
 		}
 
 		for dirPath in sorted( appDirs ):
@@ -319,7 +334,18 @@ class GccLinkerDarwin( GccDarwinBase, toolchain_gcc.GccLinker ):
 		# Move this project's just-built application file into the temp .app directory.
 		shutil.move( inputExePath, outputExePath )
 
-		#TODO: Copy any .dylib's to the app bundle exe path.
+		# Copy the relevant dependencies into the app bundle.
+		for dep in project.reconciledLinkDepends:
+			depProj = _shared_globals.projects[dep]
+			if depProj.type == csbuild.ProjectType.Application or depProj.type == csbuild.ProjectType.SharedLibrary:
+				outPath = self.GetAppBundleExePath( project.tempAppDir )
+			elif depProj.type == csbuild.ProjectType.LoadableModule:
+				outPath = self.GetAppBundlePlugInsPath( project.tempAppDir )
+			else:
+				# Don't copy static libraries.
+				continue
+			libFile = os.path.join( depProj.outputDir, depProj.outputName )
+			shutil.copyfile( libFile, os.path.join( outPath, os.path.basename( libFile ) ) )
 
 		dsymCmd = [
 			"dsymutil",
