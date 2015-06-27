@@ -216,7 +216,7 @@ def AddLibraries( *args ):
 	:type args: an arbitrary number of strings
 	:param args: The list of libraries to link in.
 	"""
-	projectSettings.currentProject.UnionSet("libraries", set( args ))
+	projectSettings.currentProject.UnionSet("libraries", _utils.OrderedSet( args ))
 
 
 def AddStaticLibraries( *args ):
@@ -226,7 +226,7 @@ def AddStaticLibraries( *args ):
 	:type args: an arbitrary number of strings
 	:param args: The list of libraries to link in.
 	"""
-	projectSettings.currentProject.UnionSet("staticLibraries", set( args ))
+	projectSettings.currentProject.UnionSet("staticLibraries", _utils.OrderedSet( args ))
 
 
 def AddSharedLibraries( *args ):
@@ -236,7 +236,7 @@ def AddSharedLibraries( *args ):
 	:type args: an arbitrary number of strings
 	:param args: The list of libraries to link in.
 	"""
-	projectSettings.currentProject.UnionSet("sharedLibraries", set( args ))
+	projectSettings.currentProject.UnionSet("sharedLibraries", _utils.OrderedSet( args ))
 
 
 def AddFrameworks( *args ):
@@ -246,7 +246,7 @@ def AddFrameworks( *args ):
 	:type args: an arbitrary number of strings
 	:param args: The list of libraries to link in.
 	"""
-	projectSettings.currentProject.UnionSet("frameworks", set( args ))
+	projectSettings.currentProject.UnionSet("frameworks", _utils.OrderedSet( args ))
 
 
 def AddIncludeDirectories( *args ):
@@ -314,7 +314,7 @@ def AddAppleStoryboardFiles( *args ):
 	:param args: List of storyboard files.
 	:type args: And arbitrary number of strings.
 	"""
-	projectSettings.currentProject.UnionSet( "storyboardFiles", set( args ) )
+	projectSettings.currentProject.UnionSet( "storyboardFiles", _utils.OrderedSet( args ) )
 
 
 def AddAppleInterfaceFiles( *args ):
@@ -325,7 +325,7 @@ def AddAppleInterfaceFiles( *args ):
 	:param args: List of interface files.
 	:type args: And arbitrary number of strings.
 	"""
-	projectSettings.currentProject.UnionSet( "interfaceFiles", set( args ) )
+	projectSettings.currentProject.UnionSet( "interfaceFiles", _utils.OrderedSet( args ) )
 
 
 def AddAppleAssetCatalogs( *args ):
@@ -336,27 +336,27 @@ def AddAppleAssetCatalogs( *args ):
 	:param args: List of asset catalogs.
 	:type args: And arbitrary number of strings.
 	"""
-	projectSettings.currentProject.UnionSet( "assetCatalogs", set( args ) )
+	projectSettings.currentProject.UnionSet( "assetCatalogs", _utils.OrderedSet( args ) )
 
 
 def ClearLibraries( ):
 	"""Clears the list of libraries"""
-	projectSettings.currentProject.SetValue("libraries", set())
+	projectSettings.currentProject.SetValue("libraries", _utils.OrderedSet())
 
 
 def ClearStaticLibraries( ):
 	"""Clears the list of statically-linked libraries"""
-	projectSettings.currentProject.SetValue("staticLibraries", set())
+	projectSettings.currentProject.SetValue("staticLibraries", _utils.OrderedSet())
 
 
 def ClearSharedibraries( ):
 	"""Clears the list of dynamically-linked libraries"""
-	projectSettings.currentProject.SetValue("sharedLibraries", set())
+	projectSettings.currentProject.SetValue("sharedLibraries", _utils.OrderedSet())
 
 
 def ClearFrameworks():
 	"""Clears the list of frameworks."""
-	projectSettings.currentProject.SetValue( "frameworks", set() )
+	projectSettings.currentProject.SetValue( "frameworks", _utils.OrderedSet() )
 
 
 def ClearIncludeDirectories( ):
@@ -378,15 +378,15 @@ def ClearFrameworkDirectories():
 
 
 def ClearAppleStoryboardFiles():
-	projectSettings.currentProject.SetValue( "storyboardFiles", set() )
+	projectSettings.currentProject.SetValue( "storyboardFiles", _utils.OrderedSet() )
 
 
 def ClearAppleInterfaceFiles():
-	projectSettings.currentProject.SetValue( "interfaceFiles", set() )
+	projectSettings.currentProject.SetValue( "interfaceFiles", _utils.OrderedSet() )
 
 
 def ClearAppleAssetCatalogs():
-	projectSettings.currentProject.SetValue( "assetCatalogs", set() )
+	projectSettings.currentProject.SetValue( "assetCatalogs", _utils.OrderedSet() )
 
 
 def SetOptimizationLevel( i ):
@@ -967,7 +967,7 @@ def DoNotChunkTogether(pattern, *additionalPatterns):
 	:param additionalPatterns: Additional patterns to compile the list of mutually exclusive files with
 	"""
 	patterns = [pattern] + list(additionalPatterns)
-	mutexFiles = set()
+	mutexFiles = _utils.OrderedSet()
 	for patternToMatch in patterns:
 		for filename in glob.glob(patternToMatch):
 			mutexFiles.add(os.path.abspath(filename))
@@ -977,7 +977,7 @@ def DoNotChunkTogether(pattern, *additionalPatterns):
 			if file1 == file2:
 				continue
 			if file1 not in projectSettings.currentProject.chunkMutexes:
-				projectSettings.currentProject.chunkMutexes[file1] = { file2 }
+				projectSettings.currentProject.chunkMutexes[file1] = _utils.OrderedSet({ file2 })
 			else:
 				projectSettings.currentProject.chunkMutexes[file1].add(file2)
 
@@ -1053,7 +1053,7 @@ def SetSupportedArchitectures(*architectures):
 	--all-architectures from building everything supported by the toolchain, if the project
 	is not set up to support all of the toolchain's architectures.
 	"""
-	projectSettings.currentProject.SetValue("supportedArchitectures", set(architectures))
+	projectSettings.currentProject.SetValue("supportedArchitectures", _utils.OrderedSet(architectures))
 
 
 def SetSupportedToolchains(*toolchains):
@@ -1062,7 +1062,7 @@ def SetSupportedToolchains(*toolchains):
 	--all-toolchains from building everything supported by csbuild, if the project
 	is not set up to support all of the toolchains.
 	"""
-	projectSettings.currentProject.SetValue("supportedToolchains", set(toolchains))
+	projectSettings.currentProject.SetValue("supportedToolchains", _utils.OrderedSet(toolchains))
 
 
 def RegisterToolchain( name, compiler, linker, **customTools ):
@@ -2369,10 +2369,20 @@ def SetupDebugTarget( ):
 
 	AddDefines("_DEBUG")
 
+
 	if not projectSettings.currentProject._outputDir_set:
-		projectSettings.currentProject.outputDir = "{project.activeToolchainName}-{project.outputArchitecture}-{project.targetName}"
+		s = _utils.FixupRelativePath( "{project.activeToolchainName}-{project.outputArchitecture}-{project.targetName}" )
+		s = _utils.PathWorkingDirPair( s )
+		projectSettings.currentProject.outputDirTemp = s
+
+	projectSettings.currentProject.outputDir = os.path.normpath( os.path.join( projectSettings.currentProject.outputDirTemp.workingDir, _utils.ResolveProjectMacros( projectSettings.currentProject.outputDirTemp.path, projectSettings.currentProject ) ) )
+
 	if not projectSettings.currentProject._objDir_set:
-		projectSettings.currentProject.objDir = os.path.join(projectSettings.currentProject.outputDir, "obj")
+		s = _utils.FixupRelativePath( os.path.join(projectSettings.currentProject.outputDir, "obj") )
+		s = _utils.PathWorkingDirPair( s )
+		projectSettings.currentProject.objDirTemp = s
+		projectSettings.currentProject.objDir = os.path.normpath( os.path.join( s.workingDir, _utils.ResolveProjectMacros( s.path, projectSettings.currentProject ) ) )
+
 	if not projectSettings.currentProject.toolchains["msvc"].shared.debug_runtime_set:
 		projectSettings.currentProject.toolchains["msvc"].shared.debug_runtime = True
 
@@ -2388,9 +2398,18 @@ def SetupReleaseTarget( ):
 	AddDefines("NDEBUG")
 
 	if not projectSettings.currentProject._outputDir_set:
-		projectSettings.currentProject.outputDir = "{project.activeToolchainName}-{project.outputArchitecture}-{project.targetName}"
+		s = _utils.FixupRelativePath( "{project.activeToolchainName}-{project.outputArchitecture}-{project.targetName}" )
+		s = _utils.PathWorkingDirPair( s )
+		projectSettings.currentProject.outputDirTemp = s
+
+	projectSettings.currentProject.outputDir = os.path.normpath( os.path.join( projectSettings.currentProject.outputDirTemp.workingDir, _utils.ResolveProjectMacros( projectSettings.currentProject.outputDirTemp.path, projectSettings.currentProject ) ) )
+
 	if not projectSettings.currentProject._objDir_set:
-		projectSettings.currentProject.objDir = os.path.join(projectSettings.currentProject.outputDir, "obj")
+		s = _utils.FixupRelativePath( os.path.join(projectSettings.currentProject.outputDir, "obj") )
+		s = _utils.PathWorkingDirPair( s )
+		projectSettings.currentProject.objDirTemp = s
+		projectSettings.currentProject.objDir = os.path.normpath( os.path.join( s.workingDir, _utils.ResolveProjectMacros( s.path, projectSettings.currentProject ) ) )
+
 	if not projectSettings.currentProject.toolchains["msvc"].shared.debug_runtime_set:
 		projectSettings.currentProject.toolchains["msvc"].shared.debug_runtime = False
 
@@ -2559,6 +2578,10 @@ mainFileDir = ""
 def _run( ):
 
 	_setupdefaults( )
+
+	#Initialized here to avoid a circular dependency
+	_shared_globals.globalPreMakeSteps = _utils.OrderedSet()
+	_shared_globals.globalPostMakeSteps = _utils.OrderedSet()
 
 	global args
 	args = _dummy( )

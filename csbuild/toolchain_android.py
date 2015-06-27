@@ -575,7 +575,7 @@ class AndroidLinker(AndroidBase, toolchain_gcc.GccLinker):
 		nullOut = '"{}"'.format( os.path.join(project.csbuildDir, "null") )
 		try:
 			cmd = [self._ld, "-o", nullOut, "--verbose",
-				   "-static" if force_static else "-shared" if force_shared else "", "-l{}".format( library ),
+				   "-Bstatic" if force_static else "-Bdynamic" if force_shared else "", "-l{}".format( library ),
 				   "-L", os.path.join( self.shared._ndkHome, "platforms", "android-{}".format(self.shared._targetSdkVersion), "arch-{}".format(self._getSimplifiedArch(project)), "usr", "lib")]
 			cmd += shlex.split( self._getLibraryDirs( libraryDirs, False ), posix=(platform.system() != "Windows") )
 
@@ -606,7 +606,7 @@ class AndroidLinker(AndroidBase, toolchain_gcc.GccLinker):
 			elif not success:
 				try:
 					cmd = [self._ld, "-o", nullOut, "--verbose",
-						   "-static" if force_static else "-shared" if force_shared else "", "-l:{}".format( library ),
+						   "-Bstatic" if force_static else "-Bdynamic" if force_shared else "", "-l:{}".format( library ),
 						   "-L", os.path.join( self.shared._ndkHome, "platforms", "android-{}".format(self.shared._targetSdkVersion), "arch-{}".format(self._getSimplifiedArch(project)), "usr", "lib")]
 					cmd += shlex.split( self._getLibraryDirs( libraryDirs, False ), posix=(platform.system() != "Windows") )
 
