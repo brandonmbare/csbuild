@@ -773,7 +773,9 @@ class projectSettings( object ):
 			proj = _shared_globals.projects[dep]
 			proj.activeToolchain.SetActiveTool("linker")
 			if proj.type == csbuild.ProjectType.StaticLibrary and self.linkMode == csbuild.StaticLinkMode.LinkIntermediateObjects:
-				self.libraries.remove(proj.outputName.split(".")[0])
+				projName = proj.outputName.split( "." )[0]
+				if projName in self.libraries:
+					self.libraries.remove( projName )
 				continue
 			if proj.outputDir:
 				# This project has already been prepared, use its output directory as is.

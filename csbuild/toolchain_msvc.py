@@ -38,11 +38,21 @@ import csbuild
 
 ### Reference: http://msdn.microsoft.com/en-us/library/f35ctcxw.aspx
 
-X64 = "X64"
-X86 = "X86"
-
 HAS_SET_VC_VARS = False
 WINDOWS_SDK_DIR = ""
+
+MSVC_VERSION = {
+	"2010": 100,
+	"2012": 110,
+	"2013": 120,
+}
+
+IS_PLATFORM_64_BIT = {
+	"amd64":  True,
+	"x86_64": True,
+	"x86":    False,
+	"i386":   False,
+}
 
 
 class SubSystem( object ):
@@ -62,34 +72,23 @@ class SubSystem( object ):
 	EFI_RUNTIME_DRIVER = 10
 
 
-class VisualStudioPackage( object ):
-	"""
-	Helper enum for filling in the MSVC version based on specific versions of Visual Studio.
-	"""
-	Vs2010 = 100
-	Vs2012 = 110
-	Vs2013 = 120
-
-
 class MsvcBase( object ):
 	def __init__(self):
 		self.shared._project_settings = None
 		self.shared.debug_runtime = False
 		self.shared.debug_runtime_set = False
-		self.shared.msvc_version = 100
+		self.shared.msvc_version = MSVC_VERSION["2010"]
 
 		self.shared._vc_env_var = ""
 		self.shared._toolchain_path = ""
 		self.shared._bin_path = ""
 		self.shared._include_path = []
 		self.shared._lib_path = []
-		self.shared._platform_arch = ""
-		self.shared._build_64_bit = False
 
-		
+
 	@staticmethod
 	def AdditionalArgs( parser ):
-		parser.add_argument("--msvc-version", help="Version of msvc to use", choices=["2010", "2012", "2013"])
+		parser.add_argument( "--msvc-version", help="Version of msvc to use.", choices=sorted( MSVC_VERSION.keys() ) )
 
 
 	def _copyTo(self, other):
@@ -101,33 +100,22 @@ class MsvcBase( object ):
 		other.shared._vc_env_var = self.shared._vc_env_var
 		other.shared._toolchain_path = self.shared._toolchain_path
 		other.shared._bin_path = self.shared._bin_path
-		other.shared._include_path = list(self.shared._include_path)
-		other.shared._lib_path = list(self.shared._lib_path)
-		other.shared._platform_arch = self.shared._platform_arch
-		other.shared._build_64_bit = self.shared._build_64_bit
+		other.shared._include_path = list( self.shared._include_path )
+		other.shared._lib_path = list( self.shared._lib_path )
 
 
-	def SetMsvcVersion( self, msvc_version ):
+	def SetMsvcVersion( self, visual_studio_version ):
 		"""
-		Set the MSVC version
+		Set the MSVC version.
 
-		:param msvc_version: The version to compile with
-		:type msvc_version: int
+		:param visual_studio_version: The version of Visual Studio associated with the desired version of msvc.
+		:type visual_studio_version: str
 		"""
-		self.shared.msvc_version = msvc_version
-
-
-	def GetMsvcVersion( self ):
-		"""
-		Get the MSVC version that's been set.
-
-		:return: int
-		"""
-		return self.shared.msvc_version
+		self.shared.msvc_version = MSVC_VERSION[visual_studio_version]
 
 
 	def GetValidArchitectures(self):
-		return ['x86', 'x64']
+		return ['x86', 'x64', "arm"]
 
 
 	def GetMsvcBinPath(self):
@@ -140,99 +128,105 @@ class MsvcBase( object ):
 
 	def _setupForProject( self, project ):
 		ver = csbuild.GetOption("msvc_version")
-		if ver == "2010":
-			self.shared.msvc_version = 100
-		elif ver == "2012":
-			self.shared.msvc_version = 110
-		elif ver == "2013":
-			self.shared.msvc_version = 120
-			
-		platform_architectures = {
-			"amd64": X64,
-			"x86_64": X64,
-			"x86": X86,
-			"i386": X86 }
+		if ver:
+			self.shared.msvc_version = MSVC_VERSION[ver]
 
 		self.shared._project_settings = project
-		self.shared._vc_env_var = r"VS{}COMNTOOLS".format( self.shared.msvc_version )
+		self.shared._vc_env_var = "VS{}COMNTOOLS".format( self.shared.msvc_version )
 		self.shared._toolchain_path = os.path.normpath( os.path.join( os.environ[self.shared._vc_env_var], "..", "..", "VC" ) )
-		self.shared._bin_path = os.path.join( self.shared._toolchain_path, "bin" )
 		self.shared._include_path = [os.path.join( self.shared._toolchain_path, "include" )]
 		self.shared._lib_path = [os.path.join( self.shared._toolchain_path, "lib" )]
-		self.shared._platform_arch = platform_architectures.get( platform.machine( ).lower( ), X86 )
-		self.shared._build_64_bit = False
 
-		# Determine if we need to build for 64-bit.
-		if(
-			self.shared._platform_arch == X64
-			and self.shared._project_settings.outputArchitecture != "x86"
-		):
-			self.shared._build_64_bit = True
-		elif self.shared._project_settings.outputArchitecture == "x64":
-			self.shared._build_64_bit = True
-
-		# If we're trying to build for 64-bit, determine the appropriate path for the 64-bit tools based on the machine's architecture.
-		if self.shared._build_64_bit:
-			#TODO: Switch the assembler to ml64.exe when assemblers are supported.
-			self.shared._bin_path = os.path.join( self.shared._bin_path, "amd64" if self.shared._platform_arch == X64 else "x86_amd64" )
-			self.shared._lib_path[0] = os.path.join( self.shared._lib_path[0], "amd64" )
+		isPlatform64Bit = IS_PLATFORM_64_BIT[platform.machine().lower()]
 
 		global HAS_SET_VC_VARS
 		global WINDOWS_SDK_DIR
-		if not HAS_SET_VC_VARS:
 
-			batch_file_path = os.path.join( self.shared._toolchain_path, "vcvarsall.bat" )
-			fd = subprocess.Popen( '"{}" {} & set'.format( batch_file_path, "x64" if self.shared._build_64_bit else "x86" ),
-				stdout = subprocess.PIPE, stderr = subprocess.PIPE )
+		if not HAS_SET_VC_VARS:
+			# Versions prior to Visual Studio 2013 had a slightly different set of arguments.
+			if self.shared.msvc_version < MSVC_VERSION["2013"]:
+				vcvarsallArg = {
+					"x86": "x86",
+					"x64": "amd64" if isPlatform64Bit else "x86_amd64",
+					"arm": "x86_arm",
+				}
+			else:
+				vcvarsallArg = {
+					"x86": "amd64_x86" if isPlatform64Bit else "x86",
+					"x64": "amd64" if isPlatform64Bit else "x86_amd64",
+					"arm": "amd64_arm" if isPlatform64Bit else "x86_arm",
+				}
+
+			vcvarsallArg = vcvarsallArg[self.shared._project_settings.outputArchitecture]
+			batchFilePath = os.path.join( self.shared._toolchain_path, "vcvarsall.bat" )
+			fd = subprocess.Popen( '"{}" {} & set'.format( batchFilePath, vcvarsallArg ), stdout = subprocess.PIPE, stderr = subprocess.PIPE )
 
 			if sys.version_info >= (3, 0):
-				(output, errors) = fd.communicate( str.encode("utf-8") )
+				(output, errors) = fd.communicate( str.encode( "utf-8" ) )
 			else:
-				(output, errors) = fd.communicate( )
+				(output, errors) = fd.communicate()
 
-			output_lines = output.splitlines( )
+			outputLines = output.splitlines()
 
-			for line in output_lines:
-				# Convert to a string on Python3.
+			for line in outputLines:
+
+				# Convert to a string in Python3.
 				if sys.version_info >= (3, 0):
-					line = line.decode("utf-8")
+					line = line.decode( "utf-8" )
 
-				key_value_list = line.split( "=", 1 )
+				keyValueList = line.split( "=", 1 )
 
 				# Only accept lines that contain key/value pairs.
-				if len( key_value_list ) == 2:
-					os.environ[key_value_list[0]] = key_value_list[1]
+				if len( keyValueList ) == 2:
+
+					if keyValueList[0] in ("Path", "LIB"):
+						os.environ[keyValueList[0]] = keyValueList[1]
 
 					# Check if the line we're on has the Windows SDK directory listed.
-					if key_value_list[0] == "WindowsSdkDir":
-						WINDOWS_SDK_DIR = key_value_list[1]
+					elif keyValueList[0] == "WindowsSdkDir":
+						WINDOWS_SDK_DIR = keyValueList[1]
 
 			HAS_SET_VC_VARS = True
 
+		binSubPath = {
+			"x86": "",
+			"x64": "amd64" if isPlatform64Bit else "x86_amd64",
+			"arm": "arm" if isPlatform64Bit and self.shared.msvc_version > MSVC_VERSION["2012"] else "x86_arm",
+		}[self.shared._project_settings.outputArchitecture]
+
+		toolchainLibSubPath = {
+			"x86": "",
+			"x64": "x64",
+			"arm": "arm",
+		}[self.shared._project_settings.outputArchitecture]
+
+		self.shared._bin_path = os.path.normpath( os.path.join( self.shared._toolchain_path, "bin", binSubPath ) )
+		self.shared._lib_path[0] = os.path.normpath( os.path.join( self.shared._lib_path[0], toolchainLibSubPath ) )
+
 		self.shared.winSdkPath = WINDOWS_SDK_DIR
 		sdkInclude = os.path.join( self.shared.winSdkPath, "include" )
+
 		self.shared._include_path.append( sdkInclude )
 		includeShared = os.path.join( sdkInclude, "Shared" )
 		includeUm = os.path.join( sdkInclude, "um" )
 		includeWinRT = os.path.join( sdkInclude, "WinRT" )
 
 		if os.access(includeShared, os.F_OK):
-			self.shared._include_path.append(includeShared)
+			self.shared._include_path.append( includeShared )
 		if os.access(includeUm, os.F_OK):
-			self.shared._include_path.append(includeUm)
+			self.shared._include_path.append( includeUm )
 		if os.access(includeWinRT, os.F_OK):
-			self.shared._include_path.append(includeWinRT)
+			self.shared._include_path.append( includeWinRT )
 
-		libPath = os.path.join( self.shared.winSdkPath, "lib", "x64" if self.shared._build_64_bit else "" )
-		#sdk8path = os.path.join( self.shared.winSdkPath, "lib", "win8", "um", "x64" if self.shared._build_64_bit else "x86" )
+		libPath = os.path.join( self.shared.winSdkPath, "lib", self.shared._project_settings.outputArchitecture )
 		sdkLibPath = os.path.join( self.shared.winSdkPath, "lib", "win*" )
 		sdkLibPathList = glob.glob( sdkLibPath )
 
 		# Use the first globbed path and use that to construct the rest of the path.
-		if sdkLibPathList and len(sdkLibPathList) > 0:
-			sdkLibPath = os.path.join( sdkLibPathList[0], "um", "x64" if self.shared._build_64_bit else "x86" )
+		if sdkLibPathList and len( sdkLibPathList ) > 0:
+			sdkLibPath = os.path.join( sdkLibPathList[0], "um", self.shared._project_settings.outputArchitecture )
 
-		if os.access(sdkLibPath, os.F_OK):
+		if os.access( sdkLibPath, os.F_OK ):
 			self.shared._lib_path.append( sdkLibPath )
 		else:
 			self.shared._lib_path.append( libPath )
@@ -618,8 +612,7 @@ class MsvcLinker( MsvcBase, toolchain.linkerBase ):
 
 
 	def _getArchitectureArg( self ):
-		#TODO: This will need to change to support other machine architectures.
-		return "/MACHINE:{} ".format( "X64" if self.shared._build_64_bit else "X86" )
+		return "/MACHINE:{} ".format( self.shared._project_settings.outputArchitecture.upper() )
 
 
 	def _getRuntimeLibraryArg( self ):

@@ -75,10 +75,10 @@ class OrderedSet(object):
 		return ret
 
 	def __and__(self, other):
-		return self.union(other)
+		return self.intersection(other)
 
 	def __or__(self, other):
-		return self.intersection(other)
+		return self.union(other)
 
 	def __sub__(self, other):
 		return self.difference(other)
@@ -98,12 +98,12 @@ class OrderedSet(object):
 		return "OrderedSet({})".format(self.map.keys())
 
 	def update(self, iterable):
+		self.map.update( [ ( x, None ) for x in iterable ] )
+
+	def intersection_update(self, iterable):
 		for key in self.map.keys():
 			if key not in iterable:
 				del self.map[key]
-
-	def intersection_update(self, iterable):
-		self.map.update( [ ( x, None ) for x in iterable ] )
 
 	def difference_update(self, iterable):
 		for key in iterable:
