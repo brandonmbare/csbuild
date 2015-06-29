@@ -2375,13 +2375,10 @@ def SetupDebugTarget( ):
 		s = _utils.PathWorkingDirPair( s )
 		projectSettings.currentProject.outputDirTemp = s
 
-	projectSettings.currentProject.outputDir = os.path.normpath( os.path.join( projectSettings.currentProject.outputDirTemp.workingDir, _utils.ResolveProjectMacros( projectSettings.currentProject.outputDirTemp.path, projectSettings.currentProject ) ) )
-
 	if not projectSettings.currentProject._objDir_set:
 		s = _utils.FixupRelativePath( os.path.join(projectSettings.currentProject.outputDir, "obj") )
 		s = _utils.PathWorkingDirPair( s )
 		projectSettings.currentProject.objDirTemp = s
-		projectSettings.currentProject.objDir = os.path.normpath( os.path.join( s.workingDir, _utils.ResolveProjectMacros( s.path, projectSettings.currentProject ) ) )
 
 	if not projectSettings.currentProject.toolchains["msvc"].shared.debug_runtime_set:
 		projectSettings.currentProject.toolchains["msvc"].shared.debug_runtime = True
@@ -2402,13 +2399,10 @@ def SetupReleaseTarget( ):
 		s = _utils.PathWorkingDirPair( s )
 		projectSettings.currentProject.outputDirTemp = s
 
-	projectSettings.currentProject.outputDir = os.path.normpath( os.path.join( projectSettings.currentProject.outputDirTemp.workingDir, _utils.ResolveProjectMacros( projectSettings.currentProject.outputDirTemp.path, projectSettings.currentProject ) ) )
-
 	if not projectSettings.currentProject._objDir_set:
 		s = _utils.FixupRelativePath( os.path.join(projectSettings.currentProject.outputDir, "obj") )
 		s = _utils.PathWorkingDirPair( s )
 		projectSettings.currentProject.objDirTemp = s
-		projectSettings.currentProject.objDir = os.path.normpath( os.path.join( s.workingDir, _utils.ResolveProjectMacros( s.path, projectSettings.currentProject ) ) )
 
 	if not projectSettings.currentProject.toolchains["msvc"].shared.debug_runtime_set:
 		projectSettings.currentProject.toolchains["msvc"].shared.debug_runtime = False
