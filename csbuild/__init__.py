@@ -2376,7 +2376,7 @@ def SetupDebugTarget( ):
 		projectSettings.currentProject.outputDirTemp = s
 
 	if not projectSettings.currentProject._objDir_set:
-		s = _utils.FixupRelativePath( os.path.join(projectSettings.currentProject.outputDir, "obj") )
+		s = _utils.FixupRelativePath( os.path.join( projectSettings.currentProject.outputDirTemp.path, "obj") )
 		s = _utils.PathWorkingDirPair( s )
 		projectSettings.currentProject.objDirTemp = s
 
@@ -2400,7 +2400,7 @@ def SetupReleaseTarget( ):
 		projectSettings.currentProject.outputDirTemp = s
 
 	if not projectSettings.currentProject._objDir_set:
-		s = _utils.FixupRelativePath( os.path.join(projectSettings.currentProject.outputDir, "obj") )
+		s = _utils.FixupRelativePath( os.path.join(projectSettings.currentProject.outputDirTemp.path, "obj") )
 		s = _utils.PathWorkingDirPair( s )
 		projectSettings.currentProject.objDirTemp = s
 

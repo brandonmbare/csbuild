@@ -132,8 +132,7 @@ class MsvcBase( object ):
 			self.shared.msvc_version = MSVC_VERSION[ver]
 
 		# If ARM is selected, make sure we can actually build for it.
-		if project.outputArchitecture == "arm" and self.shared.msvc_version < MSVC_VERSION["2012"]:
-			raise AssertionError("Compiling for ARM is only available from Visual Studio 2012 and up!")
+		assert not ( project.outputArchitecture == "arm" and self.shared.msvc_version < MSVC_VERSION["2012"] ), "Compiling for ARM is only available from Visual Studio 2012 and up!"
 
 		self.shared._project_settings = project
 		self.shared._vc_env_var = "VS{}COMNTOOLS".format( self.shared.msvc_version )
