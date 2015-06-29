@@ -131,6 +131,10 @@ class MsvcBase( object ):
 		if ver:
 			self.shared.msvc_version = MSVC_VERSION[ver]
 
+		# If ARM is selected, make sure we can actually build for it.
+		if project.outputArchitecture == "arm" and self.shared.msvc_version < MSVC_VERSION["2012"]:
+			raise AssertionError("Compiling for ARM is only available from Visual Studio 2012 and up!")
+
 		self.shared._project_settings = project
 		self.shared._vc_env_var = "VS{}COMNTOOLS".format( self.shared.msvc_version )
 		self.shared._toolchain_path = os.path.normpath( os.path.join( os.environ[self.shared._vc_env_var], "..", "..", "VC" ) )
@@ -188,11 +192,18 @@ class MsvcBase( object ):
 
 			HAS_SET_VC_VARS = True
 
-		binSubPath = {
-			"x86": "",
-			"x64": "amd64" if isPlatform64Bit else "x86_amd64",
-			"arm": "arm" if isPlatform64Bit and self.shared.msvc_version > MSVC_VERSION["2012"] else "x86_arm",
-		}[self.shared._project_settings.outputArchitecture]
+		if self.shared.msvc_version < MSVC_VERSION["2013"]:
+			binSubPath = {
+				"x86": "",
+				"x64": "amd64" if isPlatform64Bit else "x86_amd64",
+				"arm": "x86_arm",
+			}[self.shared._project_settings.outputArchitecture]
+		else:
+			binSubPath = {
+				"x86": "amd64_x86" if isPlatform64Bit else "",
+				"x64": "amd64" if isPlatform64Bit else "x86_amd64",
+				"arm": "amd64_arm" if isPlatform64Bit else "x86_arm",
+			}[self.shared._project_settings.outputArchitecture]
 
 		toolchainLibSubPath = {
 			"x86": "",
