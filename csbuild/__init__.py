@@ -3080,13 +3080,13 @@ def _run( ):
 						if arch not in validArchList:
 							log.LOG_ERROR("Toolchain {} does not support architecture {}".format(project.activeToolchainName, arch))
 							Exit(1)
-						architectures = set(project.activeToolchain.GetValidArchitectures())
+						architectures = _utils.OrderedSet(project.activeToolchain.GetValidArchitectures())
 						if project.supportedArchitectures:
 							architectures &= project.supportedArchitectures
 						if arch in architectures:
 							BuildWithArchitecture(project, arch)
 				elif args.aa:
-					architectures = set(project.activeToolchain.GetValidArchitectures())
+					architectures = _utils.OrderedSet(project.activeToolchain.GetValidArchitectures())
 					if project.supportedArchitectures:
 						architectures &= project.supportedArchitectures
 					for arch in architectures:
