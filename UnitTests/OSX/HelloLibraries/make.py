@@ -7,12 +7,8 @@ sys.path.insert(0, "../../../")
 
 import csbuild
 
-from csbuild.toolchain_msvc import VisualStudioPackage
-
 csbuild.Toolchain( "gcc", "ios" ).Compiler().SetCppStandard( "c++11" )
 csbuild.Toolchain( "gcc", "ios" ).SetCppStandardLibrary( "libc++" )
-
-csbuild.Toolchain( "msvc" ).SetMsvcVersion( VisualStudioPackage.Vs2012 )
 
 csbuild.DisablePrecompile()
 csbuild.DisableChunkedBuild()

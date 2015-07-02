@@ -40,6 +40,7 @@ import csbuild
 
 HAS_SET_VC_VARS = False
 WINDOWS_SDK_DIR = ""
+DEFAULT_MSVC_VERSION = 0
 
 MSVC_VERSION = {
 	"2010": 100,
@@ -77,7 +78,7 @@ class MsvcBase( object ):
 		self.shared._project_settings = None
 		self.shared.debug_runtime = False
 		self.shared.debug_runtime_set = False
-		self.shared.msvc_version = MSVC_VERSION["2010"]
+		self.shared.msvc_version = 0
 
 		self.shared._vc_env_var = ""
 		self.shared._toolchain_path = ""
@@ -130,6 +131,23 @@ class MsvcBase( object ):
 		ver = csbuild.GetOption("msvc_version")
 		if ver:
 			self.shared.msvc_version = MSVC_VERSION[ver]
+
+		if not self.shared.msvc_version:
+			global DEFAULT_MSVC_VERSION
+			if not DEFAULT_MSVC_VERSION:
+				# Find the highest version of Visual Studio a user has install so we can use that as the default
+				# in case they don't provide a version manually.
+				reversedKeys = reversed( sorted( MSVC_VERSION.keys() ) )
+				for versionKey in reversedKeys:
+					versionValue = MSVC_VERSION[versionKey]
+					macroName = "VS{}COMNTOOLS".format( versionValue )
+					if macroName in os.environ:
+						DEFAULT_MSVC_VERSION = versionValue
+						break
+			if not DEFAULT_MSVC_VERSION:
+				log.LOG_ERROR("No supported version of Visual Studio detected.  Please install a supported version ({}) or try another toolchain.".format( ", ".join( sorted( MSVC_VERSION.keys() ) ) ) )
+				csbuild.Exit(1)
+			self.shared.msvc_version = DEFAULT_MSVC_VERSION
 
 		# If ARM is selected, make sure we can actually build for it.
 		assert not ( project.outputArchitecture == "arm" and self.shared.msvc_version < MSVC_VERSION["2012"] ), "Compiling for ARM is only available from Visual Studio 2012 and up!"
