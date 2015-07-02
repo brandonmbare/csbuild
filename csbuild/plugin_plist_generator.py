@@ -114,6 +114,7 @@ class PListGenerator( object ):
 		self._rootNodes = set()
 		self._substitutionMap = dict()
 		self._externalPlistPath = ""
+		self._resolvedPlistPath = ""
 
 
 	def AddNode( self, nodeType, key, value = None, parent = None):
@@ -163,6 +164,9 @@ class PListGenerator( object ):
 		filePath = _utils.PathWorkingDirPair( filePath )
 		self._externalPlistPath = filePath
 
+		# Reset the resolved path if the external path whenever the external path has been changed.
+		self._resolvedPlistPath = ""
+
 
 	def AddStringSubstitution(self, key, value):
 		"""
@@ -201,7 +205,9 @@ class PListGenerator( object ):
 		"""
 		# Process the ascii plist, generating a temporary copy with the string substitutions.
 		if self._externalPlistPath:
-			self._externalPlistPath = os.path.normpath( os.path.join( self._externalPlistPath.workingDir, _utils.ResolveProjectMacros( self._externalPlistPath.path, project ) ) )
+			# Only resolve the file path if it hasn't been already.
+			if not self._resolvedPlistPath:
+				self._resolvedPlistPath = os.path.normpath( os.path.join( self._externalPlistPath.workingDir, _utils.ResolveProjectMacros( self._externalPlistPath.path, project ) ) )
 			tempAsciiFilePath = self._processExternalFile()
 		else:
 			tempAsciiFilePath = self._generateTempAsciiFile()
@@ -216,11 +222,11 @@ class PListGenerator( object ):
 
 
 	def _processExternalFile( self ):
-		if not os.access( self._externalPlistPath, os.F_OK ):
-			raise FileNotFoundError( "External plist file not found: {}".format( self._externalPlistPath ) )
+		if not os.access( self._resolvedPlistPath, os.F_OK ):
+			raise FileNotFoundError( "External plist file not found: {}".format( self._resolvedPlistPath ) )
 
 		# Read in the external plist.
-		with open( self._externalPlistPath, mode = "r" ) as fileHandle:
+		with open( self._resolvedPlistPath, mode = "r" ) as fileHandle:
 			inputFileString = fileHandle.read()
 
 		# Handle the string substitution here.

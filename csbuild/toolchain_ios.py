@@ -309,7 +309,7 @@ class iOSLinker( iOSBase, toolchain_gcc_darwin.GccLinkerDarwin ):
 
 		:return: str
 		"""
-		raise appBundlePath
+		return appBundlePath
 
 
 	def GetAppBundleSharedSupportPath( self, appBundlePath ):
