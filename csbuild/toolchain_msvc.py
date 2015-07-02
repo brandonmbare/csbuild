@@ -29,6 +29,8 @@ import subprocess
 import sys
 import glob
 
+from collections import OrderedDict
+
 from . import toolchain
 from . import _shared_globals
 from . import log
@@ -42,11 +44,11 @@ HAS_SET_VC_VARS = False
 WINDOWS_SDK_DIR = ""
 DEFAULT_MSVC_VERSION = 0
 
-MSVC_VERSION = {
-	"2010": 100,
-	"2012": 110,
-	"2013": 120,
-}
+MSVC_VERSION = OrderedDict([
+	("2010", 100),
+	("2012", 110),
+	("2013", 120),
+])
 
 IS_PLATFORM_64_BIT = {
 	"amd64":  True,
@@ -137,7 +139,7 @@ class MsvcBase( object ):
 			if not DEFAULT_MSVC_VERSION:
 				# Find the highest version of Visual Studio a user has install so we can use that as the default
 				# in case they don't provide a version manually.
-				reversedKeys = reversed( sorted( MSVC_VERSION.keys() ) )
+				reversedKeys = reversed( [ key for key in MSVC_VERSION.keys() ] )
 				for versionKey in reversedKeys:
 					versionValue = MSVC_VERSION[versionKey]
 					macroName = "VS{}COMNTOOLS".format( versionValue )
@@ -145,7 +147,7 @@ class MsvcBase( object ):
 						DEFAULT_MSVC_VERSION = versionValue
 						break
 			if not DEFAULT_MSVC_VERSION:
-				log.LOG_ERROR("No supported version of Visual Studio detected.  Please install a supported version ({}) or try another toolchain.".format( ", ".join( sorted( MSVC_VERSION.keys() ) ) ) )
+				log.LOG_ERROR("No supported version of Visual Studio detected.  Please install a supported version ({}) or try another toolchain.".format( ", ".join( [ key for key in MSVC_VERSION.keys() ] ) ) )
 				csbuild.Exit(1)
 			self.shared.msvc_version = DEFAULT_MSVC_VERSION
 
