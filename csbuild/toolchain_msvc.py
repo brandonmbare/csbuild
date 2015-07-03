@@ -41,13 +41,15 @@ import csbuild
 ### Reference: http://msdn.microsoft.com/en-us/library/f35ctcxw.aspx
 
 HAS_SET_VC_VARS = False
-WINDOWS_SDK_DIR = ""
+WINDOWS_INCLUDE_PATH_LIST = []
+WINDOWS_LIB_PATH_LIST = []
 DEFAULT_MSVC_VERSION = 0
 
 MSVC_VERSION = OrderedDict([
 	("2010", 100),
 	("2012", 110),
 	("2013", 120),
+	("2015", 140),
 ])
 
 IS_PLATFORM_64_BIT = {
@@ -125,10 +127,6 @@ class MsvcBase( object ):
 		return self.shared._bin_path
 
 
-	def GetWinSdkPath(self):
-		return self.shared.winSdkPath
-
-
 	def _setupForProject( self, project ):
 		ver = csbuild.GetOption("msvc_version")
 		if ver:
@@ -157,13 +155,12 @@ class MsvcBase( object ):
 		self.shared._project_settings = project
 		self.shared._vc_env_var = "VS{}COMNTOOLS".format( self.shared.msvc_version )
 		self.shared._toolchain_path = os.path.normpath( os.path.join( os.environ[self.shared._vc_env_var], "..", "..", "VC" ) )
-		self.shared._include_path = [os.path.join( self.shared._toolchain_path, "include" )]
-		self.shared._lib_path = [os.path.join( self.shared._toolchain_path, "lib" )]
 
 		isPlatform64Bit = IS_PLATFORM_64_BIT[platform.machine().lower()]
 
 		global HAS_SET_VC_VARS
-		global WINDOWS_SDK_DIR
+		global WINDOWS_INCLUDE_PATH_LIST
+		global WINDOWS_LIB_PATH_LIST
 
 		if not HAS_SET_VC_VARS:
 			# Versions prior to Visual Studio 2013 had a slightly different set of arguments.
@@ -184,7 +181,7 @@ class MsvcBase( object ):
 			batchFilePath = os.path.join( self.shared._toolchain_path, "vcvarsall.bat" )
 			fd = subprocess.Popen( '"{}" {} & set'.format( batchFilePath, vcvarsallArg ), stdout = subprocess.PIPE, stderr = subprocess.PIPE )
 
-			if sys.version_info >= (3, 0):
+			if sys.version_info >= ( 3, 0 ):
 				(output, errors) = fd.communicate( str.encode( "utf-8" ) )
 			else:
 				(output, errors) = fd.communicate()
@@ -194,7 +191,7 @@ class MsvcBase( object ):
 			for line in outputLines:
 
 				# Convert to a string in Python3.
-				if sys.version_info >= (3, 0):
+				if sys.version_info >= ( 3, 0 ):
 					line = line.decode( "utf-8" )
 
 				keyValueList = line.split( "=", 1 )
@@ -202,12 +199,20 @@ class MsvcBase( object ):
 				# Only accept lines that contain key/value pairs.
 				if len( keyValueList ) == 2:
 
-					if keyValueList[0] in ("Path", "LIB"):
+					if keyValueList[0] == "Path":
 						os.environ[keyValueList[0]] = keyValueList[1]
 
-					# Check if the line we're on has the Windows SDK directory listed.
-					elif keyValueList[0] == "WindowsSdkDir":
-						WINDOWS_SDK_DIR = keyValueList[1]
+					elif keyValueList[0] == "INCLUDE":
+						WINDOWS_INCLUDE_PATH_LIST = keyValueList[1]
+						#if sys.version_info >= ( 3, 0 ):
+						#	WINDOWS_INCLUDE_PATH_LIST = WINDOWS_INCLUDE_PATH_LIST.decode( "utf-8" )
+						WINDOWS_INCLUDE_PATH_LIST = [ path for path in WINDOWS_INCLUDE_PATH_LIST.split( ";" ) if path ]
+
+					elif keyValueList[0] == "LIB":
+						WINDOWS_LIB_PATH_LIST = keyValueList[1]
+						#if sys.version_info >= ( 3, 0 ):
+						#	WINDOWS_LIB_PATH_LIST = WINDOWS_LIB_PATH_LIST.decode( "utf-8" )
+						WINDOWS_LIB_PATH_LIST = [ path for path in WINDOWS_LIB_PATH_LIST.split( ";" ) if path ]
 
 			HAS_SET_VC_VARS = True
 
@@ -224,42 +229,9 @@ class MsvcBase( object ):
 				"arm": "amd64_arm" if isPlatform64Bit else "x86_arm",
 			}[self.shared._project_settings.outputArchitecture]
 
-		toolchainLibSubPath = {
-			"x86": "",
-			"x64": "x64",
-			"arm": "arm",
-		}[self.shared._project_settings.outputArchitecture]
-
 		self.shared._bin_path = os.path.normpath( os.path.join( self.shared._toolchain_path, "bin", binSubPath ) )
-		self.shared._lib_path[0] = os.path.normpath( os.path.join( self.shared._lib_path[0], toolchainLibSubPath ) )
-
-		self.shared.winSdkPath = WINDOWS_SDK_DIR
-		sdkInclude = os.path.join( self.shared.winSdkPath, "include" )
-
-		self.shared._include_path.append( sdkInclude )
-		includeShared = os.path.join( sdkInclude, "Shared" )
-		includeUm = os.path.join( sdkInclude, "um" )
-		includeWinRT = os.path.join( sdkInclude, "WinRT" )
-
-		if os.access(includeShared, os.F_OK):
-			self.shared._include_path.append( includeShared )
-		if os.access(includeUm, os.F_OK):
-			self.shared._include_path.append( includeUm )
-		if os.access(includeWinRT, os.F_OK):
-			self.shared._include_path.append( includeWinRT )
-
-		libPath = os.path.join( self.shared.winSdkPath, "lib", self.shared._project_settings.outputArchitecture )
-		sdkLibPath = os.path.join( self.shared.winSdkPath, "lib", "win*" )
-		sdkLibPathList = glob.glob( sdkLibPath )
-
-		# Use the first globbed path and use that to construct the rest of the path.
-		if sdkLibPathList and len( sdkLibPathList ) > 0:
-			sdkLibPath = os.path.join( sdkLibPathList[0], "um", self.shared._project_settings.outputArchitecture )
-
-		if os.access( sdkLibPath, os.F_OK ):
-			self.shared._lib_path.append( sdkLibPath )
-		else:
-			self.shared._lib_path.append( libPath )
+		self.shared._include_path = WINDOWS_INCLUDE_PATH_LIST
+		self.shared._lib_path = WINDOWS_LIB_PATH_LIST
 
 
 	def InterruptExitCode( self ):
