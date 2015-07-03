@@ -117,6 +117,15 @@ class MsvcBase( object ):
 		self.shared.msvc_version = MSVC_VERSION[visual_studio_version]
 
 
+	def GetMsvcVersion( self ):
+		"""
+		Get the MSVC version.
+
+		:return: int
+		"""
+		return self.shared.msvc_version
+
+
 	def GetValidArchitectures(self):
 		return ['x86', 'x64', "arm"]
 

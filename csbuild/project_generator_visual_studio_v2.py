@@ -38,12 +38,16 @@ from . import _shared_globals
 from .vsgen.platform_windows import *
 from .vsgen.platform_android import *
 
-
-class VisualStudioVersion:
-	v2010 = 2010
-	v2012 = 2012
-	v2013 = 2013
-	All = [v2010, v2012, v2013]
+# Dictionary of MSVC version numbers to tuples of items needed for the file format.
+#   Tuple[0] = Friendly version name for logging output.
+#   Tuple[1] = File format version (e.g., "Microsoft Visual Studio Solution File, Format Version XX").
+#   Tuple[2] = Version of Visual Studio the solution belongs to (e.g., "# Visual Studio XX").
+FILE_FORMAT_VERSION_INFO = {
+	100: ("2010", "11.00", "2010"),
+	110: ("2012", "12.00", "2012"),
+	120: ("2013", "12.00", "2013"),
+	140: ("2015", "12.00", "14"),
+}
 
 
 class PlatformManager:
@@ -98,16 +102,6 @@ class PlatformManager:
 		if not name in self._registeredPlatformMap:
 			return None
 		return self._registeredPlatformMap[name]
-
-
-def GetImpliedVisualStudioVersion():
-	msvcVersion = csbuild.Toolchain( "msvc" ).Compiler().GetMsvcVersion()
-	msvcToVisualStudioMap = {
-		100: VisualStudioVersion.v2010,
-		110: VisualStudioVersion.v2012,
-		120: VisualStudioVersion.v2013,
-	}
-	return msvcToVisualStudioMap[msvcVersion] if msvcVersion in msvcToVisualStudioMap else VisualStudioVersion.v2012
 
 
 def GenerateNewUuid( uuidList, name ):
@@ -199,12 +193,6 @@ class project_generator_visual_studio( project_generator.project_generator ):
 	def __init__( self, path, solutionName, extraArgs ):
 		project_generator.project_generator.__init__( self, path, solutionName, extraArgs )
 
-		versionNumber = csbuild.GetOption( "vs-gen-version" )
-
-		if not versionNumber:
-			versionNumber = GetImpliedVisualStudioVersion()
-			log.LOG_BUILD( "No Visual Studio version selected; defaulting to {}.".format( versionNumber ) )
-
 		platformList = set()
 
 		# Use the selected toolchains and architectures for form a list of platforms.
@@ -229,7 +217,7 @@ class project_generator_visual_studio( project_generator.project_generator ):
 			platformManager.RegisterPlatform( platform )
 
 		self._createNativeProject = False
-		self._visualStudioVersion = versionNumber
+		self._msvcVersion = csbuild.Toolchain("msvc").Compiler().GetMsvcVersion()
 		self._projectMap = {}
 		self._configList = []
 		self._reverseConfigMap = {} # A reverse look-up map for the configuration names.
@@ -237,6 +225,8 @@ class project_generator_visual_studio( project_generator.project_generator ):
 		self._fullIncludePathList = set() # Should be a set starting out so duplicates are eliminated.
 		self._projectUuidList = set()
 		self._orderedProjectList = []
+
+		log.LOG_BUILD( "Generating solution for Visual Studio {}.".format( FILE_FORMAT_VERSION_INFO[self._msvcVersion][0] ) )
 
 		#TODO: Implement support for native projects.
 		if self._createNativeProject:
@@ -258,13 +248,6 @@ class project_generator_visual_studio( project_generator.project_generator ):
 		#    help = "Generate native Visual Studio projects.",
 		#    action = "store_true",
 		#)
-		parser.add_argument(
-			"--vs-gen-version",
-			help = "Select the version of Visual Studio the generated solution will be compatible with.",
-			choices = VisualStudioVersion.All,
-			default = None,
-			type = int,
-		)
 		parser.add_argument(
 			"--vs-gen-force-overwrite-all",
 	        help = "Force the project generator to overwrite all existing files.",
@@ -445,12 +428,6 @@ class project_generator_visual_studio( project_generator.project_generator ):
 		platformManager = PlatformManager.Get()
 		registeredPlatformList = platformManager.GetRegisteredNameList()
 
-		fileFormatVersionNumber = {
-			2010: "11.00",
-			2012: "12.00",
-			2013: "12.00",
-		}[self._visualStudioVersion]
-
 		tempRootPath = tempfile.mkdtemp()
 		finalSolutionPath = "{}.sln".format( os.path.join( self.rootpath, self.solutionname ) )
 		tempSolutionPath = "{}.sln".format( tempRootPath, self.solutionname )
@@ -464,8 +441,8 @@ class project_generator_visual_studio( project_generator.project_generator ):
 		# Studio itself may refuse to even attempt to load the file.
 		with codecs.open( tempSolutionPath, "w", "utf-8-sig" ) as fileHandle:
 			writeLineToFile( 0, fileHandle, "" ) # Required empty line.
-			writeLineToFile( 0, fileHandle, "Microsoft Visual Studio Solution File, Format Version {}".format( fileFormatVersionNumber ) )
-			writeLineToFile( 0, fileHandle, "# Visual Studio {}".format( self._visualStudioVersion ) )
+			writeLineToFile( 0, fileHandle, "Microsoft Visual Studio Solution File, Format Version {}".format( FILE_FORMAT_VERSION_INFO[self._msvcVersion][1] ) )
+			writeLineToFile( 0, fileHandle, "# Visual Studio {}".format( FILE_FORMAT_VERSION_INFO[self._msvcVersion][2] ) )
 
 			projectFilterList = []
 
@@ -557,11 +534,7 @@ class project_generator_visual_studio( project_generator.project_generator ):
 			parentNode.append( comment )
 			return comment
 
-		platformToolsetName = {
-			2010: "vc100",
-			2012: "vc110",
-			2013: "vc120",
-		}[self._visualStudioVersion]
+		platformToolsetName = "vc{}".format( self._msvcVersion )
 
 		platformManager = PlatformManager.Get()
 		registeredPlatformList = platformManager.GetRegisteredNameList()
@@ -688,11 +661,14 @@ class project_generator_visual_studio( project_generator.project_generator ):
 							else:
 								argList = []
 								# The Windows command line likes to remove any quotes around arguments, so we need to re-add them.
-								# And because we can't know which args need quotes, we'll just add them to all of the arguments.
 								for arg in sys.argv[1:]:
-									argPair = arg.split( "=", 2 )
-									for element in argPair:
-										argList.append( '"{}"'.format( element ) )
+									if "=" in arg:
+										argPair = arg.split( "=", 2 )
+										if " " in argPair[1]:
+											argPair[1] = '"{}"'.format( argPair[1] )
+											arg = "=".join( argPair )
+									argList.append( arg )
+
 								buildCommandNode.text = '"{}" "{}" {}'.format( pythonExePath, mainMakefile, " ".join( argList ) )
 								rebuildCommandNode.text = buildCommandNode.text
 								cleanCommandNode.text = buildCommandNode.text
