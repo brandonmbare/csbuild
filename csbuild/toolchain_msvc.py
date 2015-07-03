@@ -86,7 +86,6 @@ class MsvcBase( object ):
 
 		self.shared._vc_env_var = ""
 		self.shared._toolchain_path = ""
-		self.shared._bin_path = ""
 		self.shared._include_path = []
 		self.shared._lib_path = []
 
@@ -104,7 +103,6 @@ class MsvcBase( object ):
 
 		other.shared._vc_env_var = self.shared._vc_env_var
 		other.shared._toolchain_path = self.shared._toolchain_path
-		other.shared._bin_path = self.shared._bin_path
 		other.shared._include_path = list( self.shared._include_path )
 		other.shared._lib_path = list( self.shared._lib_path )
 
@@ -121,10 +119,6 @@ class MsvcBase( object ):
 
 	def GetValidArchitectures(self):
 		return ['x86', 'x64', "arm"]
-
-
-	def GetMsvcBinPath(self):
-		return self.shared._bin_path
 
 
 	def _setupForProject( self, project ):
@@ -226,7 +220,6 @@ class MsvcBase( object ):
 				"arm": "amd64_arm" if isPlatform64Bit else "x86_arm",
 			}[self.shared._project_settings.outputArchitecture]
 
-		self.shared._bin_path = os.path.normpath( os.path.join( self.shared._toolchain_path, "bin", binSubPath ) )
 		self.shared._include_path = WINDOWS_INCLUDE_PATH_LIST
 		self.shared._lib_path = WINDOWS_LIB_PATH_LIST
 
@@ -348,7 +341,7 @@ class MsvcCompiler( MsvcBase, toolchain.compilerBase ):
 
 
 	def _getCompilerExe( self ):
-		return '"{}" '.format( os.path.join( self.shared._bin_path, "cl" ) )
+		return '"{}" '.format( "cl" )
 
 
 	def _getDefaultCompilerArgs( self ):
@@ -571,8 +564,7 @@ class MsvcLinker( MsvcBase, toolchain.linkerBase ):
 
 
 	def _getLinkerExe( self ):
-		return '"{}" '.format( os.path.join( self.shared._bin_path,
-			"lib" if self.shared._project_settings.type == csbuild.ProjectType.StaticLibrary else "link" ) )
+		return '"{}" '.format( "lib" if self.shared._project_settings.type == csbuild.ProjectType.StaticLibrary else "link" )
 
 
 	def _getDefaultLinkerArgs( self ):
