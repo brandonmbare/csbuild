@@ -401,10 +401,6 @@ class project_generator_visual_studio( project_generator.project_generator ):
 		recurseGroups( self._projectMap, None, "", projectSettings.rootGroup )
 		resolveDependencies( self._projectMap )
 
-		# Copy the project names into a list.
-		#for projectName, projectData in self._projectMap.items():
-		#	self._orderedProjectList.append( projectName )
-
 		# Sort the list of project names.
 		self._orderedProjectList = sorted( list( self._projectMap ) )
 
@@ -667,6 +663,8 @@ class project_generator_visual_studio( project_generator.project_generator ):
 										if " " in argPair[1]:
 											argPair[1] = '"{}"'.format( argPair[1] )
 											arg = "=".join( argPair )
+									elif " " in arg:
+										arg = '"{}"'.format( arg )
 									argList.append( arg )
 
 								buildCommandNode.text = '"{}" "{}" {}'.format( pythonExePath, mainMakefile, " ".join( argList ) )

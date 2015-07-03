@@ -224,10 +224,8 @@ class MsvcBase( object ):
 		return -1
 
 
-	def _get_runtime_linkage_arg( self ):
-		return "/{}{} ".format(
-			"MT" if self.shared._project_settings.useStaticRuntime else "MD",
-			"d" if self.shared.debug_runtime else "" )
+	def _convertArgListToString( self, argList ):
+		return " ".join( [x for x in argList if x] )
 
 
 	def _parseOutput(self, outputStr):
@@ -337,69 +335,92 @@ class MsvcCompiler( MsvcBase, toolchain.compilerBase ):
 
 
 	def _getCompilerExe( self ):
-		return '"{}" '.format( "cl" )
+		return "cl"
 
 
 	def _getDefaultCompilerArgs( self ):
-		return "/nologo /c "
+		return "/nologo /c /Oi /GS"
+
+
+	def _getDefaultExtendedCompilerArgs( self ):
+		return "/Gm- /errorReport:none"
 
 
 	def _getDebugArg(self):
 		debugLevel = self.shared._project_settings.debugLevel
 		if debugLevel == csbuild.DebugLevel.EmbeddedSymbols:
-			return "/Z7 "
+			return "/Z7"
 		if debugLevel == csbuild.DebugLevel.ExternalSymbols:
-			return "/Zi "
+			return "/Zi"
 		if debugLevel == csbuild.DebugLevel.ExternalSymbolsPlus:
-			return "/ZI "
-		return " "
+			return "/ZI"
+		return ""
 
 
 	def _getOptArg(self):
 		optLevel = self.shared._project_settings.optLevel
 		if optLevel == csbuild.OptimizationLevel.Max:
-			return "/Ox "
+			return "/Ox"
 		if optLevel == csbuild.OptimizationLevel.Speed:
-			return "/O2 "
+			return "/O2"
 		if optLevel == csbuild.OptimizationLevel.Size:
-			return "/O1 "
-		return "/Od "
+			return "/O1"
+		return "/Od"
 
 
-	def _getCompilerArgs( self ):
-		return "{}{}{}{}{}{}{}/Oi /GS {} ".format(
-			self._getDefaultCompilerArgs( ),
-			self._getPreprocessorDefinitionArgs( ),
-			self._get_runtime_linkage_arg( ),
-			self._getWarningArgs( ),
-			self._getIncludeDirectoryArgs( ),
-			self._getDebugArg( ),
-			self._getOptArg( ),
-			"/RTC1" if self.shared._project_settings.optLevel == csbuild.OptimizationLevel.Disabled else ""
+	def _getRuntimeLinkageArg( self ):
+		return "/{}{}".format(
+			"MT" if self.shared._project_settings.useStaticRuntime else "MD",
+			"d" if self.shared.debug_runtime else ""
 		)
 
 
 	def _getPreprocessorDefinitionArgs( self ):
-		define_args = ""
+		argList = []
 
 		# Add the defines.
-		for define_name in self.shared._project_settings.defines:
-			define_args += "/D{} ".format( define_name )
+		for defineName in self.shared._project_settings.defines:
+			argList.append( "/D{}".format( defineName ) )
 
 		# Add the undefines.
-		for define_name in self.shared._project_settings.undefines:
-			define_args += "/U{} ".format( define_name )
+		for defineName in self.shared._project_settings.undefines:
+			argList.append( "/U{}".format( defineName ) )
 
-		return define_args
+		return self._convertArgListToString( argList )
+
+
+	def _getRuntimeErrorChecksArg( self ):
+		return "/RTC1" if self.shared._project_settings.optLevel == csbuild.OptimizationLevel.Disabled else ""
+
+
+	def _getProjectSettingsArgs( self, isCpp ):
+		return " ".join( self.shared._project_settings.cxxCompilerFlags ) if isCpp else " ".join( self.shared._project_settings.ccCompilerFlags )
+
+
+	def _getPdbArg( self ):
+		return '/Fd"{}"'.format( os.path.join( self.shared._project_settings.outputDir, "{}.pdb".format( self.shared._project_settings.outputName.rsplit( '.', 1 )[0] ) ) )
+
+	def _getCompilerArgs( self ):
+		argList = [
+			self._getDefaultCompilerArgs(),
+			self._getPreprocessorDefinitionArgs(),
+			self._getRuntimeLinkageArg(),
+			self._getWarningArgs(),
+			self._getIncludeDirectoryArgs(),
+			self._getDebugArg(),
+			self._getOptArg(),
+			self._getRuntimeErrorChecksArg(),
+		]
+		return self._convertArgListToString( argList )
 
 
 	def _getCompilerCommand( self, isCpp ):
-		return "{}{}{}".format(
-			self._getCompilerExe( ),
-			self._getCompilerArgs( ),
-			" ".join( self.shared._project_settings.cxxCompilerFlags ) if isCpp else " ".join(
-				self.shared._project_settings.ccCompilerFlags ) )
-
+		argList = [
+			self._getCompilerExe(),
+			self._getCompilerArgs(),
+			self._getProjectSettingsArgs( isCpp ),
+		]
+		return self._convertArgListToString( argList )
 
 
 	def _getExtendedCompilerArgs( self, base_cmd, force_include_file, output_obj, input_file ):
@@ -409,70 +430,75 @@ class MsvcCompiler( MsvcBase, toolchain.compilerBase ):
 		else:
 			pch = ""
 
-		return '{} /Fo"{}" /Fd"{}" /Gm- /errorReport:none "{}" {} {} {} {}'.format(
+		argList = [
 			base_cmd,
-			output_obj,
-			os.path.join(self.shared._project_settings.outputDir, "{}.pdb".format(self.shared._project_settings.outputName.rsplit('.', 1)[0])),
-			input_file,
+			pch,
+			self._getDefaultExtendedCompilerArgs(),
+			self._getPdbArg(),
+			'/Fo"{}"'.format( output_obj ),
 			'/FI"{}"'.format( force_include_file ) if force_include_file else "",
 			'/Yu"{}"'.format( force_include_file ) if force_include_file else "",
-			"/FS" if self.shared.msvc_version >= 120 else "",
-			pch )
+			"/FS" if self.shared.msvc_version >= MSVC_VERSION["2013"] else "",
+			'"{}"'.format( input_file )
+		]
+		return self._convertArgListToString( argList )
 
 
-	def preLinkStep(self, project):
+	def preLinkStep( self, project ):
 		if project.cHeaderFile:
-			project.extraObjs.add("{}.obj".format(project.cHeaderFile.rsplit(".", 1)[0]))
+			project.extraObjs.add( "{}.obj".format( project.cHeaderFile.rsplit( ".", 1 )[0]) )
 		if project.cppHeaderFile:
-			project.extraObjs.add("{}.obj".format(project.cppHeaderFile.rsplit(".", 1)[0]))
+			project.extraObjs.add( "{}.obj".format( project.cppHeaderFile.rsplit( ".", 1 )[0]) )
 
 
 	def _getExtendedPrecompilerArgs( self, base_cmd, force_include_file, output_obj, input_file ):
-		split = input_file.rsplit(".", 1)
+		split = input_file.rsplit( ".", 1 )
 		#This is safe to do because csbuild always creates C++ precompiled headers with a .hpp extension.
-		srcFile = os.path.join("{}.{}".format(split[0], "c" if split[1] == "h" else "cpp"))
+		srcFile = os.path.join( "{}.{}".format( split[0], "c" if split[1] == "h" else "cpp" ) )
 		file_mode = 438 # Octal 0666
-		fd = os.open(srcFile, os.O_WRONLY | os.O_CREAT | os.O_NOINHERIT | os.O_TRUNC, file_mode)
-		data = "#include \"{}\"\n".format(input_file)
-		if sys.version_info >= (3, 0):
-			data = data.encode("utf-8")
-		os.write(fd, data)
-		os.fsync(fd)
-		os.close(fd)
+		fd = os.open( srcFile, os.O_WRONLY | os.O_CREAT | os.O_NOINHERIT | os.O_TRUNC, file_mode )
+		data = "#include \"{}\"\n".format( input_file )
+		if sys.version_info >= ( 3, 0 ):
+			data = data.encode( "utf-8" )
+		os.write( fd, data )
+		os.fsync( fd )
+		os.close( fd )
 
-		objFile = "{}.obj".format(split[0])
-
-		return '{} /Yc"{}" /Gm- /errorReport:none /Fp"{}" /FI"{}" /Fo"{}" /Fd"{}" "{}"'.format(
+		objFile = "{}.obj".format( split[0] )
+		argList = [
 			base_cmd,
-			input_file,
-			output_obj,
-			input_file,
-			objFile,
-			os.path.join(self.shared._project_settings.outputDir, "{}.pdb".format(self.shared._project_settings.outputName.rsplit('.', 1)[0])),
-			srcFile )
+			self._getDefaultExtendedCompilerArgs(),
+			self._getPdbArg(),
+			'/Yc"{}"'.format( input_file ),
+			'/Fp"{}"'.format( output_obj ),
+			'/FI"{}"'.format( input_file ),
+			'/Fo"{}"'.format( objFile ),
+			'"{}"'.format( srcFile ),
+		]
+		return self._convertArgListToString( argList )
 
 
 	def _getWarningArgs( self ):
 		#TODO: Support additional warning options.
 		if self.shared._project_settings.noWarnings:
-			return "/w "
+			return "/w"
 		elif self.shared._project_settings.warningsAsErrors:
-			return "/WX "
+			return "/WX"
 
 		return ""
 
 
 	def _getIncludeDirectoryArgs( self ):
-		include_dir_args = ""
+		includeArgs = []
 
-		for inc_dir in self.shared._project_settings.includeDirs:
-			include_dir_args += '/I"{}" '.format( os.path.normpath( inc_dir ) )
+		for incDir in self.shared._project_settings.includeDirs:
+			includeArgs.append( '/I"{}"'.format( os.path.normpath( incDir ) ) )
 
 		# The default include paths should be added last so that any paths set by the user get searched first.
-		for inc_dir in self.shared._include_path:
-			include_dir_args += '/I"{}" '.format( inc_dir )
+		for incDir in self.shared._include_path:
+			includeArgs.append( '/I"{}"'.format( incDir ) )
 
-		return include_dir_args
+		return self._convertArgListToString( includeArgs )
 
 
 	def GetBaseCxxCommand( self, project ):
@@ -505,15 +531,15 @@ class MsvcCompiler( MsvcBase, toolchain.compilerBase ):
 		return self._getExtendedPrecompilerArgs( baseCmd, forceIncludeFile, outObj, inFile )
 
 
-	def GetPreprocessCommand(self, baseCmd, project, inFile ):
-		return "{} /E /wd\"4005\" \"{}\"".format(baseCmd, inFile)
+	def GetPreprocessCommand( self, baseCmd, project, inFile ):
+		return '{} /E /wd"4005" "{}"'.format( baseCmd, inFile )
 
 
-	def PragmaMessage(self, message):
-		return "#pragma message(\"{}\")".format(message)
+	def PragmaMessage( self, message ):
+		return '#pragma message("{}")'.format( message )
 
 
-	def GetObjExt(self):
+	def GetObjExt( self ):
 		return ".obj"
 
 
@@ -536,9 +562,9 @@ class MsvcCompiler( MsvcBase, toolchain.compilerBase ):
 	def MakeDummyObjects(self, objList):
 		for obj in objList:
 			if self.shared._project_settings.outputArchitecture == "x64":
-				COFF.COFFScraper.CreateEmptyXCOFFObject(COFF.MachineType.X64, obj)
+				COFF.COFFScraper.CreateEmptyXCOFFObject( COFF.MachineType.X64, obj )
 			else:
-				COFF.COFFScraper.CreateEmptyCOFFObject(COFF.MachineType.Win32, obj)
+				COFF.COFFScraper.CreateEmptyCOFFObject( COFF.MachineType.Win32, obj )
 
 
 class MsvcLinker( MsvcBase, toolchain.linkerBase ):
@@ -560,59 +586,68 @@ class MsvcLinker( MsvcBase, toolchain.linkerBase ):
 
 
 	def _getLinkerExe( self ):
-		return '"{}" '.format( "lib" if self.shared._project_settings.type == csbuild.ProjectType.StaticLibrary else "link" )
+		return '"{}"'.format( "lib" if self.shared._project_settings.type == csbuild.ProjectType.StaticLibrary else "link" )
 
 
 	def _getDefaultLinkerArgs( self ):
-		default_args = "/NOLOGO "
-		for lib_path in self.shared._lib_path:
-			default_args += '/LIBPATH:"{}" '.format( lib_path.strip("\\") )
-		return default_args
+		argList = [
+			"/ERRORREPORT:NONE /NOLOGO",
+			"/NXCOMPAT /DYNAMICBASE" if self.shared._project_settings.type != csbuild.ProjectType.StaticLibrary else ""
+		]
+		for libPath in self.shared._lib_path:
+			argList.append( '/LIBPATH:"{}"'.format( libPath.strip( "\\") ) )
+		return self._convertArgListToString( argList )
 
 
 	def _getNonStaticLibraryLinkerArgs( self ):
-		if self.shared._project_settings.type == csbuild.ProjectType.SharedLibrary or self.shared._project_settings.type == csbuild.ProjectType.LoadableModule:
-			dllFlag = "/DLL "
-		else:
-			dllFlag = ""
+		argList = []
 
 		# The following arguments should only be specified for dynamic libraries and executables (being used with link.exe, not lib.exe).
-		return "" if self.shared._project_settings.type == csbuild.ProjectType.StaticLibrary else "{}{}{}{}".format(
-			self._getRuntimeLibraryArg( ),
-			"/PROFILE " if self.shared._project_settings.profile else "",
-			"/DEBUG " if self.shared._project_settings.profile or self.shared._project_settings.debugLevel != csbuild.DebugLevel.Disabled else "",
-			dllFlag )
+		if not self.shared._project_settings.type == csbuild.ProjectType.StaticLibrary:
+			argList.extend([
+				self._getRuntimeLibraryArg(),
+				"/PROFILE" if self.shared._project_settings.profile else "",
+				"/DEBUG" if self.shared._project_settings.profile or self.shared._project_settings.debugLevel != csbuild.DebugLevel.Disabled else "",
+			])
+
+			if not self.shared._project_settings.type == csbuild.ProjectType.Application:
+				argList.append( "/DLL" )
+
+		return self._convertArgListToString( argList )
 
 
 	def _getLinkerArgs( self, output_file, obj_list ):
-		return "/ERRORREPORT:NONE {}{}{}{}{}{}{}{}{}{}".format(
-			self._getDefaultLinkerArgs( ),
-			self._getImportLibraryArg(output_file),
-			self._getNonStaticLibraryLinkerArgs( ),
-			self._getSubsystemArg( ),
-			self._getArchitectureArg( ),
-			self._getLinkerWarningArg( ),
-			self._getLibraryDirectoryArgs( ),
+		argList = [
+			self._getDefaultLinkerArgs(),
+			self._getImportLibraryArg( output_file ),
+			self._getNonStaticLibraryLinkerArgs(),
+			self._getSubsystemArg(),
+			self._getArchitectureArg(),
+			self._getLinkerWarningArg(),
+			self._getLibraryDirectoryArgs(),
 			self._getLinkerOutputArg( output_file ),
-			self._getLibraryArgs( ),
-			self._getLinkerObjFileArgs( obj_list ) )
+			self._getLibraryArgs(),
+			self._getLinkerObjFileArgs( obj_list )
+		]
+		return self._convertArgListToString( argList )
 
 
 	def _getArchitectureArg( self ):
-		return "/MACHINE:{} ".format( self.shared._project_settings.outputArchitecture.upper() )
+		return "/MACHINE:{}".format( self.shared._project_settings.outputArchitecture.upper() )
 
 
 	def _getRuntimeLibraryArg( self ):
-		return '/DEFAULTLIB:{}{}.lib '.format(
+		return '/DEFAULTLIB:{}{}.lib'.format(
 			"libcmt" if self.shared._project_settings.useStaticRuntime else "msvcrt",
-			"d" if self.shared.debug_runtime else "" )
+			"d" if self.shared.debug_runtime else ""
+		)
 
 
 	def _getImportLibraryArg(self, output_file):
 		if self.shared._project_settings.type == csbuild.ProjectType.SharedLibrary or self.shared._project_settings.type == csbuild.ProjectType.LoadableModule:
-			return '/IMPLIB:"{}" '.format(os.path.splitext(output_file)[0] + ".lib")
+			return '/IMPLIB:"{}"'.format(os.path.splitext(output_file)[0] + ".lib")
 		else:
-			return ''
+			return ""
 
 
 	def _getSubsystemArg( self ):
@@ -622,7 +657,7 @@ class MsvcLinker( MsvcBase, toolchain.linkerBase ):
 		#   WINDOWS -> Either WinMain or wWinMain are defined (or WinMain(HINSTANCE*, HINSTANCE*, char*, int) or wWinMain(HINSTANCE*, HINSTANCE*, wchar_t*, int) for managed code).
 		#   NATIVE -> The /DRIVER:WDM argument is specified (currently unsupported).
 		if self._subsystem == SubSystem.DEFAULT:
-			return ''
+			return ""
 
 		sub_system_type = {
 			SubSystem.CONSOLE: "CONSOLE",
@@ -634,17 +669,31 @@ class MsvcLinker( MsvcBase, toolchain.linkerBase ):
 			SubSystem.EFI_APPLICATION: "EFI_APPLICATION",
 			SubSystem.EFI_BOOT_SERVICE_DRIVER: "EFI_BOOT_SERVICE_DRIVER",
 			SubSystem.EFI_ROM: "EFI_ROM",
-			SubSystem.EFI_RUNTIME_DRIVER: "EFI_RUNTIME_DRIVER" }
+			SubSystem.EFI_RUNTIME_DRIVER: "EFI_RUNTIME_DRIVER"
+		}
 
-		return "/SUBSYSTEM:{} ".format( sub_system_type[self._subsystem] )
+		return "/SUBSYSTEM:{}".format( sub_system_type[self._subsystem] )
 
 
 	def _getLibraryArgs( self ):
+		argList = []
+
 		# Static libraries don't require any libraries to be linked.
-		if self.shared._project_settings.type == csbuild.ProjectType.StaticLibrary:
-			args = ''
-		else:
-			args = '"kernel32.lib" "user32.lib" "gdi32.lib" "winspool.lib" "comdlg32.lib" "advapi32.lib" "shell32.lib" "ole32.lib" "oleaut32.lib" "uuid.lib" "odbc32.lib" "odbccp32.lib" '
+		if not self.shared._project_settings.type == csbuild.ProjectType.StaticLibrary:
+			argList.extend([
+				"kernel32.lib",
+				"user32.lib",
+				"gdi32.lib",
+				"winspool.lib",
+				"comdlg32.lib",
+				"advapi32.lib",
+				"shell32.lib",
+				"ole32.lib",
+				"oleaut32.lib",
+				"uuid.lib",
+				"odbc32.lib",
+				"odbccp32.lib",
+			])
 
 		for lib in (
 			self.shared._project_settings.libraries |
@@ -660,38 +709,42 @@ class MsvcLinker( MsvcBase, toolchain.linkerBase ):
 				splitName = os.path.splitext(dependLibName)[0]
 				if ( splitName == lib or splitName == "lib{}".format( lib ) ):
 					found = True
-					args += '"{}"\n'.format( dependLibName )
+					argList.append( '"{}"'.format( dependLibName ) )
 					break
 			if not found:
-				args += '"{}"\n'.format( self._actual_library_names[lib] )
+				argList.append( '"{}"'.format( self._actual_library_names[lib] ) )
 
-		return args
+		return self._convertArgListToString( argList )
 
 
 	def _getLinkerWarningArg( self ):
 		# When linking, the only warning argument supported is whether or not to treat warnings as errors.
-		return "/WX{} ".format( "" if self.shared._project_settings.warningsAsErrors else ":NO" )
+		return "/WX{}".format( "" if self.shared._project_settings.warningsAsErrors else ":NO" )
 
 
 	def _getLibraryDirectoryArgs( self ):
-		library_dir_args = ""
+		libDirArgs = []
 
-		for lib_dir in self.shared._project_settings.libraryDirs:
-			library_dir_args += '/LIBPATH:"{}" '.format( os.path.normpath( lib_dir ) )
+		for libDir in self.shared._project_settings.libraryDirs:
+			libDirArgs.append( '/LIBPATH:"{}"'.format( os.path.normpath( libDir ) ) )
 
-		return library_dir_args
+		return self._convertArgListToString( libDirArgs )
 
 
 	def _getLinkerOutputArg( self, output_file ):
-		return '/OUT:"{}" '.format( output_file )
+		return '/OUT:"{}"'.format( output_file )
 
 
 	def _getLinkerObjFileArgs( self, obj_file_list ):
-		args = ""
-		for obj_file in obj_file_list:
-			args += '"{}" '.format( obj_file )
+		args = []
+		for objFile in obj_file_list:
+			args.append( '"{}"'.format( objFile ) )
 
-		return args
+		return self._convertArgListToString( args )
+
+
+	def _getProjectSettingsLinkerArgs( self ):
+		return " ".join( self.shared._project_settings.linkerFlags )
 
 
 	def _getLinkerCommand( self, output_file, obj_list ):
@@ -707,11 +760,12 @@ class MsvcLinker( MsvcBase, toolchain.linkerBase ):
 		os.fsync(fd)
 		os.close(fd)
 
-		return "{}{}{}{}".format(
-			self._getLinkerExe( ),
-			"/NXCOMPAT /DYNAMICBASE " if self.shared._project_settings.type != csbuild.ProjectType.StaticLibrary else "",
+		argList = [
+			self._getLinkerExe(),
+			self._getProjectSettingsLinkerArgs(),
 			'@"{}"'.format(linkFile),
-			" ".join( self.shared._project_settings.linkerFlags ) )
+		]
+		return self._convertArgListToString( argList )
 
 
 	def FindLibrary( self, project, library, libraryDirs, force_static, force_shared ):
