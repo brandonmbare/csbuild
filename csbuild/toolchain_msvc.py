@@ -199,13 +199,16 @@ class MsvcBase( object ):
 				# Only accept lines that contain key/value pairs.
 				if len( keyValueList ) == 2:
 
-					if keyValueList[0] == "Path":
+					# In Windows, all environment variables are case insensitive.
+					keyValueList[0] = keyValueList[0].lower()
+
+					if keyValueList[0] == "path":
 						os.environ[keyValueList[0]] = keyValueList[1]
 
-					elif keyValueList[0] == "INCLUDE":
+					elif keyValueList[0] == "include":
 						WINDOWS_INCLUDE_PATH_LIST = [ path for path in keyValueList[1].split( ";" ) if path ]
 
-					elif keyValueList[0] == "LIB":
+					elif keyValueList[0] == "lib":
 						WINDOWS_LIB_PATH_LIST = [ path for path in keyValueList[1].split( ";" ) if path ]
 
 			HAS_SET_VC_VARS = True
