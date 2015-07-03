@@ -207,19 +207,6 @@ class MsvcBase( object ):
 
 			HAS_SET_VC_VARS = True
 
-		if self.shared.msvc_version < MSVC_VERSION["2013"]:
-			binSubPath = {
-				"x86": "",
-				"x64": "amd64" if isPlatform64Bit else "x86_amd64",
-				"arm": "x86_arm",
-			}[self.shared._project_settings.outputArchitecture]
-		else:
-			binSubPath = {
-				"x86": "amd64_x86" if isPlatform64Bit else "",
-				"x64": "amd64" if isPlatform64Bit else "x86_amd64",
-				"arm": "amd64_arm" if isPlatform64Bit else "x86_arm",
-			}[self.shared._project_settings.outputArchitecture]
-
 		self.shared._include_path = WINDOWS_INCLUDE_PATH_LIST
 		self.shared._lib_path = WINDOWS_LIB_PATH_LIST
 
