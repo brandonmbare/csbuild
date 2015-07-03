@@ -203,16 +203,10 @@ class MsvcBase( object ):
 						os.environ[keyValueList[0]] = keyValueList[1]
 
 					elif keyValueList[0] == "INCLUDE":
-						WINDOWS_INCLUDE_PATH_LIST = keyValueList[1]
-						#if sys.version_info >= ( 3, 0 ):
-						#	WINDOWS_INCLUDE_PATH_LIST = WINDOWS_INCLUDE_PATH_LIST.decode( "utf-8" )
-						WINDOWS_INCLUDE_PATH_LIST = [ path for path in WINDOWS_INCLUDE_PATH_LIST.split( ";" ) if path ]
+						WINDOWS_INCLUDE_PATH_LIST = [ path for path in keyValueList[1].split( ";" ) if path ]
 
 					elif keyValueList[0] == "LIB":
-						WINDOWS_LIB_PATH_LIST = keyValueList[1]
-						#if sys.version_info >= ( 3, 0 ):
-						#	WINDOWS_LIB_PATH_LIST = WINDOWS_LIB_PATH_LIST.decode( "utf-8" )
-						WINDOWS_LIB_PATH_LIST = [ path for path in WINDOWS_LIB_PATH_LIST.split( ";" ) if path ]
+						WINDOWS_LIB_PATH_LIST = [ path for path in keyValueList[1].split( ";" ) if path ]
 
 			HAS_SET_VC_VARS = True
 
