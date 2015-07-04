@@ -1077,6 +1077,9 @@ class toolBase( SettingsOverrider ):
 		SettingsOverrider.__init__(self)
 		self.shared = shared
 
+	def GetEnv( self ):
+		return {}
+
 	def prePrepareBuildStep(self, project):
 		pass
 

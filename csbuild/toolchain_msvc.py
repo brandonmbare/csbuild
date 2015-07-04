@@ -40,9 +40,14 @@ import csbuild
 
 ### Reference: http://msdn.microsoft.com/en-us/library/f35ctcxw.aspx
 
-HAS_SET_VC_VARS = False
-WINDOWS_INCLUDE_PATH_LIST = []
-WINDOWS_LIB_PATH_LIST = []
+class VcVarsCache:
+	def __init__( self, environPath_, binPath_, includePathList_, libPathList_ ):
+		self.environPath = environPath_
+		self.binPath = binPath_
+		self.includePathList = includePathList_
+		self.libPathList = libPathList_
+
+VC_VARS_CACHE_MAP = {} # Dictionary mapping output architecture to cached data from vcvarsall.bat.
 DEFAULT_MSVC_VERSION = 0
 
 MSVC_VERSION = OrderedDict([
@@ -88,6 +93,8 @@ class MsvcBase( object ):
 		self.shared._toolchain_path = ""
 		self.shared._include_path = []
 		self.shared._lib_path = []
+		self.shared.binPath = ""
+		self.shared.environPath = ""
 
 
 	@staticmethod
@@ -105,6 +112,8 @@ class MsvcBase( object ):
 		other.shared._toolchain_path = self.shared._toolchain_path
 		other.shared._include_path = list( self.shared._include_path )
 		other.shared._lib_path = list( self.shared._lib_path )
+		other.shared.binPath = self.shared.binPath
+		other.shared.environPath = self.shared.environPath
 
 
 	def SetMsvcVersion( self, visual_studio_version ):
@@ -131,6 +140,9 @@ class MsvcBase( object ):
 
 
 	def _setupForProject( self, project ):
+		if platform.system() != "Windows":
+			return
+
 		ver = csbuild.GetOption("msvc_version")
 		if ver:
 			self.shared.msvc_version = MSVC_VERSION[ver]
@@ -161,11 +173,8 @@ class MsvcBase( object ):
 
 		isPlatform64Bit = IS_PLATFORM_64_BIT[platform.machine().lower()]
 
-		global HAS_SET_VC_VARS
-		global WINDOWS_INCLUDE_PATH_LIST
-		global WINDOWS_LIB_PATH_LIST
-
-		if not HAS_SET_VC_VARS:
+		global VC_VARS_CACHE_MAP
+		if not self.shared._project_settings.outputArchitecture in VC_VARS_CACHE_MAP:
 			# Versions prior to Visual Studio 2013 had a slightly different set of arguments.
 			if self.shared.msvc_version < MSVC_VERSION["2013"]:
 				vcvarsallArg = {
@@ -191,6 +200,11 @@ class MsvcBase( object ):
 
 			outputLines = output.splitlines()
 
+			windowsEnvironPath = ""
+			windowsBinPath = ""
+			windowsIncludePathList = []
+			windowsLibPathList = []
+
 			for line in outputLines:
 
 				# Convert to a string in Python3.
@@ -206,18 +220,35 @@ class MsvcBase( object ):
 					keyValueList[0] = keyValueList[0].lower()
 
 					if keyValueList[0] == "path":
-						os.environ[keyValueList[0]] = keyValueList[1]
+						windowsEnvironPath = keyValueList[1]
+
+						# Passing a custom environment to subprocess.Popen() does not always help in locating a command
+						# to execute on Windows (seems to be a bug with CreateProcess()),so we still need to find the
+						# bin path where the tools live.  Luckily, the modified path vars are setup such that the first
+						# we come across containing "cl.exe" is the one we want.
+						for envPath in [ path for path in windowsEnvironPath.split( ";" ) if path ]:
+							if os.access( os.path.join( envPath, "cl.exe" ), os.F_OK ):
+								windowsBinPath = envPath
+								break
 
 					elif keyValueList[0] == "include":
-						WINDOWS_INCLUDE_PATH_LIST = [ path for path in keyValueList[1].split( ";" ) if path ]
+						windowsIncludePathList = [ path for path in keyValueList[1].split( ";" ) if path ]
 
 					elif keyValueList[0] == "lib":
-						WINDOWS_LIB_PATH_LIST = [ path for path in keyValueList[1].split( ";" ) if path ]
+						windowsLibPathList = [ path for path in keyValueList[1].split( ";" ) if path ]
 
-			HAS_SET_VC_VARS = True
+			VC_VARS_CACHE_MAP[self.shared._project_settings.outputArchitecture] = VcVarsCache( windowsEnvironPath, windowsBinPath, windowsIncludePathList, windowsLibPathList )
 
-		self.shared._include_path = WINDOWS_INCLUDE_PATH_LIST
-		self.shared._lib_path = WINDOWS_LIB_PATH_LIST
+		vcVarsCache = VC_VARS_CACHE_MAP[self.shared._project_settings.outputArchitecture]
+
+		self.shared._include_path = vcVarsCache.includePathList
+		self.shared._lib_path = vcVarsCache.libPathList
+		self.shared.binPath = vcVarsCache.binPath
+		self.shared.environPath = vcVarsCache.environPath
+
+
+	def GetEnv( self ):
+		return { "PATH": self.shared.environPath }
 
 
 	def InterruptExitCode( self ):
@@ -335,7 +366,7 @@ class MsvcCompiler( MsvcBase, toolchain.compilerBase ):
 
 
 	def _getCompilerExe( self ):
-		return "cl"
+		return '"{}"'.format( os.path.join( self.shared.binPath, "cl.exe" ) )
 
 
 	def _getDefaultCompilerArgs( self ):
@@ -586,7 +617,7 @@ class MsvcLinker( MsvcBase, toolchain.linkerBase ):
 
 
 	def _getLinkerExe( self ):
-		return '"{}"'.format( "lib" if self.shared._project_settings.type == csbuild.ProjectType.StaticLibrary else "link" )
+		return '"{}"'.format( os.path.join( self.shared.binPath, "lib.exe" if self.shared._project_settings.type == csbuild.ProjectType.StaticLibrary else "link.exe" ) )
 
 
 	def _getDefaultLinkerArgs( self ):

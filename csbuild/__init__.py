@@ -2042,7 +2042,8 @@ def _performLink(project, objs):
 	if platform.system() != "Windows":
 		cmd = shlex.split(cmd)
 
-	fd = subprocess.Popen( cmd, stdout = subprocess.PIPE, stderr = subprocess.PIPE, cwd = project.objDir )
+	toolchainEnv = _utils.GetToolchainEnvironment( project.activeToolchain.Linker() )
+	fd = subprocess.Popen( cmd, stdout = subprocess.PIPE, stderr = subprocess.PIPE, cwd = project.objDir, env = toolchainEnv )
 
 	(output, errors) = fd.communicate( )
 

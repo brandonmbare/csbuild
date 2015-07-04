@@ -258,19 +258,21 @@ class ThreadedBuild( threading.Thread ):
 			else:
 				project = self.project
 
+			toolchainEnv = GetToolchainEnvironment( self.project.activeToolchain.Compiler() )
+
 			if _shared_globals.profile:
 				profileIn = os.path.join( self.project.csbuildDir, "profileIn")
-				if not os.access(profileIn, os.F_OK):
-					os.makedirs(profileIn)
-				self.file = os.path.join( profileIn, "{}.{}".format(hashlib.md5(self.file).hexdigest(), self.file.rsplit(".", 1)[1]) )
+				if not os.access( profileIn, os.F_OK):
+					os.makedirs( profileIn )
+				self.file = os.path.join( profileIn, "{}.{}".format( hashlib.md5( self.file ).hexdigest(), self.file.rsplit( ".", 1 )[1] ) )
 
-				preprocessCmd = self.project.activeToolchain.Compiler().GetPreprocessCommand( baseCommand, project, os.path.abspath( self.originalIn ))
+				preprocessCmd = self.project.activeToolchain.Compiler().GetPreprocessCommand( baseCommand, project, os.path.abspath( self.originalIn ) )
 				if _shared_globals.show_commands:
-					print(preprocessCmd)
+					print( preprocessCmd )
 
 				if platform.system() != "Windows":
-					preprocessCmd = shlex.split(preprocessCmd)
-				fd = subprocess.Popen(preprocessCmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+					preprocessCmd = shlex.split( preprocessCmd )
+				fd = subprocess.Popen( preprocessCmd, stderr = subprocess.PIPE, stdout = subprocess.PIPE, env = toolchainEnv )
 
 				data = StringIO()
 				lastLine = 0
@@ -355,7 +357,7 @@ class ThreadedBuild( threading.Thread ):
 			if platform.system() != "Windows":
 				cmd = shlex.split(cmd)
 
-			fd = subprocess.Popen( cmd, stdout = subprocess.PIPE, stderr = subprocess.PIPE, cwd = self.project.workingDirectory )
+			fd = subprocess.Popen( cmd, stdout = subprocess.PIPE, stderr = subprocess.PIPE, cwd = self.project.workingDirectory, env = toolchainEnv )
 			running = True
 
 			times = {}
@@ -1073,3 +1075,9 @@ def DeleteTree( pathToDelete ):
 		os.rmdir( pathToDelete )
 	else:
 		os.remove( pathToDelete )
+
+
+def GetToolchainEnvironment( tool ):
+	envCopy = os.environ.copy()
+	envCopy.update( tool.GetEnv() )
+	return envCopy
