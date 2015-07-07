@@ -300,6 +300,7 @@ class project_generator_visual_studio( project_generator.project_generator ):
 								generatorPlatform.AddOutputDirectory( configName, projectName, settings.outputDir )
 								generatorPlatform.AddIntermediateDirectory( configName, projectName, settings.objDir )
 								generatorPlatform.AddDefines( configName, projectName, settings.defines )
+								generatorPlatform.AddProjectSettings( configName, projectName, settings )
 
 							projectData.fullSourceFileList.update( set( settings.allsources ) )
 							projectData.fullHeaderFileList.update( set( settings.allheaders ) )
@@ -781,7 +782,7 @@ class project_generator_visual_studio( project_generator.project_generator ):
 					for configName in self._configList:
 						for platformName in registeredPlatformList:
 							generatorPlatform = platformManager.GetRegisteredPlatformFromVisualStudioName( platformName )
-							generatorPlatform.WriteUserDebugPropertyGroup( rootNode, configName )
+							generatorPlatform.WriteUserDebugPropertyGroup( rootNode, configName, projectData )
 
 				self._saveXmlFile( rootNode, os.path.join( projectData.outputPath, "{}.vcxproj.user".format( projectData.name ) ), True )
 

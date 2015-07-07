@@ -20,6 +20,8 @@
 
 """Contains the vsgen platform for Tegra-Android."""
 
+import os
+import csbuild
 import xml.etree.ElementTree as ET
 
 from .platform_base import PlatformBase
@@ -85,6 +87,18 @@ class PlatformTegraAndroid( PlatformBase ):
 		pass
 
 
-	def WriteUserDebugPropertyGroup( self, parentXmlNode, vsConfigName ):
+	def WriteUserDebugPropertyGroup( self, parentXmlNode, vsConfigName, projectData ):
 		propertyGroupNode = _addNode( parentXmlNode, "PropertyGroup" )
 		propertyGroupNode.set( "Condition", "'$(Configuration)|$(Platform)'=='{}|{}'".format( vsConfigName, self.GetVisualStudioName() ) )
+
+		outputDir = self.GetOutputDirectory( vsConfigName, projectData.name )
+		projectSettings = self.GetProjectSettings( vsConfigName, projectData.name )
+
+		if outputDir and projectSettings and projectSettings.metaType == csbuild.ProjectType.Application:
+			overrideApkPathNode = _addNode( propertyGroupNode, "OverrideAPKPath" )
+			debuggerFlavorNode = _addNode( propertyGroupNode, "DebuggerFlavor" )
+
+			outputName = "{}{}.apk".format( projectSettings.name, "-debug" if csbuild.Toolchain("android").Compiler().IsAndroidDebugBuild( projectSettings ) else "" )
+
+			overrideApkPathNode.text = os.path.join( os.path.abspath( outputDir ), outputName )
+			debuggerFlavorNode.text = "AndroidDebugger"

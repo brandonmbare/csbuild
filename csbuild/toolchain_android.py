@@ -80,6 +80,7 @@ class AndroidBase( object ):
 		self.shared._stlVersion = "GNU"
 		self.shared._addNativeAppGlue = True
 
+
 	def _copyTo(self, other):
 		other.shared._ndkHome = self.shared._ndkHome
 		other.shared._sdkHome = self.shared._sdkHome
@@ -100,58 +101,80 @@ class AndroidBase( object ):
 		other.shared._stlVersion = self.shared._stlVersion
 		other.shared._addNativeAppGlue = self.shared._addNativeAppGlue
 
+
 	def SetNdkHome(self, pathToNdk):
 		self.shared._ndkHome = os.path.abspath(pathToNdk)
+
 
 	def SetSdkHome(self, pathToSdk):
 		self.shared._sdkHome = os.path.abspath(pathToSdk)
 
+
 	def SetAntHome(self, pathToAnt):
 		self.shared._antHome = os.path.abspath(pathToAnt)
 
+
 	def SetJavaHome(self, pathToJava):
 		self.shared._javaHome = os.path.abspath(pathToJava)
+
 
 	def SetKeystoreLocation(self, pathToKeystore):
 		self.shared._keystoreLocation = os.path.abspath(pathToKeystore)
 		if not self.shared._keystorePwFile:
 			self.shared._keystorePwFile = os.path.join(csbuild.mainfileDir, os.path.basename(pathToKeystore+".pass"))
 
+
 	def SetKeystorePasswordFile(self, pathToPwFile):
 		self.shared._keystorePwFile = os.path.abspath(pathToPwFile)
+
 
 	def SetKeyPasswordFile(self, pathToPwFile):
 		self.shared._keyPwFile = os.path.abspath(pathToPwFile)
 
+
 	def SetKeystoreAlias(self, alias):
 		self.shared._keystoreAlias = alias
+
 
 	def SetMinSdkVersion(self, version):
 		self.shared._minSdkVersion = version
 
+
 	#def SetMaxSdkVersion(self, version):
 	#	self.shared._maxSdkVersion = version
+
 
 	def SetTargetSdkVersion(self, version):
 		self.shared._targetSdkVersion = version
 
+
 	def SetPackageName(self, name):
 		self.shared._packageName = name
+
 
 	def SetActivityName(self, name):
 		self.shared._activityName = name
 
+
 	def AddUsedFeatures(self, *args):
 		self.shared._usedFeatures += list(args)
+
 
 	def AddUsedPermissions(self, *args):
 		self.shared._usedPermissions += list(args)
 
+
 	def SetNativeAppGlue(self, addGlue):
 		self.shared._addNativeAppGlue = addGlue
 
+
 	def GetValidArchitectures(self):
 		return ['x86', 'armeabi', 'armeabi-v7a', 'armeabi-v7a-hard', 'mips']
+
+
+	def IsAndroidDebugBuild( self, project ):
+		return True if project.optLevel != csbuild.OptimizationLevel.Max else False
+
 
 	def _getTargetTriple(self, project):
 		if self.shared.isClang:
@@ -742,7 +765,7 @@ class APKBuilder(AndroidBase, toolchain.toolBase):
 			f.write('  </application>\n')
 			f.write('</manifest>\n')
 
-		if project.optLevel != csbuild.OptimizationLevel.Max:
+		if self.IsAndroidDebugBuild( project ):
 			antBuildType = "debug"
 		else:
 			antBuildType = "release"

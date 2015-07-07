@@ -132,6 +132,7 @@ class MsvcBase( object ):
 
 		:return: int
 		"""
+		self._setupMsvcVersion()
 		return self.shared.msvc_version
 
 
@@ -143,26 +144,7 @@ class MsvcBase( object ):
 		if platform.system() != "Windows":
 			return
 
-		ver = csbuild.GetOption("msvc_version")
-		if ver:
-			self.shared.msvc_version = MSVC_VERSION[ver]
-
-		if not self.shared.msvc_version:
-			global DEFAULT_MSVC_VERSION
-			if not DEFAULT_MSVC_VERSION:
-				# Find the highest version of Visual Studio a user has install so we can use that as the default
-				# in case they don't provide a version manually.
-				reversedKeys = reversed( [ key for key in MSVC_VERSION.keys() ] )
-				for versionKey in reversedKeys:
-					versionValue = MSVC_VERSION[versionKey]
-					macroName = "VS{}COMNTOOLS".format( versionValue )
-					if macroName in os.environ:
-						DEFAULT_MSVC_VERSION = versionValue
-						break
-			if not DEFAULT_MSVC_VERSION:
-				log.LOG_ERROR("No supported version of Visual Studio detected.  Please install a supported version ({}) or try another toolchain.".format( ", ".join( [ key for key in MSVC_VERSION.keys() ] ) ) )
-				csbuild.Exit(1)
-			self.shared.msvc_version = DEFAULT_MSVC_VERSION
+		self._setupMsvcVersion()
 
 		# If ARM is selected, make sure we can actually build for it.
 		assert not ( project.outputArchitecture == "arm" and self.shared.msvc_version < MSVC_VERSION["2012"] ), "Compiling for ARM is only available from Visual Studio 2012 and up!"
@@ -253,6 +235,36 @@ class MsvcBase( object ):
 
 	def InterruptExitCode( self ):
 		return -1
+
+
+	def _setupMsvcVersion(self):
+		verCmdLine = csbuild.GetOption("msvc_version")
+
+		# Do nothing if we already have a version set and nothing was passed in from the command line.
+		if self.shared.msvc_version and not verCmdLine:
+			return
+
+		# If a version was passed to us from the command line, use that.
+		if verCmdLine:
+			self.shared.msvc_version = MSVC_VERSION[verCmdLine]
+
+		# If we still don't have a version, fallback to the default.
+		if not self.shared.msvc_version:
+			global DEFAULT_MSVC_VERSION
+			if not DEFAULT_MSVC_VERSION:
+				# Find the highest version of Visual Studio a user has install so we can use that as the default
+				# in case they don't provide a version manually.
+				reversedKeys = reversed( [ key for key in MSVC_VERSION.keys() ] )
+				for versionKey in reversedKeys:
+					versionValue = MSVC_VERSION[versionKey]
+					macroName = "VS{}COMNTOOLS".format( versionValue )
+					if macroName in os.environ:
+						DEFAULT_MSVC_VERSION = versionValue
+						break
+			if not DEFAULT_MSVC_VERSION:
+				log.LOG_ERROR("No supported version of Visual Studio detected.  Please install a supported version ({}) or try another toolchain.".format( ", ".join( [ key for key in MSVC_VERSION.keys() ] ) ) )
+				csbuild.Exit(1)
+			self.shared.msvc_version = DEFAULT_MSVC_VERSION
 
 
 	def _convertArgListToString( self, argList ):

@@ -27,6 +27,7 @@ class PlatformBase( object ):
 		self._outDirMap = dict()
 		self._intDirMap = dict()
 		self._definesMap = dict()
+		self._projectSettingsMap = dict()
 
 
 	@staticmethod
@@ -129,6 +130,26 @@ class PlatformBase( object ):
 			self._definesMap[mapKey].append( defines )
 
 
+	def AddProjectSettings( self, vsConfigName, projectName, projectSettings ):
+		"""
+		Map a projectSettings object to a project and configuration.
+
+		:param vsConfigName: Output configuration name.
+		:type vsConfigName: str
+
+		:param projectName: Name of the project associated with the defines.
+		:type projectName: str
+
+		:param projectSettings: Defines to add.
+		:type projectSettings: class`csbuild.projectSettings`
+		"""
+		mapKey = ( vsConfigName, projectName )
+		if not mapKey in self._projectSettingsMap:
+			self._projectSettingsMap.update( { mapKey: projectSettings } )
+		else:
+			self._projectSettingsMap[mapKey] = projectSettings
+
+
 	def GetOutputName( self, vsConfigName, projectName ):
 		"""
 		Retrieve an output name from a project and configuration.
@@ -185,7 +206,7 @@ class PlatformBase( object ):
 
 	def GetDefines( self, vsConfigName, projectName ):
 		"""
-		Retrieve an list of preprocessor defines from a project and configuration.
+		Retrieve a list of preprocessor defines from a project and configuration.
 
 		:param vsConfigName: Output configuration name.
 		:type vsConfigName: str
@@ -199,6 +220,24 @@ class PlatformBase( object ):
 		if not mapKey in self._definesMap:
 			return []
 		return self._definesMap[mapKey]
+
+
+	def GetProjectSettings( self, vsConfigName, projectName ):
+		"""
+		Retrieve the projectSettings object mapped to a specific project and configuration.
+
+		:param vsConfigName: Output configuration name.
+		:type vsConfigName: str
+
+		:param projectName: Name of the project associated with the defines.
+		:type projectName: str
+
+		:return: class`csbuild.projectSettings`
+		"""
+		mapKey = ( vsConfigName, projectName )
+		if not mapKey in self._projectSettingsMap:
+			return None
+		return self._projectSettingsMap[mapKey]
 
 
 	def WriteTopLevelInfo( self, parentXmlNode ):
@@ -259,7 +298,7 @@ class PlatformBase( object ):
 		pass
 
 
-	def WriteUserDebugPropertyGroup( self, parentXmlNode, vsConfigName ):
+	def WriteUserDebugPropertyGroup( self, parentXmlNode, vsConfigName, projectData ):
 		"""
 		Write the property group nodes specifying the user debug settings.
 
@@ -268,5 +307,8 @@ class PlatformBase( object ):
 
 		:param vsConfigName: Visual Studio configuration name.
 		:type vsConfigName: str
+
+		:param projectData: Project data.
+		:type projectData: class `csbuild.project_generator_visual_studio_v2.Project`
 		"""
 		pass
