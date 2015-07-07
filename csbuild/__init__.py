@@ -2781,6 +2781,7 @@ def _run( ):
 		action = "store_true" )
 	parser.add_argument( '--dg', '--dependency-graph', help="Generate dependency graph", action="store_true")
 	parser.add_argument( '--with-libs', help="Include linked libraries in dependency graph", action="store_true" )
+	parser.add_argument( "-d", "--define", help = "Add defines to each project being built.", action = "append")
 
 	group = parser.add_argument_group( "Solution generation", "Commands to generate a solution" )
 	group.add_argument( '--generate-solution', help = "Generate a solution file for use with the given IDE.",
@@ -2842,13 +2843,18 @@ def _run( ):
 		print("\nMaintainer: {} - {}".format( __maintainer__, __email__ ))
 		return
 
+	# Add any defines that were passed in from the command line.
+	if args.define:
+		for define in args.define:
+			AddDefines(define)
+
 	_shared_globals.CleanBuild = args.clean
 	_shared_globals.do_install = args.install or args.install_headers or args.install_output
 	_shared_globals.quiet = args.quiet
 	_shared_globals.show_commands = args.show_commands
 	_shared_globals.rebuild = args.rebuild or args.profile
 	if args.gui and _shared_globals.CleanBuild:
-		log.LOG_INFO("The GUI is currently disabled when performing a clean.");
+		log.LOG_INFO("The GUI is currently disabled when performing a clean.")
 		args.gui = False
 	if args.profile and not args.gui:
 		log.LOG_WARN("Profile mode has no effect without --gui. Disabling --profile.")

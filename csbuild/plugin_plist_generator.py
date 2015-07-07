@@ -112,7 +112,8 @@ class PListGenerator( object ):
 
 	def __init__( self ):
 		self._rootNodes = set()
-		self._substitutionMap = dict()
+		self._cmakeStringSubstitutionMap = dict()
+		self._variableSubstitutionMap = dict()
 		self._externalPlistPath = ""
 		self._resolvedPlistPath = ""
 
@@ -168,11 +169,11 @@ class PListGenerator( object ):
 		self._resolvedPlistPath = ""
 
 
-	def AddStringSubstitution(self, key, value):
+	def AddCmakeStringSubstitution(self, key, value):
 		"""
 		Add a key/value pair to be used for string substitution in the ASCII plist before a binary version is generated.
 		This is intended to mimic CMake's behavior so as to be compatible with any plist template files one might also use with CMake.
-		What this means is that if you were to call AddStringSubstitution( "VERSION_NUMBER", "1.1.0" ), it would look for
+		What this means is that if you were to call AddCmakeStringSubstitution( "VERSION_NUMBER", "1.1.0" ), it would look for
 		the string "@VERSION_NUMBER@" and replace it with "1.1.0".
 
 		Example:
@@ -191,7 +192,32 @@ class PListGenerator( object ):
 			return
 		if not isinstance( value, str ):
 			value = ""
-		self._substitutionMap[key] = value
+		self._cmakeStringSubstitutionMap[key] = value
+
+
+	def AddVariableSubstitution(self, key, value):
+		"""
+		Add a key/value pair to be used for variable substitution in the ASCII plist before a binary version is generated.
+		What this means is that if you were to call AddVariableSubstitution( "EXECUTABLE_NAME", "MyApp" ), it would look for
+		the string "$(EXECUTABLE_NAME)" and replace it with "MyApp".
+
+		Example:
+		(before) <key>CFBundleVersion</key><string>@VERSION_NUMBER@</string>
+		(after)  <key>CFBundleVersion</key><string>1.1.0</string>
+
+		:param key: Substitution key to search for.
+		:type key: str
+
+		:param value: Value to substitute for the key.
+		:type value: str
+
+		:return: None
+		"""
+		if not key or not isinstance( key, str ):
+			return
+		if not isinstance( value, str ):
+			value = ""
+		self._variableSubstitutionMap[key] = value
 
 
 	def Output( self, project, outputFilePath ):
@@ -221,6 +247,18 @@ class PListGenerator( object ):
 		return success
 
 
+	def _doSubstitutionsOnString( self, inputString ):
+		# Handle the string substitution here.
+		for key, value in self._cmakeStringSubstitutionMap.items():
+			inputString = inputString.replace( "@{}@".format( key ), value )
+
+		# Handle the variable substitution here.
+		for key, value in self._variableSubstitutionMap.items():
+			inputString = inputString.replace( "$({})".format( key ), value )
+
+		return inputString
+
+
 	def _processExternalFile( self ):
 		if not os.access( self._resolvedPlistPath, os.F_OK ):
 			raise FileNotFoundError( "External plist file not found: {}".format( self._resolvedPlistPath ) )
@@ -229,9 +267,7 @@ class PListGenerator( object ):
 		with open( self._resolvedPlistPath, mode = "r" ) as fileHandle:
 			inputFileString = fileHandle.read()
 
-		# Handle the string substitution here.
-		for key, value in self._substitutionMap.items():
-			inputFileString = inputFileString.replace("@{}@".format(key), value)
+		inputFileString = self._doSubstitutionsOnString( inputFileString )
 
 		fd, tempFilePath = tempfile.mkstemp()
 
@@ -263,7 +299,7 @@ class PListGenerator( object ):
 			elif plistNode.nodeType == PListNodeType.Data:
 				valueNode = AddNode( parentXmlNode, "data")
 				if sys.version_info() >= (3, 0):
-					valueNode.text = plistNode.value.decode("utf-8")
+					valueNode.text = plistNode.value.decode( "utf-8" )
 				else:
 					valueNode.text = plistNode.value
 			elif plistNode.nodeType == PListNodeType.Date:
@@ -295,9 +331,7 @@ class PListGenerator( object ):
 		if sys.version_info >= ( 3, 0 ):
 			xmlString = xmlString.decode( "utf-8" )
 
-		# Handle the string substitution here.
-		for key, value in self._substitutionMap.items():
-			xmlString = xmlString.replace("@{}@".format(key), value)
+		xmlString = self._doSubstitutionsOnString( xmlString )
 
 		# Use minidom to reformat the XML since ElementTree doesn't do it for us.
 		formattedXmlString = minidom.parseString( xmlString ).toprettyxml( "\t", "\n", encoding = "utf-8" )
