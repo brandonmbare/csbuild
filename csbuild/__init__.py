@@ -3135,9 +3135,17 @@ def _run( ):
 	os.chdir( mainFileDir )
 
 	if project_build_list:
+		inputProjectSet = set(project_build_list)
+		foundProjectSet = set()
 		for proj in _shared_globals.projects.keys( ):
-			if proj.rsplit( "@", 1 )[0] in project_build_list:
+			projName = proj.rsplit( "@", 1 )[0]
+			if projName in project_build_list:
 				_shared_globals.project_build_list.add( proj )
+				foundProjectSet.add( projName )
+		missingProjectList = sorted( inputProjectSet.difference( foundProjectSet ) )
+		if missingProjectList:
+			log.LOG_ERROR( "The following projects cannot be built with the selected configuration: {}".format( ", ".join( missingProjectList ) ) )
+			Exit( 1 )
 	else:
 		_shared_globals.project_build_list = set(_shared_globals.projects.keys())
 
