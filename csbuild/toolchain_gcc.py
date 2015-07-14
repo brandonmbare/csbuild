@@ -55,8 +55,8 @@ class gccBase( object ):
 		self.shared._objcAbiVersion = version
 
 
-	def _getStandardLibraryArg( self, project, isCpp ):
-		return "-stdlib={} ".format( project.stdLib ) if isCpp else ""
+	def _getStandardLibraryArg( self, project ):
+		return "-stdlib={} ".format( project.stdLib )
 
 
 	def _getArchFlag( self, project ):
@@ -325,7 +325,7 @@ class GccCompiler( gccBase, toolchain.compilerBase ):
 			picFlag,
 			"-pg " if project.profile else "",
 			"-std={} ".format( standard ) if standard != "" else "",
-			self._getStandardLibraryArg( project, isCpp ),
+			self._getStandardLibraryArg( project ) if isCpp else "",
 			self._getVisibilityArgs( project ),
 			" ".join( project.cxxCompilerFlags ) if isCpp else " ".join( project.ccCompilerFlags )
 		)
@@ -579,7 +579,7 @@ class GccLinker( gccBase, toolchain.linkerBase ):
 				cmd,
 				archArg,
 				self._getObjcAbiVersionArg(),
-				self._getStandardLibraryArg( project, project.hasCppFiles ),
+				self._getStandardLibraryArg( project ) if project.hasCppFiles else "",
 				"-pg " if project.profile else "",
 				outputFile,
 				"@{}".format(linkFile),
