@@ -173,7 +173,7 @@ class AndroidBase( object ):
 
 
 	def IsAndroidDebugBuild( self, project ):
-		return True if project.optLevel != csbuild.OptimizationLevel.Max else False
+		return project.optLevel != csbuild.OptimizationLevel.Max
 
 
 	def _getTargetTriple(self, project):

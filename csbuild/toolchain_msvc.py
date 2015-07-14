@@ -254,7 +254,7 @@ class MsvcBase( object ):
 			if not DEFAULT_MSVC_VERSION:
 				# Find the highest version of Visual Studio a user has install so we can use that as the default
 				# in case they don't provide a version manually.
-				reversedKeys = reversed( [ key for key in MSVC_VERSION.keys() ] )
+				reversedKeys = reversed( MSVC_VERSION )
 				for versionKey in reversedKeys:
 					versionValue = MSVC_VERSION[versionKey]
 					macroName = "VS{}COMNTOOLS".format( versionValue )

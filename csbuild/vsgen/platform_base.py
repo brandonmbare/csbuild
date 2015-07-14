@@ -64,10 +64,7 @@ class PlatformBase( object ):
 		:type outputName: str
 		"""
 		mapKey = ( vsConfigName, projectName )
-		if not mapKey in self._outputNameMap:
-			self._outputNameMap.update( { mapKey: outputName } )
-		else:
-			self._outputNameMap[mapKey] = outputName
+		self._outputNameMap[mapKey] = outputName
 
 
 	def AddOutputDirectory( self, vsConfigName, projectName, outDir ):
@@ -84,10 +81,7 @@ class PlatformBase( object ):
 		:type outDir: str
 		"""
 		mapKey = ( vsConfigName, projectName )
-		if not mapKey in self._outDirMap:
-			self._outDirMap.update( { mapKey: outDir } )
-		else:
-			self._outDirMap[mapKey] = outDir
+		self._outDirMap[mapKey] = outDir
 
 
 	def AddIntermediateDirectory( self, vsConfigName, projectName, intDir ):
@@ -104,10 +98,7 @@ class PlatformBase( object ):
 		:type intDir: str
 		"""
 		mapKey = ( vsConfigName, projectName )
-		if not mapKey in self._intDirMap:
-			self._intDirMap.update( { mapKey: intDir } )
-		else:
-			self._intDirMap[mapKey] = intDir
+		self._intDirMap[mapKey] = intDir
 
 
 	def AddDefines( self, vsConfigName, projectName, defines ):
@@ -124,10 +115,7 @@ class PlatformBase( object ):
 		:type defines: list
 		"""
 		mapKey = ( vsConfigName, projectName )
-		if not mapKey in self._definesMap:
-			self._definesMap.update( { mapKey: defines } )
-		else:
-			self._definesMap[mapKey].append( defines )
+		self._definesMap[mapKey] = self._definesMap.get( mapKey, [] ) + defines
 
 
 	def AddProjectSettings( self, vsConfigName, projectName, projectSettings ):
@@ -144,10 +132,7 @@ class PlatformBase( object ):
 		:type projectSettings: class`csbuild.projectSettings`
 		"""
 		mapKey = ( vsConfigName, projectName )
-		if not mapKey in self._projectSettingsMap:
-			self._projectSettingsMap.update( { mapKey: projectSettings } )
-		else:
-			self._projectSettingsMap[mapKey] = projectSettings
+		self._projectSettingsMap[mapKey] = projectSettings
 
 
 	def GetOutputName( self, vsConfigName, projectName ):
@@ -163,9 +148,7 @@ class PlatformBase( object ):
 		:return: str
 		"""
 		mapKey = ( vsConfigName, projectName )
-		if not mapKey in self._outputNameMap:
-			return ""
-		return self._outputNameMap[mapKey]
+		return self._outputNameMap.get( mapKey, "" )
 
 
 	def GetOutputDirectory( self, vsConfigName, projectName ):
@@ -181,9 +164,7 @@ class PlatformBase( object ):
 		:return: str
 		"""
 		mapKey = ( vsConfigName, projectName )
-		if not mapKey in self._outDirMap:
-			return ""
-		return self._outDirMap[mapKey]
+		return self._outDirMap.get( mapKey, "" )
 
 
 	def GetIntermediateDirectory( self, vsConfigName, projectName ):
@@ -199,9 +180,7 @@ class PlatformBase( object ):
 		:return: str
 		"""
 		mapKey = ( vsConfigName, projectName )
-		if not mapKey in self._intDirMap:
-			return ""
-		return self._intDirMap[mapKey]
+		return self._intDirMap.get( mapKey, "" )
 
 
 	def GetDefines( self, vsConfigName, projectName ):
@@ -217,9 +196,7 @@ class PlatformBase( object ):
 		:return: list
 		"""
 		mapKey = ( vsConfigName, projectName )
-		if not mapKey in self._definesMap:
-			return []
-		return self._definesMap[mapKey]
+		return self._definesMap.get( mapKey, [] )
 
 
 	def GetProjectSettings( self, vsConfigName, projectName ):
@@ -235,7 +212,7 @@ class PlatformBase( object ):
 		:return: class`csbuild.projectSettings`
 		"""
 		mapKey = ( vsConfigName, projectName )
-		if not mapKey in self._projectSettingsMap:
+		if mapKey not in self._projectSettingsMap:
 			return None
 		return self._projectSettingsMap[mapKey]
 
