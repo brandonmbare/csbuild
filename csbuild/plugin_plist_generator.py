@@ -188,10 +188,8 @@ class PListGenerator( object ):
 
 		:return: None
 		"""
-		if not key or not isinstance( key, str ):
-			return
-		if not isinstance( value, str ):
-			value = ""
+		assert isinstance( key, str ), "Key must be a string!"
+		assert isinstance( value, str ), "Value must be a string!"
 		self._cmakeStringSubstitutionMap[key] = value
 
 
@@ -202,8 +200,8 @@ class PListGenerator( object ):
 		the string "$(EXECUTABLE_NAME)" and replace it with "MyApp".
 
 		Example:
-		(before) <key>CFBundleVersion</key><string>@VERSION_NUMBER@</string>
-		(after)  <key>CFBundleVersion</key><string>1.1.0</string>
+		(before) <key>CFBundleVersion</key><string>$(EXECUTABLE_NAME)</string>
+		(after)  <key>CFBundleVersion</key><string>MyApp</string>
 
 		:param key: Substitution key to search for.
 		:type key: str
@@ -213,10 +211,8 @@ class PListGenerator( object ):
 
 		:return: None
 		"""
-		if not key or not isinstance( key, str ):
-			return
-		if not isinstance( value, str ):
-			value = ""
+		assert isinstance( key, str ), "Key must be a string!"
+		assert isinstance( value, str ), "Value must be a string!"
 		self._variableSubstitutionMap[key] = value
 
 
