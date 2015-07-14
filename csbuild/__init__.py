@@ -3135,16 +3135,39 @@ def _run( ):
 	os.chdir( mainFileDir )
 
 	if project_build_list:
-		inputProjectSet = set(project_build_list)
-		foundProjectSet = set()
-		for proj in _shared_globals.projects.keys( ):
+		inputProjectSet = set( project_build_list )
+		existingProjectSet = set( _shared_globals.tempprojects )
+		validProjectSet = set()
+		foundExistingProjectSet = set()
+		foundValidProjectSet = set()
+
+		for proj in _shared_globals.projects.keys():
 			projName = proj.rsplit( "@", 1 )[0]
-			if projName in project_build_list:
+			validProjectSet.add( projName ) # Fill in the set of valid projects for the current build.
+			if projName in inputProjectSet:
 				_shared_globals.project_build_list.add( proj )
-				foundProjectSet.add( projName )
-		missingProjectList = sorted( inputProjectSet.difference( foundProjectSet ) )
-		if missingProjectList:
-			log.LOG_ERROR( "The following projects cannot be built with the selected configuration: {}".format( ", ".join( missingProjectList ) ) )
+
+		# Search for projects that are either not valid or non-existent.
+		for projName in inputProjectSet:
+			if projName in existingProjectSet:
+				foundExistingProjectSet.add( projName )
+			if projName in validProjectSet:
+				foundValidProjectSet.add( projName )
+
+		# Create a list of the projects that don't exist and a list of projects that are invalid for the current build.
+		nonExistentProjectList = sorted( inputProjectSet.difference( foundExistingProjectSet ) )
+		invalidProjectList = sorted( inputProjectSet.difference( nonExistentProjectList ).difference( foundValidProjectSet ) )
+		forceExit = False
+
+		if nonExistentProjectList:
+			log.LOG_ERROR( "The following projects do not exist: {}".format( ", ".join( nonExistentProjectList ) ) )
+			forceExit = True
+
+		if invalidProjectList:
+			log.LOG_ERROR( "The following projects cannot be built with the selected configuration: {}".format( ", ".join( invalidProjectList ) ) )
+			forceExit = True
+
+		if forceExit:
 			Exit( 1 )
 	else:
 		_shared_globals.project_build_list = set(_shared_globals.projects.keys())
