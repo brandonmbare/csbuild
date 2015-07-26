@@ -212,9 +212,7 @@ class PlatformBase( object ):
 		:return: class`csbuild.projectSettings`
 		"""
 		mapKey = ( vsConfigName, projectName )
-		if mapKey not in self._projectSettingsMap:
-			return None
-		return self._projectSettingsMap[mapKey]
+		return self._projectSettingsMap.get( mapKey, None )
 
 
 	def WriteTopLevelInfo( self, parentXmlNode ):
