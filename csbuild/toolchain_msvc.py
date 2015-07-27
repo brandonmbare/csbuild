@@ -136,6 +136,15 @@ class MsvcBase( object ):
 		return self.shared.msvc_version
 
 
+	def GetBinPath(self):
+		"""
+		Get the MSVC bin path.
+
+		:return: str
+		"""
+		return self.shared.binPath
+
+
 	def GetValidArchitectures(self):
 		return ['x86', 'x64', "arm"]
 
@@ -648,7 +657,6 @@ class MsvcLinker( MsvcBase, toolchain.linkerBase ):
 		# The following arguments should only be specified for dynamic libraries and executables (being used with link.exe, not lib.exe).
 		if not self.shared._project_settings.type == csbuild.ProjectType.StaticLibrary:
 			argList.extend([
-				self._getRuntimeLibraryArg(),
 				"/PROFILE" if self.shared._project_settings.profile else "",
 				"/DEBUG" if self.shared._project_settings.profile or self.shared._project_settings.debugLevel != csbuild.DebugLevel.Disabled else "",
 			])
@@ -677,13 +685,6 @@ class MsvcLinker( MsvcBase, toolchain.linkerBase ):
 
 	def _getArchitectureArg( self ):
 		return "/MACHINE:{}".format( self.shared._project_settings.outputArchitecture.upper() )
-
-
-	def _getRuntimeLibraryArg( self ):
-		return '/DEFAULTLIB:{}{}.lib'.format(
-			"libcmt" if self.shared._project_settings.useStaticRuntime else "msvcrt",
-			"d" if self.shared.debug_runtime else ""
-		)
 
 
 	def _getImportLibraryArg(self, output_file):
