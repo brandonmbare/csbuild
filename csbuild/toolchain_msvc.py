@@ -125,7 +125,7 @@ class MsvcBase( object ):
 		"""
 		self.shared.msvc_version = MSVC_VERSION[visual_studio_version]
 
-		if platform.system() == "Windows":
+		if "msvc" in _shared_globals.selectedToolchains:
 			# Verify the selected version of Visual Studio is installed.
 			macroName = "VS{}COMNTOOLS".format( self.shared.msvc_version )
 			assert macroName in os.environ, 'Required environment variable "{}" is missing; unable to verify installation of Visual Studio {}!'.format( macroName, visual_studio_version )
