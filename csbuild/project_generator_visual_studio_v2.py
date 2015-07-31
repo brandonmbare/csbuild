@@ -35,8 +35,13 @@ from . import projectSettings
 from . import log
 from . import _shared_globals
 
-from .vsgen.platform_windows import *
-from .vsgen.platform_android import *
+from .vsgen.platform_windows import PlatformWindowsX86, PlatformWindowsX64
+from .vsgen.platform_android import PlatformTegraAndroid
+
+try:
+	from .proprietary.vsgen.platform_ps4 import PlatformPs4
+except:
+	pass
 
 # Dictionary of MSVC version numbers to tuples of items needed for the file format.
 #   Tuple[0] = Friendly version name for logging output.
@@ -59,6 +64,11 @@ class PlatformManager:
 		self._makePlatformAvailable( PlatformWindowsX86 )
 		self._makePlatformAvailable( PlatformWindowsX64 )
 		self._makePlatformAvailable( PlatformTegraAndroid )
+
+		try:
+			self._makePlatformAvailable( PlatformPs4 )
+		except:
+			pass
 
 
 	@staticmethod
@@ -204,6 +214,11 @@ class project_generator_visual_studio( project_generator.project_generator ):
 		if "android" in _shared_globals.selectedToolchains:
 			if "armeabi-v7a" in _shared_globals.allarchitectures:
 				platformList.add( PlatformTegraAndroid.GetVisualStudioName() )
+		if "ps4" in _shared_globals.selectedToolchains:
+			try:
+				platformList.add( PlatformPs4.GetVisualStudioName() )
+			except:
+				pass
 
 		# If no valid platforms were found, add a default.
 		if not platformList:
