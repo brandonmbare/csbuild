@@ -110,6 +110,11 @@ from . import project_generator_visual_studio_v2
 from . import project_generator
 from . import plugin
 
+try:
+	from .proprietary import toolchain_ps4
+except:
+	pass
+
 __author__ = "Jaedyn K. Draper, Brandon M. Bare"
 __copyright__ = 'Copyright (C) 2012-2014 Jaedyn K. Draper'
 __credits__ = ["Jaedyn K. Draper", "Brandon M. Bare", "Jeff Grills", "Randy Culley"]
@@ -2419,6 +2424,12 @@ def _setupdefaults( ):
 	RegisterToolchain( "msvc", toolchain_msvc.MsvcCompiler, toolchain_msvc.MsvcLinker )
 	RegisterToolchain( "android", toolchain_android.AndroidCompiler, toolchain_android.AndroidLinker, apkBuilder = toolchain_android.APKBuilder )
 	RegisterToolchain( "ios", toolchain_ios.iOSCompiler, toolchain_ios.iOSLinker )
+
+	try:
+		# Attempt to register the PS4 toolchain.
+		RegisterToolchain( "ps4", toolchain_ps4.Ps4Compiler, toolchain_ps4.Ps4Linker )
+	except:
+		pass
 
 	RegisterProjectGenerator( "qtcreator", project_generator_qtcreator.project_generator_qtcreator )
 	RegisterProjectGenerator( "visualstudio", project_generator_visual_studio_v2.project_generator_visual_studio )
