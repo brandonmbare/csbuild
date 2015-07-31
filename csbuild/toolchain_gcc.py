@@ -517,13 +517,13 @@ class GccLinker( gccBase, toolchain.linkerBase ):
 		"""Returns a string containing all of the passed library dirs, formatted to be passed to gcc/g++."""
 		ret = ""
 		for lib in libDirs:
-			ret += "-L{} ".format( lib )
+			ret += '-L"{}" '.format( lib )
 		ret += "-L/usr/lib -L/usr/local/lib "
 		if self._include_lib64:
 			ret += "-L/usr/lib64 -L/usr/local/lib64 "
 		if forLinker:
 			for lib in libDirs:
-				ret += "-Wl,-R{} ".format( os.path.abspath( lib ) )
+				ret += '-Wl,-R"{}" '.format( os.path.abspath( lib ) )
 			ret += "-Wl,-R/usr/lib -Wl,-R/usr/local/lib "
 			if self._include_lib64:
 				ret += "-Wl,-R/usr/lib64 -Wl,-R/usr/local/lib64 "
@@ -575,14 +575,14 @@ class GccLinker( gccBase, toolchain.linkerBase ):
 
 			archArg = self._getArchFlag( project )
 
-			return "\"{}\" {}{}{}{}-o{} {} {} {} {}{}{} {} {}-g{} -O{} {} {} ".format(
+			return '"{}" {}{}{}{}-o"{}" {} {} {} {}{}{} {} {}-g{} -O{} {} {} '.format(
 				cmd,
 				archArg,
 				self._getObjcAbiVersionArg(),
 				self._getStandardLibraryArg( project ) if project.hasCppFiles else "",
 				"-pg " if project.profile else "",
 				outputFile,
-				"@{}".format(linkFile),
+				'@"{}"'.format(linkFile),
 				"-static-libgcc -static-libstdc++ " if project.useStaticRuntime else "",
 				"{}".format(self._getStartGroupFlags()) if not self.strictOrdering else "",
 				self._getLibraries( project.libraries ),
