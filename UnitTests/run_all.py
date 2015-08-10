@@ -3,6 +3,7 @@ import sys
 import os
 import platform
 import time
+import re
 from xml.etree import ElementTree
 
 exitCode = 0
@@ -23,6 +24,8 @@ os.putenv("PYTHONPATH", csbuildPath)
 
 results = {}
 
+ansi_escape = re.compile(r'\x1b[^m]*m')
+
 for test in tests:
 	print("================================================================================")
 	print(">>> Running test {}".format(test))
@@ -36,7 +39,7 @@ for test in tests:
 		output = output.decode("UTF-8")
 		errors = errors.decode("UTF-8")
 
-	results[test] = (output, errors, fd.returncode, time.time() - start)
+	results[test] = (re.sub(ansi_escape, "", output), re.sub(ansi_escape, "", errors), fd.returncode, time.time() - start)
 
 	sys.stdout.write(output)
 	sys.stderr.write(errors)

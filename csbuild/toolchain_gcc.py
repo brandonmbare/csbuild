@@ -424,11 +424,11 @@ class GccCompiler( gccBase, toolchain.compilerBase ):
 
 
 	def SupportsObjectScraping(self):
-		return True
+		return False
 
 
 	def GetObjectScraper(self):
-		return ELF.ELFScraper()
+		return None #ELF.ELFScraper()
 
 
 class GccLinker( gccBase, toolchain.linkerBase ):

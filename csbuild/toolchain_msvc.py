@@ -605,11 +605,11 @@ class MsvcCompiler( MsvcBase, toolchain.compilerBase ):
 
 
 	def SupportsObjectScraping(self):
-		return True
+		return False
 
 
 	def GetObjectScraper(self):
-		return COFF.COFFScraper()
+		return None #COFF.COFFScraper()
 
 
 	def SupportsDummyObjects(self):
