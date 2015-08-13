@@ -86,7 +86,7 @@ class Ps4Compiler( Ps4Base, toolchain_gcc.GccCompiler ):
 
 	def _getBaseCommand( self, compiler, project, isCpp ):
 		ret = toolchain_gcc.GccCompiler._getBaseCommand( self, compiler, project, isCpp )
-		ret = "{} -fcaret-diagnostics".format( ret )
+		ret = "{} -fno-caret-diagnostics".format( ret )
 		return ret
 
 
@@ -152,6 +152,8 @@ class Ps4Linker( Ps4Base, toolchain_gcc.GccLinker ):
 			dependLibName = dependProj.outputName
 			splitName = os.path.splitext(dependLibName)[0]
 			if splitName == lib or splitName == "lib{}".format( lib ):
+				if splitName.startswith( "lib" ):
+					splitName = splitName[3:]
 				return '-l"{}" '.format( splitName )
 		return '"{}" '.format( self._actual_library_names[lib] )
 

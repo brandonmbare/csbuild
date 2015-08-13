@@ -95,6 +95,7 @@ class PlatformManager:
 		if not name in self._availablePlatformMap:
 			log.LOG_ERROR( "Unknown vsgen platform: {}".format( name ) )
 			return
+		log.LOG_BUILD( "Using platform: {}".format( name ) )
 		platformClass = self._availablePlatformMap[name]
 		self._registeredPlatformMap.update( { name: platformClass() } )
 
@@ -546,7 +547,7 @@ class project_generator_visual_studio( project_generator.project_generator ):
 			parentNode.append( comment )
 			return comment
 
-		platformToolsetName = "vc{}".format( self._msvcVersion )
+		platformToolsetName = "v{}".format( self._msvcVersion )
 
 		platformManager = PlatformManager.Get()
 		registeredPlatformList = platformManager.GetRegisteredNameList()
