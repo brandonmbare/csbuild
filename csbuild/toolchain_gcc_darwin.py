@@ -219,8 +219,10 @@ class GccLinkerDarwin( GccDarwinBase, toolchain_gcc.GccLinker ):
 				if dependProj.type == csbuild.ProjectType.Application or dependProj.type == csbuild.ProjectType.LoadableModule:
 					# Loadable modules and applications should not be linked into the executables. They are only dependencies so they can be copied into the app bundles.
 					return ""
-				return "{} ".format( os.path.join( dependProj.outputDir, dependLibName ) )
-		return "{} ".format( self._actual_library_names[lib] )
+				if not dependLibName.startswith( "lib" ):
+					dependLibName = "lib{}".format( dependLibName )
+				return '"{}" '.format( os.path.join( dependProj.outputDir, dependLibName ) )
+		return '"{}" '.format( self._actual_library_names[lib] )
 
 
 	def _getLibraryDirs( self, libDirs, forLinker ):
@@ -254,35 +256,35 @@ class GccLinkerDarwin( GccDarwinBase, toolchain_gcc.GccLinker ):
 
 
 	def FindLibrary( self, project, library, libraryDirs, force_static, force_shared ):
-		self._setupForProject(project)
+		self._setupForProject( project )
 
 		for lib_dir in libraryDirs:
-			log.LOG_INFO("Looking for library {} in directory {}...".format(library, lib_dir))
+			log.LOG_INFO( "Looking for library {} in directory {}...".format( library, lib_dir ) )
 			lib_file_path = os.path.join( lib_dir, library )
 			libFileStatic = "{}.a".format( lib_file_path )
 			libFileDynamic = "{}.dylib".format( lib_file_path )
 			# Check for a static lib.
-			if os.access(libFileStatic , os.F_OK) and not force_shared:
+			if os.access( libFileStatic , os.F_OK ) and not force_shared:
 				self._actual_library_names.update( { library : libFileStatic } )
 				return libFileStatic
 			# Check for a dynamic lib.
-			if os.access(libFileDynamic , os.F_OK) and not force_static:
+			if os.access( libFileDynamic , os.F_OK ) and not force_static:
 				self._actual_library_names.update( { library : libFileDynamic } )
 				return libFileDynamic
 
 		for lib_dir in libraryDirs:
 			# Compatibility with Linux's way of adding lib- to the front of its libraries
 			libfileCompat = "lib{}".format( library )
-			log.LOG_INFO("Looking for library {} in directory {}...".format(libfileCompat, lib_dir))
+			log.LOG_INFO( "Looking for library {} in directory {}...".format( libfileCompat, lib_dir ) )
 			lib_file_path = os.path.join( lib_dir, libfileCompat )
 			libFileStatic = "{}.a".format( lib_file_path )
 			libFileDynamic = "{}.dylib".format( lib_file_path )
 			# Check for a static lib.
-			if os.access(libFileStatic , os.F_OK) and not force_shared:
+			if os.access( libFileStatic , os.F_OK ) and not force_shared:
 				self._actual_library_names.update( { library : libFileStatic } )
 				return libFileStatic
 			# Check for a dynamic lib.
-			if os.access(libFileDynamic , os.F_OK) and not force_static:
+			if os.access( libFileDynamic , os.F_OK ) and not force_static:
 				self._actual_library_names.update( { library : libFileDynamic } )
 				return libFileDynamic
 

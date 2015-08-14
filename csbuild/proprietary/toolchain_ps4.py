@@ -120,12 +120,8 @@ class Ps4Linker( Ps4Base, toolchain_gcc.GccLinker ):
 
 
 	def _getLibraryDirs( self, libDirs, forLinker ):
-		"""Returns a string containing all of the passed library dirs, formatted to be passed to orbis-clang/-clang++."""
-		ret = ""
-		for lib in libDirs:
-			ret += '-L"{}" '.format( lib )
-		ret += '-L"{}" '.format( SCE_ORBIS_SYSLIB_DIR )
-		return ret
+		# No library directories necessary since all libraries are linked with full paths.
+		return ""
 
 
 	def _getStartGroupFlags( self ):
@@ -147,14 +143,14 @@ class Ps4Linker( Ps4Base, toolchain_gcc.GccLinker ):
 	def _getLibraryArg(self, lib):
 		for depend in self._project_settings.reconciledLinkDepends:
 			dependProj = _shared_globals.projects[depend]
-			if dependProj.type == csbuild.ProjectType.Application:
-				continue
 			dependLibName = dependProj.outputName
 			splitName = os.path.splitext(dependLibName)[0]
 			if splitName == lib or splitName == "lib{}".format( lib ):
-				if splitName.startswith( "lib" ):
-					splitName = splitName[3:]
-				return '-l"{}" '.format( splitName )
+				if dependProj.type == csbuild.ProjectType.LoadableModule:
+					return ""
+				if not dependLibName.startswith( "lib" ):
+					dependLibName = "lib{}".format( dependLibName )
+				return '"{}" '.format( os.path.join( dependProj.outputDir, dependLibName ) )
 		return '"{}" '.format( self._actual_library_names[lib] )
 
 
@@ -182,32 +178,32 @@ class Ps4Linker( Ps4Base, toolchain_gcc.GccLinker ):
 		libraryDirs.append( SCE_ORBIS_SYSLIB_DIR )
 
 		for lib_dir in libraryDirs:
-			log.LOG_INFO("Looking for library {} in directory {}...".format(library, lib_dir))
+			log.LOG_INFO( "Looking for library {} in directory {}...".format( library, lib_dir ) )
 			lib_file_path = os.path.join( lib_dir, library )
 			libFileStatic = "{}.a".format( lib_file_path )
 			libFileDynamic = "{}.prx".format( lib_file_path )
 			# Check for a static lib.
-			if os.access(libFileStatic , os.F_OK) and not force_shared:
+			if os.access( libFileStatic , os.F_OK ) and not force_shared:
 				self._actual_library_names.update( { library : libFileStatic } )
 				return libFileStatic
 			# Check for a dynamic lib.
-			if os.access(libFileDynamic , os.F_OK) and not force_static:
+			if os.access( libFileDynamic , os.F_OK ) and not force_static:
 				self._actual_library_names.update( { library : libFileDynamic } )
 				return libFileDynamic
 
 		for lib_dir in libraryDirs:
 			# Compatibility with Linux's way of adding lib- to the front of its libraries
 			libfileCompat = "lib{}".format( library )
-			log.LOG_INFO("Looking for library {} in directory {}...".format(libfileCompat, lib_dir))
+			log.LOG_INFO( "Looking for library {} in directory {}...".format( libfileCompat, lib_dir ) )
 			lib_file_path = os.path.join( lib_dir, libfileCompat )
 			libFileStatic = "{}.a".format( lib_file_path )
 			libFileDynamic = "{}.prx".format( lib_file_path )
 			# Check for a static lib.
-			if os.access(libFileStatic , os.F_OK) and not force_shared:
+			if os.access( libFileStatic , os.F_OK ) and not force_shared:
 				self._actual_library_names.update( { library : libFileStatic } )
 				return libFileStatic
 			# Check for a dynamic lib.
-			if os.access(libFileDynamic , os.F_OK) and not force_static:
+			if os.access( libFileDynamic , os.F_OK ) and not force_static:
 				self._actual_library_names.update( { library : libFileDynamic } )
 				return libFileDynamic
 
@@ -220,7 +216,5 @@ class Ps4Linker( Ps4Base, toolchain_gcc.GccLinker ):
 			return ".elf"
 		elif projectType == csbuild.ProjectType.StaticLibrary:
 			return ".a"
-		elif projectType == csbuild.ProjectType.SharedLibrary:
-			return ".prx"
-		elif projectType == csbuild.ProjectType.LoadableModule:
+		elif projectType == csbuild.ProjectType.SharedLibrary or projectType == csbuild.ProjectType.LoadableModule:
 			return ".prx"
