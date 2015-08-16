@@ -385,6 +385,9 @@ class projectSettings( object ):
 	:ivar frameworkDirsTemp: Directories to search for Apple frameworks.
 	:type frameworkDirsTemp: list[:class:`_utils.PathWorkingDir`]
 
+	:ivar autoDiscoverSourceFiles: Automatically discover source files from the working directory.
+	:type autoDiscoverSourceFiles: bool
+
 	.. note:: Toolchains can define additional variables that will show up on this class's
 		instance variable list when that toolchain is active. See toolchain documentation for
 		more details on what additional instance variables are available.
@@ -619,6 +622,8 @@ class projectSettings( object ):
 
 		self.plugins = _utils.OrderedSet()
 
+		self.autoDiscoverSourceFiles = True
+
 		self._intermediateScopeSettings = {}
 		self._finalScopeSettings = {}
 
@@ -650,6 +655,7 @@ class projectSettings( object ):
 		self.linkOutput = ""
 		self.linkErrors = ""
 		self.parsedLinkErrors = None
+
 
 	def prepareBuild( self ):
 		wd = os.getcwd( )
@@ -837,6 +843,12 @@ class projectSettings( object ):
 			self.cHeaders = []
 
 			self.get_files( self.allsources, self.cppHeaders, self.cHeaders )
+
+			# If not auto-discovering files, clear the source file list. This will still let us keep
+			# the headers from working directory regardless of the auto-discover setting.
+			if not self.autoDiscoverSourceFiles:
+				self.allsources = []
+
 			if self.extraFiles:
 				log.LOG_INFO("Appending extra files {}".format(self.extraFiles))
 				self.allsources += self.extraFiles
@@ -1293,6 +1305,7 @@ class projectSettings( object ):
 			"userData" : self.userData.copy(),
 			"plistFile" : copy.deepcopy( self.plistFile ) if isinstance( self.plistFile, plugin_plist_generator.PListGenerator ) else self.plistFile,
 			"plugins" : _utils.OrderedSet(self.plugins),
+			"autoDiscoverSourceFiles" : self.autoDiscoverSourceFiles,
 		}
 
 		for name in self.targets:

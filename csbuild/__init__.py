@@ -1203,7 +1203,7 @@ def scope( scope ):
 
 	return wrap
 
-def project( name, workingDirectory, depends = None, priority = -1, ignoreDependencyOrdering = False ):
+def project( name, workingDirectory, depends = None, priority = -1, ignoreDependencyOrdering = False, autoDiscoverSourceFiles = True ):
 	"""
 	Decorator used to declare a project. linkDepends and srcDepends here will be used to determine project build order.
 
@@ -1249,6 +1249,8 @@ def project( name, workingDirectory, depends = None, priority = -1, ignoreDepend
 		newProject.srcDepends = []
 		newProject.srcDependsIntermediate = []
 		newProject.srcDependsFinal = []
+
+		newProject.autoDiscoverSourceFiles = autoDiscoverSourceFiles
 
 		for depend in depends:
 			if isinstance(depend, str):
