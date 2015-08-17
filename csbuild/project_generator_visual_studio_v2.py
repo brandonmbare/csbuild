@@ -368,8 +368,13 @@ class project_generator_visual_studio( project_generator.project_generator ):
 				filterData = Project( subGroupName, self._projectUuidList ) # Subgroups should be treated as project filters in the solution.
 				filterData.isFilter = True
 
+				filterName = "{}.Filter".format( filterData.name )
+
+				if parentFilter_out:
+					parentFilter_out.dependencyList.add( filterName )
+
 				# Explicitly map the filter names with a different name to help avoid possible naming collisions.
-				projectMap_out["{}.Filter".format( filterData.name )] = filterData
+				projectMap_out[filterName] = filterData
 
 				# Create the group path if it doesn't exist.
 				if not os.access( groupPathFinal, os.F_OK ):
