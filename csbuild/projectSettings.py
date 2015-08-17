@@ -843,12 +843,6 @@ class projectSettings( object ):
 			self.cHeaders = []
 
 			self.get_files( self.allsources, self.cppHeaders, self.cHeaders )
-
-			# If not auto-discovering files, clear the source file list. This will still let us keep
-			# the headers from working directory regardless of the auto-discover setting.
-			if not self.autoDiscoverSourceFiles:
-				self.allsources = []
-
 			if self.extraFiles:
 				log.LOG_INFO("Appending extra files {}".format(self.extraFiles))
 				self.allsources += self.extraFiles
@@ -1383,10 +1377,10 @@ class projectSettings( object ):
 						break
 				if bFound:
 					if not absroot.startswith( self.csbuildDir ):
-						log.LOG_INFO( "Skipping dir {0}".format( root ) )
+						log.LOG_INFO( "Skipping directory {0}".format( root ) )
 					continue
 				log.LOG_INFO( "Looking in directory {0}".format( root ) )
-				if sources is not None:
+				if sources is not None and not ( sourceDir == "." and not self.autoDiscoverSourceFiles ):
 					for extension in self.cppExtensions:
 						for filename in fnmatch.filter( filenames, '*'+extension ):
 							path = os.path.join( absroot, filename )
