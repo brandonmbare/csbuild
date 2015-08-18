@@ -877,10 +877,9 @@ def AddExtraFiles( *args ):
 	"""
 	newArgs = []
 	for arg in list( args ):
-		for file in glob.glob( arg ):
-			file = _utils.FixupRelativePath( file )
-			file = _utils.PathWorkingDirPair( file )
-			newArgs.append( file )
+		arg = _utils.FixupRelativePath( arg )
+		arg = _utils.PathWorkingDirPair( arg )
+		newArgs.append( arg )
 	projectSettings.currentProject.ExtendList( "extraFilesTemp", newArgs )
 	projectSettings.currentProject.SetValue( "tempsDirty", True )
 
@@ -926,10 +925,9 @@ def AddExtraObjects( *args ):
 	"""
 	newArgs = []
 	for arg in list( args ):
-		for file in glob.glob( arg ):
-			file = _utils.FixupRelativePath( file )
-			file = _utils.PathWorkingDirPair( file )
-			newArgs.append( file )
+		arg = _utils.FixupRelativePath( arg )
+		arg = _utils.PathWorkingDirPair( arg )
+		newArgs.append( arg )
 	projectSettings.currentProject.ExtendList( "extraObjsTemp", newArgs )
 	projectSettings.currentProject.SetValue( "tempsDirty", True )
 

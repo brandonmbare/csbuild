@@ -828,6 +828,29 @@ class projectSettings( object ):
 
 		self.excludeDirs.append( self.csbuildDir )
 
+		realExtraObjs = set()
+		realExtraFiles = set()
+		realExtraDirs = set()
+		realExcludeFiles = set()
+		realExcludeDirs = set()
+
+		# Glob file and directory paths.
+		for arg in self.extraObjs:
+			realExtraObjs |= set( glob.glob( arg ) )
+		for arg in self.extraFiles:
+			realExtraFiles |= set( glob.glob( arg ) )
+		for arg in self.extraDirs:
+			realExtraDirs |= set( glob.glob( arg ) )
+		for arg in self.excludeFiles:
+			realExcludeFiles |= set( glob.glob( arg ) )
+		for arg in self.excludeDirs:
+			realExcludeDirs |= set( glob.glob( arg ) )
+
+		self.extraObjs = _utils.OrderedSet( realExtraObjs )
+		self.extraFiles = sorted( realExtraFiles )
+		self.extraDirs = sorted( realExtraDirs )
+		self.excludeFiles = sorted( realExcludeFiles )
+		self.excludeDirs = sorted( realExcludeDirs )
 
 	def RunFileDiscovery( self ):
 		#Have to chdir in case this gets called from a build step.
@@ -1002,7 +1025,7 @@ class projectSettings( object ):
 	def _combineObjects(baseObj, newObj, name):
 		if newObj is None:
 			return
-		
+
 		# Libraries are a special case.
 		# Any time any project references a library, that library should be moved later in the list.
 		# Referenced libraries have to be linked after all the libraries that reference them.
@@ -1349,15 +1372,9 @@ class projectSettings( object ):
 		ignore files of the relevant types.
 		"""
 
-		excludeFiles = set( )
-		excludeDirs = set( )
+		excludeFiles = set( self.excludeFiles )
+		excludeDirs = set( self.excludeDirs )
 		ambiguousHeaders = set()
-
-		for exclude in self.excludeFiles:
-			excludeFiles |= set( glob.glob( exclude ) )
-
-		for exclude in self.excludeDirs:
-			excludeDirs |= set( glob.glob( exclude ) )
 
 		for sourceDir in [ '.' ] + self.extraDirs:
 			for root, dirnames, filenames in os.walk( sourceDir ):
