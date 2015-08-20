@@ -264,7 +264,10 @@ class ThreadedBuild( threading.Thread ):
 				profileIn = os.path.join( self.project.csbuildDir, "profileIn")
 				if not os.access( profileIn, os.F_OK):
 					os.makedirs( profileIn )
-				self.file = os.path.join( profileIn, "{}.{}".format( hashlib.md5( self.file ).hexdigest(), self.file.rsplit( ".", 1 )[1] ) )
+				filenameNoExt = self.file.rsplit( ".", 1 )[1]
+				if sys.version_info >= (3, 0):
+					self.file = self.file.encode( "utf-8" )
+				self.file = os.path.join( profileIn, "{}.{}".format( hashlib.md5( self.file ).hexdigest(), filenameNoExt ) )
 
 				preprocessCmd = self.project.activeToolchain.Compiler().GetPreprocessCommand( baseCommand, project, os.path.abspath( self.originalIn ) )
 				if _shared_globals.show_commands:
@@ -321,7 +324,10 @@ class ThreadedBuild( threading.Thread ):
 					if platform.system() == "Windows":
 						file_mode = 438 # Octal 0666
 						fd = os.open(self.file, os.O_WRONLY | os.O_CREAT | os.O_NOINHERIT | os.O_TRUNC, file_mode)
-						os.write(fd, data.getvalue())
+						dataValue = data.getvalue()
+						if sys.version_info >= (3, 0):
+							dataValue = dataValue.encode( "utf-8" )
+						os.write(fd, dataValue)
 						os.fsync(fd)
 						os.close(fd)
 					else:

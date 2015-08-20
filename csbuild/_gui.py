@@ -12,33 +12,42 @@ else:
 import csbuild
 from . import log
 
-# try:
-# 	from PyQt5 import QtCore, QtGui, QtWidgets
-# 	QMainWindow = QtWidgets.QMainWindow
-# 	QApplication = QtWidgets.QApplication
-# 	QtGui.QWidget = QtWidgets.QWidget
-# 	QtGui.QHBoxLayout = QtWidgets.QHBoxLayout
-# 	QtGui.QVBoxLayout = QtWidgets.QVBoxLayout
-# 	QtGui.QSplitter = QtWidgets.QSplitter
-# 	QtGui.QLabel = QtWidgets.QLabel
-# 	QtGui.QProgressBar = QtWidgets.QProgressBar
-# 	QtGui.QPushButton = QtWidgets.QPushButton
-# 	QtGui.QTreeWidget = QtWidgets.QTreeWidget
-# 	QtGui.QTreeWidgetItem = QtWidgets.QTreeWidgetItem
-# 	QtGui.QSpacerItem = QtWidgets.QSpacerItem
-# 	QtGui.QSizePolicy = QtWidgets.QSizePolicy
-# 	QtGui.QTextEdit = QtWidgets.QTextEdit
-# 	QtGui.QTabWidget = QtWidgets.QTabWidget
-# 	log.LOG_INFO("Using Qt5")
-# except:
 try:
-	from PyQt4 import QtCore, QtGui
-	QMainWindow = QtGui.QMainWindow
-	QApplication = QtGui.QApplication
-	log.LOG_INFO("Using Qt4")
+	from PyQt5 import QtCore, QtGui, QtWidgets
+	QMainWindow = QtWidgets.QMainWindow
+	QApplication = QtWidgets.QApplication
+	QtGui.QAbstractItemView = QtWidgets.QAbstractItemView
+	QtGui.QAction = QtWidgets.QAction
+	QtGui.QHBoxLayout = QtWidgets.QHBoxLayout
+	QtGui.QHeaderView = QtWidgets.QHeaderView
+	QtGui.QLabel = QtWidgets.QLabel
+	QtGui.QMainWindow = QtWidgets.QMainWindow
+	QtGui.QMenu = QtWidgets.QMenu
+	QtGui.QPlainTextEdit = QtWidgets.QPlainTextEdit
+	QtGui.QProgressBar = QtWidgets.QProgressBar
+	QtGui.QPushButton = QtWidgets.QPushButton
+	QtGui.QSpacerItem = QtWidgets.QSpacerItem
+	QtGui.QSizePolicy = QtWidgets.QSizePolicy
+	QtGui.QSplitter = QtWidgets.QSplitter
+	QtGui.QStyledItemDelegate = QtWidgets.QStyledItemDelegate
+	QtGui.QTextEdit = QtWidgets.QTextEdit
+	QtGui.QTreeWidget = QtWidgets.QTreeWidget
+	QtGui.QTreeWidgetItem = QtWidgets.QTreeWidgetItem
+	QtGui.QTabWidget = QtWidgets.QTabWidget
+	QtGui.QVBoxLayout = QtWidgets.QVBoxLayout
+	QtGui.QWidget = QtWidgets.QWidget
+	log.LOG_INFO("Using Qt5")
+	USING_PYQT5 = True
 except:
-	log.LOG_ERROR("PyQt4 must be installed on your system to load the CSBuild GUI")
-	csbuild.Exit( 1 )
+	try:
+		from PyQt4 import QtCore, QtGui
+		QMainWindow = QtGui.QMainWindow
+		QApplication = QtGui.QApplication
+		log.LOG_INFO("Using Qt4")
+		USING_PYQT5 = False
+	except:
+		log.LOG_ERROR("PyQt4 must be installed on your system to load the CSBuild GUI")
+		csbuild.Exit( 1 )
 
 import os
 import threading
@@ -1222,7 +1231,10 @@ class MainWindow( QMainWindow ):
 		self.timelineWidget.header().setDefaultSectionSize(30)
 		self.timelineWidget.header().setStretchLastSection(False)
 
-		self.timelineWidget.header().setResizeMode(QtGui.QHeaderView.Fixed)
+		if USING_PYQT5:
+			self.timelineWidget.header().setSectionResizeMode(QtWidgets.QHeaderView.Fixed)
+		else:
+			self.timelineWidget.header().setResizeMode(QtGui.QHeaderView.Fixed)
 
 		self.timelineWidget.itemExpanded.connect(self.TimelineItemExpended)
 		self.timelineWidget.itemCollapsed.connect(self.TimelineItemExpended)
