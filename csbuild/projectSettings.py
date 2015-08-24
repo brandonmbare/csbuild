@@ -679,6 +679,8 @@ class projectSettings( object ):
 		for buildStep in self.prePrepareBuildSteps:
 			_utils.CheckRunBuildStep(self, buildStep, "project pre-PrepareBuild")
 
+		self.defines = sorted(set(self.defines))
+
 		# Run the initial pass to resolve file and directory paths.
 		self.ResolveFilesAndDirectories()
 
@@ -804,7 +806,9 @@ class projectSettings( object ):
 			if not os.access(directory, os.F_OK):
 				log.LOG_WARN( "Include path {} does not exist!".format( directory ) )
 			alteredIncludeDirs.append( directory )
-		self.includeDirs = alteredIncludeDirs
+
+		self.libraryDirs = sorted(set(self.libraryDirs))
+		self.includeDirs = sorted(set(alteredIncludeDirs))
 
 		def apply_macro(l):
 			alteredList = []
