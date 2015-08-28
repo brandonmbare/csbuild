@@ -50,7 +50,7 @@ class PlatformTegraAndroid( PlatformBase ):
 		tegraRevisionNumberNode = _addNode( propertyGroupNode, "NsightTegraProjectRevisionNumber" )
 
 		propertyGroupNode.set( "Label", "NsightTegraProject" )
-		tegraRevisionNumberNode.text = "9"
+		tegraRevisionNumberNode.text = "11"
 
 
 	def WriteProjectConfiguration( self, parentXmlNode, vsConfigName ):

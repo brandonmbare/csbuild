@@ -884,8 +884,8 @@ class SettingsOverrider( object ):
 			self._settingsOverrides["extraFilesTemp"] = []
 		newArgs = []
 		for arg in list( args ):
-			args = _utils.FixupRelativePath( arg )
-			args = _utils.PathWorkingDirPair( arg )
+			arg = _utils.FixupRelativePath( arg )
+			arg = _utils.PathWorkingDirPair( arg )
 			newArgs.append( arg )
 		self._settingsOverrides["extraFilesTemp"] += newArgs
 		self._settingsOverrides["tempsDirty"] = True

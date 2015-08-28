@@ -1213,7 +1213,7 @@ def project( name, workingDirectory, depends = None, priority = -1, ignoreDepend
 	(or a subdirectory) should contain the project's source files.
 
 	:type depends: list
-	:param linkDepends: A list of other projects. This project will not be linked until the dependent projects
+	:param depends: A list of other projects. This project will not be linked until the dependent projects
 	have completed their build process. These can be specified as either projName, Link(projName, scope), or Src(projName, scope).
 
 	projName will be converted to Link(projName, ScopeDef.Final)
@@ -1223,7 +1223,7 @@ def project( name, workingDirectory, depends = None, priority = -1, ignoreDepend
 	if not depends:
 		depends = []
 	if isinstance( depends, str ):
-		linkDepends = [depends]
+		depends = [depends]
 
 	def wrap( projectFunction ):
 		if name in _shared_globals.tempprojects:
