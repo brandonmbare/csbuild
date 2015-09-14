@@ -277,6 +277,9 @@ class ThreadedBuild( threading.Thread ):
 					preprocessCmd = shlex.split( preprocessCmd )
 				fd = subprocess.Popen( preprocessCmd, stderr = subprocess.PIPE, stdout = subprocess.PIPE, env = toolchainEnv )
 
+				with _shared_globals.spmutex:
+					_shared_globals.subprocesses[self.file] = fd
+
 				data = StringIO()
 				lastLine = 0
 				lastFile = 0
@@ -284,6 +287,13 @@ class ThreadedBuild( threading.Thread ):
 				highIndex = 0
 
 				op, er = fd.communicate()
+
+				with _shared_globals.spmutex:
+					del _shared_globals.subprocesses[self.file]
+					if _shared_globals.exiting:
+						#Don't bother with the rest, we're killing everything early.
+						return
+
 				if sys.version_info >= (3, 0):
 					op = op.decode("utf-8")
 					er = er.decode("utf-8")
@@ -364,6 +374,10 @@ class ThreadedBuild( threading.Thread ):
 				cmd = shlex.split(cmd)
 
 			fd = subprocess.Popen( cmd, stdout = subprocess.PIPE, stderr = subprocess.PIPE, cwd = self.project.workingDirectory, env = toolchainEnv )
+
+			with _shared_globals.spmutex:
+				_shared_globals.subprocesses[self.obj] = fd
+
 			running = True
 
 			times = {}
@@ -451,10 +465,17 @@ class ThreadedBuild( threading.Thread ):
 			errorThread.start()
 
 			fd.wait()
+
 			running = False
 
 			outputThread.join()
 			errorThread.join()
+
+			with _shared_globals.spmutex:
+				del _shared_globals.subprocesses[self.obj]
+				if _shared_globals.exiting:
+					#Don't bother with the rest, we're killing everything early.
+					return
 
 			with self.project.mutex:
 				self.project.times[self.originalIn] = times
@@ -508,16 +529,11 @@ class ThreadedBuild( threading.Thread ):
 				_shared_globals.errorcount += errorcount
 
 			if ret:
-				if str( ret ) == str( self.project.activeToolchain.Compiler().InterruptExitCode( ) ):
+				if str( ret ) == str( self.project.activeToolchain.Compiler().InterruptExitCode( ) ) or str( ret ) == str( -self.project.activeToolchain.Compiler().InterruptExitCode( ) ):
 					_shared_globals.lock.acquire( )
-					if not _shared_globals.interrupted:
-						log.LOG_ERROR( "Keyboard interrupt received. Aborting build." )
 					_shared_globals.interrupted = True
-					log.LOG_BUILD( "Releasing lock..." )
 					_shared_globals.lock.release( )
-					log.LOG_BUILD( "Releasing semaphore..." )
 					_shared_globals.semaphore.release( )
-					log.LOG_BUILD( "Closing thread..." )
 				if not _shared_globals.interrupted:
 					log.LOG_ERROR( "Compile of {} failed!  (Return code: {})".format( self.originalIn, ret ) )
 				_shared_globals.build_success = False
@@ -527,6 +543,7 @@ class ThreadedBuild( threading.Thread ):
 				self.project.fileStatus[self.originalIn] = _shared_globals.ProjectState.FAILED
 				self.project.updated = True
 				self.project.mutex.release( )
+				return
 		except Exception as e:
 			#If we don't do this with ALL exceptions, any unhandled exception here will cause the semaphore to never
 			# release...

@@ -46,7 +46,7 @@ except:
 		log.LOG_INFO("Using Qt4")
 		USING_PYQT5 = False
 	except:
-		log.LOG_ERROR("PyQt4 must be installed on your system to load the CSBuild GUI")
+		log.LOG_ERROR("Either PyQt4 or PyQt5 must be installed on your system to load the CSBuild GUI")
 		csbuild.Exit( 1 )
 
 import os
@@ -2563,6 +2563,10 @@ class MainWindow( QMainWindow ):
 			self.timer.stop()
 
 	def closeEvent(self, event):
+		if self.exitRequested:
+			QMainWindow.closeEvent(self, event)
+			return
+
 		if not self.readyToClose:
 			answer = QtGui.QMessageBox.question(
 				self,
@@ -2574,7 +2578,7 @@ class MainWindow( QMainWindow ):
 			if answer == QtGui.QMessageBox.Yes:
 				QMainWindow.closeEvent(self, event)
 				self.timer.stop()
-				os.kill(os.getpid(), signal.SIGINT)
+				csbuild.Exit(0)
 			else:
 				event.ignore()
 		else:
@@ -2626,6 +2630,7 @@ class GuiThread( threading.Thread ):
 		"""Initialize the object. Also handles above-mentioned bug with dummy threads."""
 		threading.Thread.__init__( self )
 		self.app = None
+		self.window = None
 		#Prevent certain versions of python from choking on dummy threads.
 		if not hasattr( threading.Thread, "_Thread__block" ):
 			threading.Thread._Thread__block = _shared_globals.dummy_block( )
@@ -2636,6 +2641,7 @@ class GuiThread( threading.Thread ):
 		global lock
 		lock.release()
 		window = MainWindow()
+		self.window = window
 
 		window.m_buildTree.setSortingEnabled(False)
 		row = 0
@@ -2890,7 +2896,6 @@ class GuiThread( threading.Thread ):
 		window.m_buildTree.setSortingEnabled(True)
 
 		window.show()
-		self.window = window
 		self.app.exec_()
 
 	def stop(self):
@@ -2908,6 +2913,10 @@ def run():
 
 def stop():
 	global _thread
-	if _thread:
+	if _thread and threading.current_thread() != _thread:
 		_thread.stop()
+
+def join():
+	global _thread
+	if _thread and threading.current_thread() != _thread:
 		_thread.join()

@@ -128,7 +128,15 @@ __status__ = "Development"
 with open( os.path.dirname( __file__ ) + "/version", "r" ) as f:
 	__version__ = f.read( )
 
-signal.signal( signal.SIGINT, signal.SIG_DFL )
+def _exitsig(sig, frame):
+	if sig == signal.SIGINT:
+		log.LOG_ERROR( "Keyboard interrupt received. Aborting build." )
+	else:
+		log.LOG_ERROR( "Received terminate signal. Aborting build." )
+	Exit(sig)
+
+signal.signal( signal.SIGINT, _exitsig )
+signal.signal( signal.SIGTERM, _exitsig )
 
 
 def NoBuiltInTargets( ):
@@ -1201,25 +1209,7 @@ def scope( scope ):
 
 	return wrap
 
-def project( name, workingDirectory, depends = None, priority = -1, ignoreDependencyOrdering = False, autoDiscoverSourceFiles = True ):
-	"""
-	Decorator used to declare a project. linkDepends and srcDepends here will be used to determine project build order.
-
-	:type name: str
-	:param name: A unique name to be used to refer to this project
-
-	:type workingDirectory: str
-	:param workingDirectory: The directory in which to perform build operations. This directory
-	(or a subdirectory) should contain the project's source files.
-
-	:type depends: list
-	:param depends: A list of other projects. This project will not be linked until the dependent projects
-	have completed their build process. These can be specified as either projName, Link(projName, scope), or Src(projName, scope).
-
-	projName will be converted to Link(projName, ScopeDef.Final)
-	Link will cause the project it applies to to link this dependency.
-	Src will cause the project it applies to to wait until this project finishes before it starts its build at all.
-	"""
+def _project_decorator( name, workingDirectory, depends = None, priority = -1, ignoreDependencyOrdering = False, autoDiscoverSourceFiles = True, prebuilt = False, shell = False ):
 	if not depends:
 		depends = []
 	if isinstance( depends, str ):
@@ -1249,6 +1239,8 @@ def project( name, workingDirectory, depends = None, priority = -1, ignoreDepend
 		newProject.srcDependsFinal = []
 
 		newProject.autoDiscoverSourceFiles = autoDiscoverSourceFiles
+		newProject.prebuilt = prebuilt
+		newProject.shell = shell
 
 		for depend in depends:
 			if isinstance(depend, str):
@@ -1283,6 +1275,33 @@ def project( name, workingDirectory, depends = None, priority = -1, ignoreDepend
 
 
 	return wrap
+
+def project( name, workingDirectory, depends = None, priority = -1, ignoreDependencyOrdering = False, autoDiscoverSourceFiles = True ):
+	"""
+	Decorator used to declare a project. linkDepends and srcDepends here will be used to determine project build order.
+
+	:type name: str
+	:param name: A unique name to be used to refer to this project
+
+	:type workingDirectory: str
+	:param workingDirectory: The directory in which to perform build operations. This directory
+	(or a subdirectory) should contain the project's source files.
+
+	:type depends: list
+	:param linkDepends: A list of other projects. This project will not be linked until the dependent projects
+	have completed their build process. These can be specified as either projName, Link(projName, scope), or Src(projName, scope).
+
+	projName will be converted to Link(projName, ScopeDef.Final)
+	Link will cause the project it applies to to link this dependency.
+	Src will cause the project it applies to to wait until this project finishes before it starts its build at all.
+	"""
+	return _project_decorator(name, workingDirectory, depends, priority, ignoreDependencyOrdering, autoDiscoverSourceFiles)
+
+def prebuilt( name, depends = None ):
+	return _project_decorator(name, "", depends, prebuilt = True)
+
+def shellProject( name, workingDirectory, depends = None, autoDiscoverSourceFiles = True ):
+	return _project_decorator(name, workingDirectory, depends, autoDiscoverSourceFiles = autoDiscoverSourceFiles, shell = True)
 
 
 def projectGroup( name ):
@@ -1602,13 +1621,6 @@ def _build( ):
 		log.LOG_BUILD( "Running global pre-make step {}".format(_utils.GetFuncName(buildStep)))
 		buildStep()
 
-	for project in _shared_globals.sortedProjects:
-		log.LOG_BUILD( "Verifying libraries for {} ({} {}/{})".format( project.outputName, project.targetName, project.outputArchitecture, project.activeToolchainName ) )
-		if not project.check_libraries( ):
-			return False
-			#if _utils.needs_link(project):
-			#    projects_needing_links.add(project.key)
-
 	_shared_globals.starttime = time.time( )
 
 	_linkThread.start()
@@ -1646,8 +1658,10 @@ def _build( ):
 					if otherProj.reconciledLinkDepends:
 						for depend in otherProj.reconciledLinkDepends:
 							if depend not in projects_done:
-								okToLink = False
-								break
+								dependProj = _shared_globals.projects[depend]
+								if not dependProj.shell and not dependProj.prebuilt:
+									okToLink = False
+									break
 					if okToLink:
 						_link( otherProj )
 						LinkedSomething = True
@@ -1663,8 +1677,10 @@ def _build( ):
 				okToLink = True
 				for depend in otherProj.reconciledLinkDepends:
 					if depend not in projects_done:
-						okToLink = False
-						break
+						dependProj = _shared_globals.projects[depend]
+						if not dependProj.shell and not dependProj.prebuilt:
+							okToLink = False
+							break
 				if okToLink:
 					_link( otherProj )
 					LinkedSomething = True
@@ -1987,7 +2003,7 @@ def _performLink(project, objs):
 					project._builtSomething = True
 			for dep in project.reconciledLinkDepends:
 				depProj = _shared_globals.projects[dep]
-				if depProj.state != _shared_globals.ProjectState.UP_TO_DATE:
+				if not depProj.prebuilt and not depProj.shell and depProj.state != _shared_globals.ProjectState.UP_TO_DATE:
 					log.LOG_LINKER(
 						"Dependent project {0} has been modified since the last successful build. Relinking to new library."
 						.format( depProj.name ) )
@@ -2050,24 +2066,32 @@ def _performLink(project, objs):
 	toolchainEnv = _utils.GetToolchainEnvironment( project.activeToolchain.Linker() )
 	fd = subprocess.Popen( cmd, stdout = subprocess.PIPE, stderr = subprocess.PIPE, cwd = project.objDir, env = toolchainEnv )
 
-	(output, errors) = fd.communicate( )
+	with _shared_globals.spmutex:
+		_shared_globals.subprocesses[output] = fd
+
+	(out, errors) = fd.communicate( )
+
+	with _shared_globals.spmutex:
+		del _shared_globals.subprocesses[output]
+		if _shared_globals.exiting:
+			return
 
 	ret = fd.returncode
 	sys.stdout.flush( )
 	sys.stderr.flush( )
 
 	if sys.version_info >= (3, 0):
-		output = output.decode("utf-8")
+		out = out.decode("utf-8")
 		errors = errors.decode("utf-8")
-	sys.stdout.write( output )
+	sys.stdout.write( out )
 	sys.stderr.write( errors )
 
 	with project.mutex:
 		ansi_escape = re.compile(r'\x1b[^m]*m')
 		stripped_errors = re.sub(ansi_escape, '', errors)
-		project.linkOutput = output
+		project.linkOutput = out
 		project.linkErrors = stripped_errors
-		errorlist = project.activeToolchain.Compiler()._parseOutput(output)
+		errorlist = project.activeToolchain.Compiler()._parseOutput(out)
 		errorlist2 = project.activeToolchain.Compiler()._parseOutput(stripped_errors)
 		if errorlist is None:
 			errorlist = errorlist2
@@ -2331,6 +2355,12 @@ def _make( ):
 	Performs both the build and link steps of the process.
 	Aborts if the build fails.
 	"""
+
+	for project in _shared_globals.sortedProjects:
+		log.LOG_BUILD( "Verifying libraries for {} ({} {}/{})".format( project.outputName, project.targetName, project.outputArchitecture, project.activeToolchainName ) )
+		if not project.check_libraries( ):
+			Exit( 1 )
+
 	if not _build( ):
 		_shared_globals.build_success = False
 		log.LOG_ERROR( "Build failed." )
@@ -2449,31 +2479,58 @@ _guiModule = None
 
 sysExit = sys.exit
 
-def Done( code = 0 ):
+def Done( code = 0, killGui = True ):
 	"""
 	Exit the build process early
 
 	:param code: Exit code to exit with
 	:type code: int
+
+	:param killGui: Whether to immediately kill the GUI or wait for the user to close it, if it's active
+	:type killGui: bool
 	"""
-	Exit( code )
+	Exit( code, killGui )
 
 
-def Exit( code = 0 ):
+def Exit( code = 0, killGui = True ):
 	"""
 	Exit the build process early
 
 	:param code: Exit code to exit with
 	:type code: int
+
+	:param killGui: Whether to immediately kill the GUI or wait for the user to close it, if it's active
+	:type killGui: bool
 	"""
-	#global _guiModule
-	#if _guiModule:
-	#	_guiModule.stop()
+	_shared_globals.exiting = True
+
+	global _building
+	_building = False
 
 	if not imp.lock_held():
 		imp.acquire_lock()
 
-	sysExit( code )
+	with _shared_globals.spmutex:
+		for output, fd in _shared_globals.subprocesses.items():
+			log.LOG_BUILD("Killing process {} creating file '{}'".format(fd.pid, os.path.basename(output)))
+			try:
+				fd.kill()
+			except OSError:
+				pass
+			if os.path.exists(output):
+				log.LOG_BUILD("Removing incomplete/partially-created file '{}'".format(fd.pid, os.path.basename(output)))
+				os.remove(output)
+
+	global _guiModule
+	if _guiModule:
+		if killGui:
+			log.LOG_BUILD("Killing GUI")
+			_guiModule.stop()
+		_guiModule.join()
+
+	#Die hard, we don't need python to clean up and we want to make sure this exits.
+	#sys.exit just throws an exception that can be caught. No catching allowed.
+	os._exit( code )
 
 
 ARG_NOT_SET = type( "ArgNotSetType", (), { } )( )
@@ -3416,8 +3473,15 @@ def _run( ):
 	#		except:
 	#			del _shared_globals.allheaders[header]
 
+
 	for proj in _shared_globals.sortedProjects:
-		proj.prepareBuild( )
+		if proj.prebuilt == False and (proj.shell == False or args.generate_solution):
+			proj.prepareBuild( )
+		else:
+			proj.minimalPrepareBuild()
+
+	# Remove projects that don't actually build.
+	_shared_globals.sortedProjects = [ proj for proj in _shared_globals.sortedProjects if proj.prebuilt == False and (proj.shell == False or args.generate_solution) ]
 
 	#with open(headerCacheFile, "wb") as f:
 	#	pickle.dump(_shared_globals.allheaders, f, 2)
@@ -3476,9 +3540,9 @@ def _run( ):
 			log.LOG_ERROR( error )
 
 	if not _shared_globals.build_success:
-		Exit( 1 )
+		Exit( 1, False )
 	else:
-		Exit( 0 )
+		Exit( 0, False )
 
 #Regular sys.exit can't be called because we HAVE to reacquore the import lock at exit.
 #We stored sys.exit earlier, now we overwrite it to call our wrapper.

@@ -431,6 +431,8 @@ class projectSettings( object ):
 		self.srcDependsIntermediate = []
 		self.srcDependsFinal = []
 		self.func = None
+		self.prebuilt = False
+		self.shell = False
 
 		self.libraries = _utils.OrderedSet()
 		self.staticLibraries = _utils.OrderedSet()
@@ -679,8 +681,6 @@ class projectSettings( object ):
 		for buildStep in self.prePrepareBuildSteps:
 			_utils.CheckRunBuildStep(self, buildStep, "project pre-PrepareBuild")
 
-		self.defines = sorted(set(self.defines))
-
 		# Run the initial pass to resolve file and directory paths.
 		self.ResolveFilesAndDirectories()
 
@@ -747,6 +747,44 @@ class projectSettings( object ):
 		os.chdir( wd )
 
 
+	def minimalPrepareBuild( self ):
+
+		self.activeToolchain.SetActiveTool("linker")
+
+		global currentProject
+		currentProject = self
+
+		pluginClasses = self.plugins
+		self.plugins = []
+		for pluginClass in pluginClasses:
+			self.plugins.append(pluginClass())
+
+		for plugin in self.plugins:
+			_utils.CheckRunBuildStep(self, plugin.prePrepareBuildStep, "plugin pre-PrepareBuild")
+		_utils.CheckRunBuildStep(self, self.activeToolchain.prePrepareBuildStep, "toolchain pre-PrepareBuild")
+		for buildStep in self.prePrepareBuildSteps:
+			_utils.CheckRunBuildStep(self, buildStep, "project pre-PrepareBuild")
+
+		# Run the initial pass to resolve file and directory paths.
+		self.ResolveFilesAndDirectories()
+
+		self.activeToolchain.SetActiveTool("linker")
+		if self.ext is None:
+			self.ext = self.activeToolchain.Linker().GetDefaultOutputExtension( self.type )
+
+		self.outputName += self.ext
+		self.activeToolchain.SetActiveTool("compiler")
+
+		for plugin in self.plugins:
+			_utils.CheckRunBuildStep(self, plugin.postPrepareBuildStep, "plugin post-PrepareBuild")
+		_utils.CheckRunBuildStep(self, self.activeToolchain.postPrepareBuildStep, "toolchain post-PrepareBuild")
+		for buildStep in self.postPrepareBuildSteps:
+			_utils.CheckRunBuildStep(self, buildStep, "project post-PrepareBuild")
+
+		# Make sure the paths are up-to-date in case the previous build step added/changed any of them.
+		self.ResolveFilesAndDirectories()
+
+
 	def ResolveFilesAndDirectories( self ):
 		# Nothing to resolve if no files or directories have been added since the last resolve.
 		if not self.tempsDirty:
@@ -806,9 +844,7 @@ class projectSettings( object ):
 			if not os.access(directory, os.F_OK):
 				log.LOG_WARN( "Include path {} does not exist!".format( directory ) )
 			alteredIncludeDirs.append( directory )
-
-		self.libraryDirs = sorted(set(self.libraryDirs))
-		self.includeDirs = sorted(set(alteredIncludeDirs))
+		self.includeDirs = alteredIncludeDirs
 
 		def apply_macro(l):
 			alteredList = []
@@ -1160,6 +1196,8 @@ class projectSettings( object ):
 			"srcDependsIntermediate": list( self.srcDependsIntermediate ),
 			"srcDependsFinal": list( self.srcDependsFinal ),
 			"func": self.func,
+			"prebuilt" : self.prebuilt,
+			"shell" : self.shell,
 			"libraries": _utils.OrderedSet( self.libraries ),
 			"staticLibraries": _utils.OrderedSet( self.staticLibraries ),
 			"sharedLibraries": _utils.OrderedSet( self.sharedLibraries ),
@@ -1778,6 +1816,7 @@ class projectSettings( object ):
 			libraries_ok = True
 			for library in libraries:
 				bFound = False
+				log.LOG_INFO(str(self.reconciledLinkDepends))
 				for depend in self.reconciledLinkDepends:
 					splitname = os.path.splitext(_shared_globals.projects[depend].outputName)[0]
 					if splitname == library or splitname == "lib{}".format( library ):
