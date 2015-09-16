@@ -911,6 +911,16 @@ class projectSettings( object ):
 				self.allsources += self.extraFiles
 			self.allheaders = self.cppHeaders + self.cHeaders
 
+			# Determine if this project has any C++ files.
+			if self.cppHeaders:
+				self.hasCppFiles = True
+			else:
+				for sourceFile in self.allsources:
+					_, ext = os.path.splitext(sourceFile)
+					if ext in self.cppExtensions:
+						self.hasCppFiles = True
+						break
+
 			if not self.allsources:
 				os.chdir(wd)
 				return
@@ -1445,7 +1455,6 @@ class projectSettings( object ):
 							path = os.path.join( absroot, filename )
 							if path not in excludeFiles:
 								sources.append( os.path.abspath( path ) )
-								self.hasCppFiles = True
 					for extension in self.cExtensions:
 						for filename in fnmatch.filter( filenames, '*'+extension ):
 							path = os.path.join( absroot, filename )
@@ -1460,7 +1469,6 @@ class projectSettings( object ):
 							path = os.path.join( absroot, filename )
 							if path not in excludeFiles:
 								headers.append( os.path.abspath( path ) )
-								self.hasCppFiles = True
 				if cHeaders is not None:
 					for extension in self.cHeaderExtensions:
 						for filename in fnmatch.filter( filenames, '*'+extension ):
