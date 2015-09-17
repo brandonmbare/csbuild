@@ -818,9 +818,9 @@ class projectSettings( object ):
 		for dep in self.reconciledLinkDepends:
 			proj = _shared_globals.projects[dep]
 			proj.activeToolchain.SetActiveTool("linker")
-			if proj.type == csbuild.ProjectType.StaticLibrary and \
-					self.linkMode == csbuild.StaticLinkMode.LinkIntermediateObjects and \
-					not proj.prebuilt:
+			if ( proj.type == csbuild.ProjectType.StaticLibrary and
+					self.linkMode == csbuild.StaticLinkMode.LinkIntermediateObjects and
+					not proj.prebuilt ):
 				projName = proj.outputName.split( "." )[0]
 				if projName in self.libraries:
 					self.libraries.remove( projName )
