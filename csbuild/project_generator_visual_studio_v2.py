@@ -34,6 +34,7 @@ from . import project_generator
 from . import projectSettings
 from . import log
 from . import _shared_globals
+from . import _utils
 
 from .vsgen.platform_windows import PlatformWindowsX86, PlatformWindowsX64
 from .vsgen.platform_android import PlatformTegraAndroid
@@ -677,17 +678,7 @@ class project_generator_visual_studio( project_generator.project_generator ):
 								rebuildCommandNode.text = '"{}" "{}" --rebuild --target={} --toolchain={} --architecture={}{} {}'.format( pythonExePath, mainMakefile, properConfigName, toolchainName, archName, projectArg, self._extraBuildArgs )
 								includePathNode.text = ";".join( self._fullIncludePathList )
 							else:
-								argList = []
-								# The Windows command line likes to remove any quotes around arguments, so we need to re-add them.
-								for arg in sys.argv[1:]:
-									if "=" in arg:
-										argPair = arg.split( "=", 2 )
-										if " " in argPair[1]:
-											argPair[1] = '"{}"'.format( argPair[1] )
-											arg = "=".join( argPair )
-									elif " " in arg:
-										arg = '"{}"'.format( arg )
-									argList.append( arg )
+								argList = _utils.GetCommandLineArgumentList()
 
 								buildCommandNode.text = '"{}" "{}" {}'.format( pythonExePath, mainMakefile, " ".join( argList ) )
 								rebuildCommandNode.text = buildCommandNode.text

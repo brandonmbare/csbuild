@@ -47,7 +47,7 @@ class OrderedSet(object):
 		self.map = collections.OrderedDict()
 		if iterable is not None:
 			self.map.update( [ ( x, None ) for x in iterable ] )
-	
+
 	def __len__(self):
 		return len(self.map)
 
@@ -85,7 +85,7 @@ class OrderedSet(object):
 
 	def __xor__(self, other):
 		return self.symmetric_difference(other)
-		
+
 	def __iter__(self):
 		for key in self.map.keys():
 			yield key
@@ -137,7 +137,7 @@ class OrderedSet(object):
 
 	def clear(self):
 		self.map = collections.OrderedDict()
-	
+
 
 def remove_comments( text ):
 	def replacer( match ):
@@ -913,7 +913,7 @@ def ChunkedBuild( ):
 				project.chunksByFile.update( { outFile : chunk } )
 			elif len( sources_in_this_chunk ) > 0:
 				chunkname = GetChunkName( project.outputName, chunk )
-				
+
 				obj = GetSourceObjPath( project, chunkname, sourceIsChunkPath=project.ContainsChunk( chunkname ) )
 				if os.access(obj , os.F_OK):
 					#If the chunk object exists, the last build of these files was the full chunk.
@@ -1104,3 +1104,20 @@ def GetToolchainEnvironment( tool ):
 	envCopy = os.environ.copy()
 	envCopy.update( tool.GetEnv() )
 	return envCopy
+
+
+def GetCommandLineArgumentList():
+	argList = []
+
+	# The Windows command line likes to remove any quotes around arguments, so we need to re-add them.
+	for arg in sys.argv[1:]:
+		if "=" in arg:
+			argPair = arg.split( "=", 2 )
+			if " " in argPair[1]:
+				argPair[1] = '"{}"'.format( argPair[1] )
+				arg = "=".join( argPair )
+		elif " " in arg:
+			arg = '"{}"'.format( arg )
+		argList.append( arg )
+
+	return argList
