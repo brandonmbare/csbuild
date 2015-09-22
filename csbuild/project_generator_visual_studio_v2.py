@@ -389,11 +389,19 @@ class project_generator_visual_studio( project_generator.project_generator ):
 				resolvedDependencyList = []
 
 				# Sort the dependency name list before parsing it.
-				projectData.dependencyList = sorted( projectData.dependencyList)
+				projectData.dependencyList = sorted( projectData.dependencyList )
 
 				# Resolve each project name to their associated project objects.
 				for dependentProjectName in projectData.dependencyList:
-					resolvedDependencyList.append( projectMap[dependentProjectName] )
+					isPrebuilt = False
+					# Make sure the current dependency is not a prebuilt project.
+					for projectName, project in _shared_globals.projects.items():
+						projectName = projectName.split("@")[0]
+						if dependentProjectName == projectName:
+							isPrebuilt = project.prebuilt
+							break
+					if not isPrebuilt:
+						resolvedDependencyList.append( projectMap[dependentProjectName] )
 
 				# Replace the old name list with the new resolved list.
 				projectData.dependencyList = resolvedDependencyList
