@@ -1112,7 +1112,7 @@ def GetCommandLineArgumentList():
 	# The Windows command line likes to remove any quotes around arguments, so we need to re-add them.
 	for arg in sys.argv[1:]:
 		if "=" in arg:
-			argPair = arg.split( "=", 2 )
+			argPair = arg.split( "=", 1 )
 			if " " in argPair[1]:
 				argPair[1] = '"{}"'.format( argPair[1] )
 				arg = "=".join( argPair )
