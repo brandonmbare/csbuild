@@ -1598,7 +1598,7 @@ def _build( ):
 	_shared_globals.total_compiles += _shared_globals.total_precompiles
 	_shared_globals.current_compile = 1
 
-	projects_in_flight = []
+	projects_in_flight = set()
 	projects_done = set()
 	pending_links = set()
 	pending_builds = _shared_globals.sortedProjects
@@ -1695,7 +1695,7 @@ def _build( ):
 				if depend not in projects_done:
 					pending_builds.append( project )
 					continue
-			projects_in_flight.append( project )
+			projects_in_flight.add( project )
 
 			projectSettings.currentProject = project
 

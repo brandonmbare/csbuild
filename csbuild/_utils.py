@@ -533,7 +533,6 @@ class ThreadedBuild( threading.Thread ):
 					_shared_globals.lock.acquire( )
 					_shared_globals.interrupted = True
 					_shared_globals.lock.release( )
-					_shared_globals.semaphore.release( )
 				if not _shared_globals.interrupted:
 					log.LOG_ERROR( "Compile of {} failed!  (Return code: {})".format( self.originalIn, ret ) )
 				_shared_globals.build_success = False
@@ -542,7 +541,9 @@ class ThreadedBuild( threading.Thread ):
 				self.project.compilationFailed = True
 				self.project.fileStatus[self.originalIn] = _shared_globals.ProjectState.FAILED
 				self.project.updated = True
+				self.project.compilationCompleted += 1
 				self.project.mutex.release( )
+				_shared_globals.semaphore.release( )
 				return
 		except Exception as e:
 			#If we don't do this with ALL exceptions, any unhandled exception here will cause the semaphore to never

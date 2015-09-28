@@ -248,7 +248,7 @@ class MsvcBase( object ):
 
 
 	def InterruptExitCode( self ):
-		return -1
+		return 4
 
 
 	def _setupMsvcVersion(self):
