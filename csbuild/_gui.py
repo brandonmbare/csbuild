@@ -29,6 +29,7 @@ try:
 	QtGui.QSpacerItem = QtWidgets.QSpacerItem
 	QtGui.QSizePolicy = QtWidgets.QSizePolicy
 	QtGui.QSplitter = QtWidgets.QSplitter
+	QtGui.QStatusBar = QtWidgets.QStatusBar
 	QtGui.QStyledItemDelegate = QtWidgets.QStyledItemDelegate
 	QtGui.QTextEdit = QtWidgets.QTextEdit
 	QtGui.QTreeWidget = QtWidgets.QTreeWidget

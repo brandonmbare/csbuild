@@ -487,8 +487,13 @@ class ThreadedBuild( threading.Thread ):
 
 			ret = fd.returncode
 
+			output.str = output.str.replace("\r", "")
+			errors.str = errors.str.replace("\r", "")
+
 			sys.stdout.write( output.str )
 			sys.stderr.write( errors.str )
+			sys.stdout.flush()
+			sys.stderr.flush()
 
 			with self.project.mutex:
 				stripped_errors = re.sub(ansi_escape, '', errors.str)
