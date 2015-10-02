@@ -2083,8 +2083,14 @@ def _performLink(project, objs):
 	if sys.version_info >= (3, 0):
 		out = out.decode("utf-8")
 		errors = errors.decode("utf-8")
+
+	out = out.replace("\r", "")
+	errors = errors.replace("\r", "")
+
 	sys.stdout.write( out )
 	sys.stderr.write( errors )
+	sys.stdout.flush( )
+	sys.stderr.flush( )
 
 	with project.mutex:
 		ansi_escape = re.compile(r'\x1b[^m]*m')
