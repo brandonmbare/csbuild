@@ -219,8 +219,6 @@ class GccLinkerDarwin( GccDarwinBase, toolchain_gcc.GccLinker ):
 				if dependProj.type == csbuild.ProjectType.Application or dependProj.type == csbuild.ProjectType.LoadableModule:
 					# Loadable modules and applications should not be linked into the executables. They are only dependencies so they can be copied into the app bundles.
 					return ""
-				if not dependLibName.startswith( "lib" ):
-					dependLibName = "lib{}".format( dependLibName )
 				return '"{}" '.format( os.path.join( dependProj.outputDir, dependLibName ) )
 		return '"{}" '.format( self._actual_library_names[lib] )
 
