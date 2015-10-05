@@ -86,7 +86,7 @@ class Ps4Compiler( Ps4Base, toolchain_gcc.GccCompiler ):
 
 	def _getBaseCommand( self, compiler, project, isCpp ):
 		ret = toolchain_gcc.GccCompiler._getBaseCommand( self, compiler, project, isCpp )
-		ret = "{} -fcaret-diagnostics".format( ret )
+		ret = "{}".format( ret )
 		return ret
 
 
