@@ -48,9 +48,11 @@ class PlatformTegraAndroid( PlatformBase ):
 	def WriteTopLevelInfo( self, parentXmlNode ):
 		propertyGroupNode = _addNode( parentXmlNode, "PropertyGroup" )
 		tegraRevisionNumberNode = _addNode( propertyGroupNode, "NsightTegraProjectRevisionNumber" )
+		upgradeWithoutPromptNode = _addNode( propertyGroupNode, "NsightTegraUpgradeOnceWithoutPrompt" )
 
 		propertyGroupNode.set( "Label", "NsightTegraProject" )
 		tegraRevisionNumberNode.text = "11"
+		upgradeWithoutPromptNode.text = "true"
 
 
 	def WriteProjectConfiguration( self, parentXmlNode, vsConfigName ):
