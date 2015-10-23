@@ -83,6 +83,18 @@ class GccDarwinBase( object ):
 		other.shared._sysroot = self.shared._sysroot
 
 
+	@staticmethod
+	def AdditionalArgs( parser ):
+		parser.add_argument( "--osx-target-version", help="Version of OSX to build against.", type=str, default=None )
+
+
+	def _setTargetVersion( self ):
+		cmdLineVer = csbuild.GetOption( "osx_target_version" )
+
+		if cmdLineVer:
+			self.SetTargetMacVersion( cmdLineVer )
+
+
 	def SetTargetMacVersion( self, version ):
 		"""
 		Set the version of MacOSX to target and the sysroot of the SDK for that version.
@@ -92,6 +104,8 @@ class GccDarwinBase( object ):
 		"""
 		self.shared._targetMacVersion = version
 		self.shared._sysroot = "{}/Platforms/MacOSX.platform/Developer/SDKs/MacOSX{}.sdk".format( DEFAULT_XCODE_ACTIVE_DEV_DIR, self.shared._targetMacVersion )
+
+		assert os.access( self.shared._sysroot, os.F_OK ), "SDK does not exist: {}".format( self.shared._sysroot )
 
 
 	def GetTargetMacVersion( self ):
@@ -122,6 +136,11 @@ class GccCompilerDarwin( GccDarwinBase, toolchain_gcc.GccCompiler ):
 		ret = toolchain_gcc.GccCompiler.copy( self, shared )
 		GccDarwinBase._copyTo( self, ret )
 		return ret
+
+
+	def _setupForProject( self, project ):
+		self._setTargetVersion()
+		toolchain_gcc.GccCompiler._setupForProject( self, project )
 
 
 	def _getNoCommonFlag( self, project ):
@@ -171,6 +190,11 @@ class GccLinkerDarwin( GccDarwinBase, toolchain_gcc.GccLinker ):
 		ret = toolchain_gcc.GccLinker.copy( self, shared )
 		GccDarwinBase._copyTo( self, ret )
 		return ret
+
+
+	def _setupForProject( self, project ):
+		self._setTargetVersion()
+		toolchain_gcc.GccLinker._setupForProject( self, project )
 
 
 	def InterruptExitCode( self ):

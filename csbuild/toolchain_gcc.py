@@ -331,11 +331,18 @@ class GccCompiler( gccBase, toolchain.compilerBase ):
 		)
 
 
+	def _setupForProject( self, project ):
+		# Does nothing by default.
+		pass
+
+
 	def GetBaseCxxCommand( self, project ):
+		self._setupForProject( project )
 		return self._getBaseCommand( project.cxx, project, True )
 
 
 	def GetBaseCcCommand( self, project ):
+		self._setupForProject( project )
 		return self._getBaseCommand( project.cc, project, False )
 
 
@@ -350,10 +357,12 @@ class GccCompiler( gccBase, toolchain.compilerBase ):
 
 
 	def GetBaseCxxPrecompileCommand( self, project ):
+		self._setupForProject( project )
 		return self.GetBaseCxxCommand( project )
 
 
 	def GetBaseCcPrecompileCommand( self, project ):
+		self._setupForProject( project )
 		return self.GetBaseCcCommand( project )
 
 
