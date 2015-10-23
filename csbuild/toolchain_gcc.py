@@ -526,7 +526,7 @@ class GccLinker( gccBase, toolchain.linkerBase ):
 		"""Returns a string containing all of the passed library dirs, formatted to be passed to gcc/g++."""
 		ret = ""
 		for lib in libDirs:
-			ret += '-L"{}" '.format( lib )
+			ret += '-L{} '.format( lib )
 		ret += "-L/usr/lib -L/usr/local/lib "
 		if self._include_lib64:
 			ret += "-L/usr/lib64 -L/usr/local/lib64 "
