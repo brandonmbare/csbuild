@@ -2116,6 +2116,10 @@ def _performLink(project, objs):
 			project.warnings += warningcount
 			project.parsedLinkErrors = errorlist
 
+			with _shared_globals.sgmutex:
+				_shared_globals.warningcount += warningcount
+				_shared_globals.errorcount += errorcount
+
 	if ret != 0:
 		log.LOG_ERROR( "Linking failed." )
 		return _LinkStatus.Fail

@@ -501,9 +501,9 @@ class ThreadedBuild( threading.Thread ):
 				self.project.compileErrors[self.originalIn] = stripped_errors
 				errorlist = self.project.activeToolchain.Compiler()._parseOutput(output.str)
 				errorlist2 = self.project.activeToolchain.Compiler()._parseOutput(stripped_errors)
-				if errorlist is None:
+				if not errorlist:
 					errorlist = errorlist2
-				elif errorlist2 is not None:
+				elif errorlist2:
 					errorlist += errorlist2
 
 				errorcount = 0

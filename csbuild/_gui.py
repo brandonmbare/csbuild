@@ -23,6 +23,7 @@ try:
 	QtGui.QLabel = QtWidgets.QLabel
 	QtGui.QMainWindow = QtWidgets.QMainWindow
 	QtGui.QMenu = QtWidgets.QMenu
+	QtGui.QMessageBox = QtWidgets.QMessageBox
 	QtGui.QPlainTextEdit = QtWidgets.QPlainTextEdit
 	QtGui.QProgressBar = QtWidgets.QProgressBar
 	QtGui.QPushButton = QtWidgets.QPushButton
