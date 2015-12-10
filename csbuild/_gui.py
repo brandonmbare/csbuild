@@ -18,9 +18,11 @@ try:
 	QApplication = QtWidgets.QApplication
 	QtGui.QAbstractItemView = QtWidgets.QAbstractItemView
 	QtGui.QAction = QtWidgets.QAction
+	QtGui.QApplication = QtWidgets.QApplication
 	QtGui.QHBoxLayout = QtWidgets.QHBoxLayout
 	QtGui.QHeaderView = QtWidgets.QHeaderView
 	QtGui.QLabel = QtWidgets.QLabel
+	QtGui.QLineEdit = QtWidgets.QLineEdit
 	QtGui.QMainWindow = QtWidgets.QMainWindow
 	QtGui.QMenu = QtWidgets.QMenu
 	QtGui.QMessageBox = QtWidgets.QMessageBox
@@ -29,6 +31,7 @@ try:
 	QtGui.QPushButton = QtWidgets.QPushButton
 	QtGui.QSpacerItem = QtWidgets.QSpacerItem
 	QtGui.QSizePolicy = QtWidgets.QSizePolicy
+	QtGui.QSlider = QtWidgets.QSlider
 	QtGui.QSplitter = QtWidgets.QSplitter
 	QtGui.QStatusBar = QtWidgets.QStatusBar
 	QtGui.QStyledItemDelegate = QtWidgets.QStyledItemDelegate
@@ -36,6 +39,7 @@ try:
 	QtGui.QTreeWidget = QtWidgets.QTreeWidget
 	QtGui.QTreeWidgetItem = QtWidgets.QTreeWidgetItem
 	QtGui.QTabWidget = QtWidgets.QTabWidget
+	QtGui.QToolTip = QtWidgets.QToolTip
 	QtGui.QVBoxLayout = QtWidgets.QVBoxLayout
 	QtGui.QWidget = QtWidgets.QWidget
 	log.LOG_INFO("Using Qt5")
@@ -1368,6 +1372,9 @@ class MainWindow( QMainWindow ):
 
 		self.tick = 0
 
+		self.selectedItem = None
+
+
 	def buildTreeContextMenu(self, point):
 		if not _shared_globals.profile:
 			return
@@ -1381,9 +1388,10 @@ class MainWindow( QMainWindow ):
 			return
 		if parent.parent():
 			return
+		self.selectedItem = item
 		menu = QtGui.QMenu(self)
 		action = QtGui.QAction("View profile data", self)
-		action.triggered.connect(functools.partial(self.buildTreeViewProfile, item))
+		action.triggered.connect(self.buildTreeViewProfile)
 		menu.addAction(action)
 		menu.popup(self.m_buildTree.viewport().mapToGlobal(point))
 
@@ -1400,9 +1408,10 @@ class MainWindow( QMainWindow ):
 			return
 		if parent.parent():
 			return
+		self.selectedItem = item
 		menu = QtGui.QMenu(self)
 		action = QtGui.QAction("View profile data", self)
-		action.triggered.connect(functools.partial(self.timelineViewProfile, item))
+		action.triggered.connect(self.timelineViewProfile)
 		menu.addAction(action)
 		menu.popup(self.timelineWidget.viewport().mapToGlobal(point))
 
@@ -1441,7 +1450,11 @@ class MainWindow( QMainWindow ):
 		window.show()
 
 
-	def buildTreeViewProfile(self, item, checked):
+	def buildTreeViewProfile(self):
+		if not self.selectedItem:
+			return
+
+		item = self.selectedItem
 		filename = os.path.normcase(str(item.toolTip(3)))
 
 		project = self.itemToProject[str(item.parent().text(0))]
@@ -1449,7 +1462,11 @@ class MainWindow( QMainWindow ):
 		self.launchProfileView(project, filename)
 
 
-	def timelineViewProfile(self, item, checked):
+	def timelineViewProfile(self):
+		if not self.selectedItem:
+			return
+
+		item = self.selectedItem
 		filename = os.path.normcase(str(item.toolTip(0)))
 
 		idx = self.timelineWidget.indexOfTopLevelItem(self.parent())
