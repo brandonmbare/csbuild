@@ -156,6 +156,8 @@ class GccCompilerDarwin( GccDarwinBase, toolchain_gcc.GccCompiler ):
 		for inc in includeDirs:
 			ret += "-I{} ".format( os.path.abspath( inc ) )
 		ret += "-I{}/usr/include ".format( DEFAULT_XCODE_TOOLCHAIN_DIR )
+		ret += "-I/usr/local/include "
+		ret += "-I/usr/include "
 		return ret
 
 
@@ -249,6 +251,8 @@ class GccLinkerDarwin( GccDarwinBase, toolchain_gcc.GccLinker ):
 
 	def _getLibraryDirs( self, libDirs, forLinker ):
 		# Libraries are linked with full paths on Mac, so library directories are unnecessary.
+		# If additional default library directories are required, added them to the appendedLibDirs
+		# list in FindLibrary method below.
 		return ""
 
 
@@ -280,7 +284,17 @@ class GccLinkerDarwin( GccDarwinBase, toolchain_gcc.GccLinker ):
 	def FindLibrary( self, project, library, libraryDirs, force_static, force_shared ):
 		self._setupForProject( project )
 
-		for lib_dir in libraryDirs:
+		appendedLibDirs = []
+		appendedLibDirs.extend(library)
+		appendedLibDirs.extend(
+			# Add default search directories to this list, starting with the directories that have the highest search priority.
+			[
+				"/usr/local/lib",
+				"/usr/lib",
+			]
+		)
+
+		for lib_dir in appendedLibDirs:
 			log.LOG_INFO( "Looking for library {} in directory {}...".format( library, lib_dir ) )
 			lib_file_path = os.path.join( lib_dir, library )
 			libFileStatic = "{}.a".format( lib_file_path )
@@ -294,7 +308,7 @@ class GccLinkerDarwin( GccDarwinBase, toolchain_gcc.GccLinker ):
 				self._actual_library_names.update( { library : libFileDynamic } )
 				return libFileDynamic
 
-		for lib_dir in libraryDirs:
+		for lib_dir in appendedLibDirs:
 			# Compatibility with Linux's way of adding lib- to the front of its libraries
 			libfileCompat = "lib{}".format( library )
 			log.LOG_INFO( "Looking for library {} in directory {}...".format( libfileCompat, lib_dir ) )
