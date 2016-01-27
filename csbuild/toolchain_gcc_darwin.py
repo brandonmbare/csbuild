@@ -284,8 +284,7 @@ class GccLinkerDarwin( GccDarwinBase, toolchain_gcc.GccLinker ):
 	def FindLibrary( self, project, library, libraryDirs, force_static, force_shared ):
 		self._setupForProject( project )
 
-		appendedLibDirs = []
-		appendedLibDirs.extend(library)
+		appendedLibDirs = list(libraryDirs)
 		appendedLibDirs.extend(
 			# Add default search directories to this list, starting with the directories that have the highest search priority.
 			[
