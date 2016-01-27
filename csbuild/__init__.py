@@ -45,6 +45,16 @@ import platform
 import imp
 import re
 import traceback
+import copy
+
+if sys.version_info >= (3,0):
+	import io
+	StringIO = io.StringIO
+else:
+	import cStringIO
+	StringIO = cStringIO.StringIO
+
+from . import plugin_plist_generator
 
 if sys.version_info < (3,0):
 	import cPickle as pickle
@@ -58,6 +68,7 @@ class ProjectType( object ):
 	Application = 0
 	SharedLibrary = 1
 	StaticLibrary = 2
+	LoadableModule = 3 # Only matters for Apple platforms; every other platform will interpret this as SharedLibrary.
 
 class DebugLevel( object ):
 	Disabled = 0
@@ -83,10 +94,17 @@ class StaticLinkMode( object ):
 	LinkLibs = 0
 	LinkIntermediateObjects = 1
 
+class RunMode( object ):
+	Normal = 0
+	Help = 1
+	GenerateSolution = 2
+	Qualop = 3
+
 from . import _utils
 from . import toolchain
 from . import toolchain_msvc
 from . import toolchain_gcc
+from . import toolchain_gcc_darwin
 from . import toolchain_android
 from . import toolchain_ios
 from . import log
@@ -94,9 +112,14 @@ from . import _shared_globals
 from . import projectSettings
 from . import project_generator_qtcreator
 from . import project_generator_slickedit
-from . import project_generator_visual_studio
+from . import project_generator_visual_studio_v2
 from . import project_generator
+from . import plugin
 
+try:
+	from .proprietary import toolchain_ps4
+except:
+	pass
 
 __author__ = "Jaedyn K. Draper, Brandon M. Bare"
 __copyright__ = 'Copyright (C) 2012-2014 Jaedyn K. Draper'
@@ -111,8 +134,18 @@ __status__ = "Development"
 with open( os.path.dirname( __file__ ) + "/version", "r" ) as f:
 	__version__ = f.read( )
 
-signal.signal( signal.SIGINT, signal.SIG_DFL )
+def _exitsig(sig, frame):
+	if sig == signal.SIGINT:
+		log.LOG_ERROR( "Keyboard interrupt received. Aborting build." )
+	else:
+		log.LOG_ERROR( "Received terminate signal. Aborting build." )
+	Exit(sig)
 
+signal.signal( signal.SIGINT, _exitsig )
+signal.signal( signal.SIGTERM, _exitsig )
+
+# Csbuild is in Normal run mode by default.
+_runMode = RunMode.Normal
 
 def NoBuiltInTargets( ):
 	"""
@@ -151,7 +184,7 @@ def SetHeaderInstallSubdirectory( s ):
 	:param s: The desired subdirectory; i.e., if you specify this as "myLib", the headers will be
 	installed under *{prefix*}/include/myLib.
 	"""
-	projectSettings.currentProject.SetValue("headerInstallSubdir", s)
+	projectSettings.currentProject.SetValue( "headerInstallSubdir", s)
 
 
 def AddExcludeDirectories( *args ):
@@ -165,10 +198,11 @@ def AddExcludeDirectories( *args ):
 	args = list( args )
 	newargs = []
 	for arg in args:
-		if arg[0] != '/' and not arg.startswith( "./" ):
-			arg = "./" + arg
-		newargs.append( os.path.abspath( arg ) )
-	projectSettings.currentProject.ExtendList("excludeDirs", newargs)
+		arg = _utils.FixupRelativePath( arg )
+		arg = _utils.PathWorkingDirPair( arg )
+		newargs.append( arg )
+	projectSettings.currentProject.ExtendList( "excludeDirsTemp", newargs )
+	projectSettings.currentProject.SetValue( "tempsDirty", True )
 
 
 def AddExcludeFiles( *args ):
@@ -182,10 +216,11 @@ def AddExcludeFiles( *args ):
 	args = list( args )
 	newargs = []
 	for arg in args:
-		if arg[0] != '/' and not arg.startswith( "./" ):
-			arg = "./" + arg
-		newargs.append( os.path.abspath( arg ) )
-	projectSettings.currentProject.ExtendList("excludeFiles", newargs)
+		arg = _utils.FixupRelativePath( arg )
+		arg = _utils.PathWorkingDirPair( arg )
+		newargs.append( arg )
+	projectSettings.currentProject.ExtendList( "excludeFilesTemp", newargs )
+	projectSettings.currentProject.SetValue( "tempsDirty", True )
 
 
 def AddLibraries( *args ):
@@ -202,7 +237,7 @@ def AddLibraries( *args ):
 	:type args: an arbitrary number of strings
 	:param args: The list of libraries to link in.
 	"""
-	projectSettings.currentProject.UnionSet("libraries", set( args ))
+	projectSettings.currentProject.UnionSet("libraries", _utils.OrderedSet( args ))
 
 
 def AddStaticLibraries( *args ):
@@ -212,7 +247,7 @@ def AddStaticLibraries( *args ):
 	:type args: an arbitrary number of strings
 	:param args: The list of libraries to link in.
 	"""
-	projectSettings.currentProject.UnionSet("staticLibraries", set( args ))
+	projectSettings.currentProject.UnionSet("staticLibraries", _utils.OrderedSet( args ))
 
 
 def AddSharedLibraries( *args ):
@@ -222,7 +257,7 @@ def AddSharedLibraries( *args ):
 	:type args: an arbitrary number of strings
 	:param args: The list of libraries to link in.
 	"""
-	projectSettings.currentProject.UnionSet("sharedLibraries", set( args ))
+	projectSettings.currentProject.UnionSet("sharedLibraries", _utils.OrderedSet( args ))
 
 
 def AddFrameworks( *args ):
@@ -232,7 +267,7 @@ def AddFrameworks( *args ):
 	:type args: an arbitrary number of strings
 	:param args: The list of libraries to link in.
 	"""
-	projectSettings.currentProject.UnionSet("frameworks", set( args ))
+	projectSettings.currentProject.UnionSet("frameworks", _utils.OrderedSet( args ))
 
 
 def AddIncludeDirectories( *args ):
@@ -246,9 +281,13 @@ def AddIncludeDirectories( *args ):
 	:type args: an arbitrary number of strings
 	:param args: The list of directories to be searched.
 	"""
+	newArgs = []
 	for arg in args:
-		arg = os.path.abspath( arg )
-		projectSettings.currentProject.AppendList("includeDirs",  arg )
+		arg = _utils.FixupRelativePath( arg )
+		arg = _utils.PathWorkingDirPair( arg )
+		newArgs.append( arg )
+	projectSettings.currentProject.ExtendList( "includeDirsTemp", newArgs )
+	projectSettings.currentProject.SetValue( "tempsDirty", True )
 
 
 def AddLibraryDirectories( *args ):
@@ -262,9 +301,13 @@ def AddLibraryDirectories( *args ):
 	:type args: an arbitrary number of strings
 	:param args: The list of directories to be searched.
 	"""
+	newArgs = []
 	for arg in args:
-		arg = os.path.abspath( arg )
-		projectSettings.currentProject.AppendList("libraryDirs",  arg )
+		arg = _utils.FixupRelativePath( arg )
+		arg = _utils.PathWorkingDirPair( arg )
+		newArgs.append( arg )
+	projectSettings.currentProject.ExtendList( "libraryDirsTemp",  newArgs )
+	projectSettings.currentProject.SetValue( "tempsDirty", True )
 
 
 def AddFrameworkDirectories( *args ):
@@ -275,34 +318,96 @@ def AddFrameworkDirectories( *args ):
 	:type args: an arbitrary number of strings
 	:param args: The list of directories to be searched.
 	"""
+	newArgs = []
 	for arg in args:
-		arg = os.path.abspath( arg )
-		projectSettings.currentProject.AddToSet("frameworkDirs",  arg )
+		arg = _utils.FixupRelativePath( arg )
+		arg = _utils.PathWorkingDirPair( arg )
+		newArgs.append( arg )
+	projectSettings.currentProject.ExtendList( "frameworkDirsTemp",  newArgs )
+	projectSettings.currentProject.SetValue( "tempsDirty", True )
+
+
+def AddAppleStoryboardFiles( *args ):
+	"""
+	DEPRECATED - This will be removed when tool plugins are able to register file extensions.
+	Add a list of storyboard files to be compiled. Only applies to builds for Apple platforms.
+
+	:param args: List of storyboard files.
+	:type args: And arbitrary number of strings.
+	"""
+	projectSettings.currentProject.UnionSet( "storyboardFiles", _utils.OrderedSet( args ) )
+
+
+def AddAppleInterfaceFiles( *args ):
+	"""
+	DEPRECATED - This will be removed when tool plugins are able to register file extensions.
+	Add a list of interface files to be compiled. Only applies to builds for Apple platforms.
+
+	:param args: List of interface files.
+	:type args: And arbitrary number of strings.
+	"""
+	projectSettings.currentProject.UnionSet( "interfaceFiles", _utils.OrderedSet( args ) )
+
+
+def AddAppleAssetCatalogs( *args ):
+	"""
+	DEPRECATED - This will be removed when tool plugins are able to register file extensions.
+	Add a list of asset catalogs to be compiled. Only applies to builds for Apple platforms.
+
+	:param args: List of asset catalogs.
+	:type args: And arbitrary number of strings.
+	"""
+	projectSettings.currentProject.UnionSet( "assetCatalogs", _utils.OrderedSet( args ) )
 
 
 def ClearLibraries( ):
 	"""Clears the list of libraries"""
-	projectSettings.currentProject.SetValue("libraries", set())
+	projectSettings.currentProject.SetValue("libraries", _utils.OrderedSet())
 
 
 def ClearStaticLibraries( ):
 	"""Clears the list of statically-linked libraries"""
-	projectSettings.currentProject.SetValue("staticLibraries", set())
+	projectSettings.currentProject.SetValue("staticLibraries", _utils.OrderedSet())
 
 
 def ClearSharedibraries( ):
 	"""Clears the list of dynamically-linked libraries"""
-	projectSettings.currentProject.SetValue("sharedLibraries", set())
+	projectSettings.currentProject.SetValue("sharedLibraries", _utils.OrderedSet())
+
+
+def ClearFrameworks():
+	"""Clears the list of frameworks."""
+	projectSettings.currentProject.SetValue( "frameworks", _utils.OrderedSet() )
 
 
 def ClearIncludeDirectories( ):
 	"""Clears the include directories"""
-	projectSettings.currentProject.SetValue("includeDirs", [])
+	projectSettings.currentProject.SetValue( "includeDirsTemp", [] )
+	projectSettings.currentProject.SetValue( "tempsDirty", True )
 
 
 def ClearLibraryDirectories( ):
 	"""Clears the library directories"""
-	projectSettings.currentProject.SetValue("libraryDirs", [])
+	projectSettings.currentProject.SetValue( "libraryDirsTemp", [] )
+	projectSettings.currentProject.SetValue( "tempsDirty", True )
+
+
+def ClearFrameworkDirectories():
+	"""Clears the framework directories."""
+	projectSettings.currentProject.SetValue( "frameworkDirsTemp", [] )
+	projectSettings.currentProject.SetValue( "tempsDirty", True )
+
+
+def ClearAppleStoryboardFiles():
+	projectSettings.currentProject.SetValue( "storyboardFiles", _utils.OrderedSet() )
+
+
+def ClearAppleInterfaceFiles():
+	projectSettings.currentProject.SetValue( "interfaceFiles", _utils.OrderedSet() )
+
+
+def ClearAppleAssetCatalogs():
+	projectSettings.currentProject.SetValue( "assetCatalogs", _utils.OrderedSet() )
 
 
 def SetOptimizationLevel( i ):
@@ -357,9 +462,26 @@ def ClearUndefines( ):
 	projectSettings.currentProject.SetValue("undefines", [])
 
 
+def EnableHiddenVisibility():
+	"""
+	Enable the use of hidden symbol visibility. Ignored by all but the gcc toolchain (and derived toolchains).
+	"""
+	projectSettings.currentProject.SetValue( "useHiddenVisibility", True )
+
+
+def SetCppStandardLibrary( s ):
+	"""
+	The standard C++ library to be used when compiling. Possible values are "libstdc++" and "libc++". Ignored by all but the gcc toolchain (and derived toolchains).
+
+	:param s: Library to use.
+	:type s: str
+	"""
+	projectSettings.currentProject.SetValue( "stdLib", s )
+
+
 def SetCxxCommand( s ):
 	"""
-	Specify the compiler executable to be used for compiling C++ files. Ignored by the msvc toolchain.
+	Specify the compiler executable to be used for compiling C++ files. Ignored by all but the gcc toolchain (and derived toolchains).
 
 	:type s: str
 	:param s: Path to the executable to use for compilation
@@ -414,8 +536,11 @@ def SetOutputDirectory( s ):
 	:type s: str
 	:param s: The output directory, relative to the current script location, NOT to the project working directory.
 	"""
-	projectSettings.currentProject.SetValue("outputDir", os.path.abspath( s ))
-	projectSettings.currentProject.SetValue("_outputDir_set", True)
+	s = _utils.FixupRelativePath( s )
+	s = _utils.PathWorkingDirPair( s )
+	projectSettings.currentProject.SetValue( "outputDirTemp", s )
+	projectSettings.currentProject.SetValue( "_outputDir_set", True )
+	projectSettings.currentProject.SetValue( "tempsDirty", True )
 
 
 def SetIntermediateDirectory( s ):
@@ -425,8 +550,11 @@ def SetIntermediateDirectory( s ):
 	:type s: str
 	:param s: The object directory, relative to the current script location, NOT to the project working directory.
 	"""
-	projectSettings.currentProject.SetValue("objDir", os.path.abspath( s ))
-	projectSettings.currentProject.SetValue("_objDir_set", True)
+	s = _utils.FixupRelativePath( s )
+	s = _utils.PathWorkingDirPair( s )
+	projectSettings.currentProject.SetValue( "objDirTemp", s )
+	projectSettings.currentProject.SetValue( "_objDir_set", True )
+	projectSettings.currentProject.SetValue( "tempsDirty", True )
 
 
 def EnableProfiling( ):
@@ -666,10 +794,15 @@ def Precompile( *args ):
 	:type args: an arbitrary number of strings
 	:param args: The files to precompile.
 	"""
-	projectSettings.currentProject.SetValue("precompile", [])
+	projectSettings.currentProject.SetValue( "precompileTemp", [] )
+	newArgs = []
 	for arg in list( args ):
-		projectSettings.currentProject.AppendList("precompile",  os.path.abspath( arg ) )
-	projectSettings.currentProject.SetValue("chunkedPrecompile", False)
+		arg = _utils.FixupRelativePath( arg )
+		arg = _utils.PathWorkingDirPair( arg )
+		newArgs.append( arg )
+	projectSettings.currentProject.ExtendList( "precompileTemp",  newArgs )
+	projectSettings.currentProject.SetValue( "chunkedPrecompile", False )
+	projectSettings.currentProject.SetValue( "tempsDirty", True )
 
 
 def PrecompileAsC( *args ):
@@ -679,16 +812,21 @@ def PrecompileAsC( *args ):
 	:type args: an arbitrary number of strings
 	:param args: The files to specify as C files.
 	"""
-	projectSettings.currentProject.SetValue("precompileAsC", [])
+	projectSettings.currentProject.SetValue( "precompileAsCTemp", [] )
+	newArgs = []
 	for arg in list( args ):
-		projectSettings.currentProject.AppendList("precompileAsC",  os.path.abspath( arg ) )
+		arg = _utils.FixupRelativePath( arg )
+		arg = _utils.PathWorkingDirPair( arg )
+		newArgs.append( arg )
+	projectSettings.currentProject.AppendList( "precompileAsCTemp", newArgs )
+	projectSettings.currentProject.SetValue( "tempsDirty", True )
 
 
-def EnableChunkedPrecompile( ):
+def EnableChunkedPrecompile():
 	"""
 	When this is enabled, all header files will be precompiled into a single "superheader" and included in all files.
 	"""
-	projectSettings.currentProject.SetValue("chunkedPrecompile", True)
+	projectSettings.currentProject.SetValue( "chunkedPrecompile", True )
 
 
 def DisablePrecompile( *args ):
@@ -701,16 +839,18 @@ def DisablePrecompile( *args ):
 	"""
 	args = list( args )
 	if args:
-		newargs = []
+		newArgs = []
 		for arg in args:
-			if arg[0] != '/' and not arg.startswith( "./" ):
-				arg = "./" + arg
-			newargs.append( os.path.abspath( arg ) )
-			projectSettings.currentProject.ExtendList("precompileExcludeFiles", newargs)
+			arg = _utils.FixupRelativePath( arg )
+			arg = _utils.PathWorkingDirPair( arg )
+			newArgs.append( arg )
+		projectSettings.currentProject.ExtendList( "precompileExcludeFilesTemp", newArgs )
 	else:
-		projectSettings.currentProject.SetValue("chunkedPrecompile", False)
-		projectSettings.currentProject.SetValue("precompile", [])
-		projectSettings.currentProject.SetValue("precompileAsC", [])
+		projectSettings.currentProject.SetValue( "chunkedPrecompile", False )
+		projectSettings.currentProject.SetValue( "precompileTemp", [] )
+		projectSettings.currentProject.SetValue( "precompileAsCTemp", [] )
+
+	projectSettings.currentProject.SetValue( "tempsDirty", True )
 
 
 def EnableUnityBuild( ):
@@ -751,16 +891,21 @@ def AddExtraFiles( *args ):
 	:type args: an arbitrary number of strings
 	:param args: A list of files to add.
 	"""
+	newArgs = []
 	for arg in list( args ):
-		for file in glob.glob( arg ):
-			projectSettings.currentProject.AppendList("extraFiles",  os.path.abspath( file ) )
+		arg = _utils.FixupRelativePath( arg )
+		arg = _utils.PathWorkingDirPair( arg )
+		newArgs.append( arg )
+	projectSettings.currentProject.ExtendList( "extraFilesTemp", newArgs )
+	projectSettings.currentProject.SetValue( "tempsDirty", True )
 
 
 def ClearExtraFiles():
 	"""
 	Clear the list of external files to compile.
 	"""
-	projectSettings.currentProject.SetValue("extraFiles", [])
+	projectSettings.currentProject.SetValue( "extraFilesTemp", [] )
+	projectSettings.currentProject.SetValue( "tempsDirty", True )
 
 
 def AddExtraDirectories( *args ):
@@ -770,15 +915,21 @@ def AddExtraDirectories( *args ):
 	:type args: an arbitrary number of strings
 	:param args: A list of directories to search.
 	"""
+	newArgs = []
 	for arg in list( args ):
-		projectSettings.currentProject.AppendList("extraDirs",  os.path.abspath( arg ) )
+		arg = _utils.FixupRelativePath( arg )
+		arg = _utils.PathWorkingDirPair( arg )
+		newArgs.append( arg )
+	projectSettings.currentProject.ExtendList( "extraDirsTemp", newArgs )
+	projectSettings.currentProject.SetValue( "tempsDirty", True )
 
 
 def ClearExtraDirectories():
 	"""
 	Clear the list of external directories to search.
 	"""
-	projectSettings.currentProject.SetValue("extraDirs", [])
+	projectSettings.currentProject.SetValue( "extraDirsTemp", [] )
+	projectSettings.currentProject.SetValue( "tempsDirty", True )
 
 
 def AddExtraObjects( *args ):
@@ -788,16 +939,21 @@ def AddExtraObjects( *args ):
 	:type args: an arbitrary number of strings
 	:param args: A list of objects to add.
 	"""
+	newArgs = []
 	for arg in list( args ):
-		for file in glob.glob( arg ):
-			projectSettings.currentProject.UnionSet("extraObjs",  os.path.abspath( file ) )
+		arg = _utils.FixupRelativePath( arg )
+		arg = _utils.PathWorkingDirPair( arg )
+		newArgs.append( arg )
+	projectSettings.currentProject.ExtendList( "extraObjsTemp", newArgs )
+	projectSettings.currentProject.SetValue( "tempsDirty", True )
 
 
 def ClearExtraObjects():
 	"""
 	Clear the list of external objects to link.
 	"""
-	projectSettings.currentProject.SetValue("extraObjs", set())
+	projectSettings.currentProject.SetValue( "extraObjsTemp", [] )
+	projectSettings.currentProject.SetValue( "tempsDirty", True )
 
 
 def EnableWarningsAsErrors( ):
@@ -830,7 +986,7 @@ def DoNotChunkTogether(pattern, *additionalPatterns):
 	:param additionalPatterns: Additional patterns to compile the list of mutually exclusive files with
 	"""
 	patterns = [pattern] + list(additionalPatterns)
-	mutexFiles = set()
+	mutexFiles = _utils.OrderedSet()
 	for patternToMatch in patterns:
 		for filename in glob.glob(patternToMatch):
 			mutexFiles.add(os.path.abspath(filename))
@@ -840,7 +996,7 @@ def DoNotChunkTogether(pattern, *additionalPatterns):
 			if file1 == file2:
 				continue
 			if file1 not in projectSettings.currentProject.chunkMutexes:
-				projectSettings.currentProject.chunkMutexes[file1] = { file2 }
+				projectSettings.currentProject.chunkMutexes[file1] = _utils.OrderedSet({ file2 })
 			else:
 				projectSettings.currentProject.chunkMutexes[file1].add(file2)
 
@@ -900,13 +1056,23 @@ def SetUserData(key, value):
 	projectSettings.currentProject.userData.dataDict[key] = value
 
 
+def SetApplePropertyList( plistFile ):
+	"""
+	Set the property list for a project.  This only applies to builds on Apple platforms.
+
+	:param plistFile:
+	:type plistFile: :class:`csbuild.plugin_plist_generator.PListGenerator`
+	"""
+	projectSettings.currentProject.SetValue( "plistFile", copy.deepcopy( plistFile ) )
+
+
 def SetSupportedArchitectures(*architectures):
 	"""
 	Specifies the architectures that this project supports. This can be used to limit
 	--all-architectures from building everything supported by the toolchain, if the project
 	is not set up to support all of the toolchain's architectures.
 	"""
-	projectSettings.currentProject.SetValue("supportedArchitectures", set(architectures))
+	projectSettings.currentProject.SetValue("supportedArchitectures", _utils.OrderedSet(architectures))
 
 
 def SetSupportedToolchains(*toolchains):
@@ -915,10 +1081,10 @@ def SetSupportedToolchains(*toolchains):
 	--all-toolchains from building everything supported by csbuild, if the project
 	is not set up to support all of the toolchains.
 	"""
-	projectSettings.currentProject.SetValue("supportedToolchains", set(toolchains))
+	projectSettings.currentProject.SetValue("supportedToolchains", _utils.OrderedSet(toolchains))
 
 
-def RegisterToolchain( name, compiler, linker ):
+def RegisterToolchain( name, compiler, linker, **customTools ):
 	"""
 	Register a new toolchain for use in the project.
 
@@ -932,8 +1098,11 @@ def RegisterToolchain( name, compiler, linker ):
 	class registeredToolchain(toolchain.toolchain):
 		def __init__(self):
 			toolchain.toolchain.__init__(self)
-			self.tools["compiler"] = compiler()
-			self.tools["linker"] = linker()
+			self.tools["compiler"] = compiler(self.shared)
+			self.tools["linker"] = linker(self.shared)
+			toolsDict = dict(customTools)
+			for name, tool in toolsDict.items():
+				self.tools[name] = tool(self.shared)
 
 	# Format the name so that it can be used as part of its architecture command line option.
 	# This generally means replacing all whitespace with dashes.
@@ -969,6 +1138,10 @@ def RegisterProjectGenerator( name, generator ):
 	"""
 	_shared_globals.allgenerators[name] = generator
 	_shared_globals.project_generators[name] = generator
+
+
+def RegisterPlugin( pluginClass ):
+	projectSettings.currentProject.AddToSet( "plugins", pluginClass )
 
 
 def Toolchain( *args ):
@@ -1044,29 +1217,11 @@ def scope( scope ):
 
 	return wrap
 
-def project( name, workingDirectory, depends = None, priority = -1, ignoreDependencyOrdering = False ):
-	"""
-	Decorator used to declare a project. linkDepends and srcDepends here will be used to determine project build order.
-
-	:type name: str
-	:param name: A unique name to be used to refer to this project
-
-	:type workingDirectory: str
-	:param workingDirectory: The directory in which to perform build operations. This directory
-	(or a subdirectory) should contain the project's source files.
-
-	:type depends: list
-	:param linkDepends: A list of other projects. This project will not be linked until the dependent projects
-	have completed their build process. These can be specified as either projName, Link(projName, scope), or Src(projName, scope).
-
-	projName will be converted to Link(projName, ScopeDef.Final)
-	Link will cause the project it applies to to link this dependency.
-	Src will cause the project it applies to to wait until this project finishes before it starts its build at all.
-	"""
+def _project_decorator( name, workingDirectory, depends = None, priority = -1, ignoreDependencyOrdering = False, autoDiscoverSourceFiles = True, prebuilt = False, shell = False ):
 	if not depends:
 		depends = []
 	if isinstance( depends, str ):
-		linkDepends = [depends]
+		depends = [depends]
 
 	def wrap( projectFunction ):
 		if name in _shared_globals.tempprojects:
@@ -1090,6 +1245,10 @@ def project( name, workingDirectory, depends = None, priority = -1, ignoreDepend
 		newProject.srcDepends = []
 		newProject.srcDependsIntermediate = []
 		newProject.srcDependsFinal = []
+
+		newProject.autoDiscoverSourceFiles = autoDiscoverSourceFiles
+		newProject.prebuilt = prebuilt
+		newProject.shell = shell
 
 		for depend in depends:
 			if isinstance(depend, str):
@@ -1124,6 +1283,33 @@ def project( name, workingDirectory, depends = None, priority = -1, ignoreDepend
 
 
 	return wrap
+
+def project( name, workingDirectory, depends = None, priority = -1, ignoreDependencyOrdering = False, autoDiscoverSourceFiles = True ):
+	"""
+	Decorator used to declare a project. linkDepends and srcDepends here will be used to determine project build order.
+
+	:type name: str
+	:param name: A unique name to be used to refer to this project
+
+	:type workingDirectory: str
+	:param workingDirectory: The directory in which to perform build operations. This directory
+	(or a subdirectory) should contain the project's source files.
+
+	:type depends: list
+	:param linkDepends: A list of other projects. This project will not be linked until the dependent projects
+	have completed their build process. These can be specified as either projName, Link(projName, scope), or Src(projName, scope).
+
+	projName will be converted to Link(projName, ScopeDef.Final)
+	Link will cause the project it applies to to link this dependency.
+	Src will cause the project it applies to to wait until this project finishes before it starts its build at all.
+	"""
+	return _project_decorator(name, workingDirectory, depends, priority, ignoreDependencyOrdering, autoDiscoverSourceFiles)
+
+def prebuilt( name, depends = None ):
+	return _project_decorator(name, "", depends, prebuilt = True)
+
+def shellProject( name, workingDirectory, depends = None, autoDiscoverSourceFiles = True ):
+	return _project_decorator(name, workingDirectory, depends, autoDiscoverSourceFiles = autoDiscoverSourceFiles, shell = True)
 
 
 def projectGroup( name ):
@@ -1235,7 +1421,7 @@ def prePrepareBuildStep( func ):
 		:class:`csbuild.projectSettings.projectSettings`.
 	"""
 
-	projectSettings.currentProject.SetValue("prePrepareBuildStep", func)
+	projectSettings.currentProject.AddToSet("prePrepareBuildSteps", func)
 	return func
 
 
@@ -1252,7 +1438,7 @@ def postPrepareBuildStep( func ):
 		:class:`csbuild.projectSettings.projectSettings`.
 	"""
 
-	projectSettings.currentProject.SetValue("postPrepareBuildStep", func)
+	projectSettings.currentProject.AddToSet("postPrepareBuildSteps", func)
 	return func
 
 
@@ -1268,7 +1454,7 @@ def preMakeStep( func ):
 		:class:`csbuild.projectSettings.projectSettings`.
 	"""
 
-	projectSettings.currentProject.SetValue("preMakeStep", func)
+	projectSettings.currentProject.AddToSet("preMakeSteps", func)
 	return func
 
 
@@ -1284,7 +1470,7 @@ def postMakeStep( func ):
 		:class:`csbuild.projectSettings.projectSettings`.
 	"""
 
-	projectSettings.currentProject.SetValue("postMakeStep", func)
+	projectSettings.currentProject.AddToSet("postMakeSteps", func)
 	return func
 
 
@@ -1300,7 +1486,7 @@ def preBuildStep( func ):
 		:class:`csbuild.projectSettings.projectSettings`.
 	"""
 
-	projectSettings.currentProject.SetValue("preBuildStep", func)
+	projectSettings.currentProject.AddToSet("preBuildSteps", func)
 	return func
 
 
@@ -1316,7 +1502,7 @@ def postBuildStep( func ):
 		:class:`csbuild.projectSettings.projectSettings`.
 	"""
 
-	projectSettings.currentProject.SetValue("postBuildStep", func)
+	projectSettings.currentProject.AddToSet("postBuildSteps", func)
 	return func
 
 
@@ -1332,7 +1518,39 @@ def preLinkStep( func ):
 		:class:`csbuild.projectSettings.projectSettings`.
 	"""
 
-	projectSettings.currentProject.SetValue("preLinkStep", func)
+	projectSettings.currentProject.AddToSet("preLinkSteps", func)
+	return func
+
+def globalPostMakeStep( func ):
+	"""
+	Decorator that creates a global post-make step that will only be executed once. Post-make steps run after all projects have
+	finished building and linking. This step will only run if the entire build process was successful.
+
+	Global build steps execute after all project build steps of the same type have completed.
+
+	:param func: (Implicit) The function wrapped by this decorator
+	:type func: (Implicit) function
+
+	.. note:: The function this wraps should take no arguments.
+	"""
+	_shared_globals.globalPostMakeSteps.add(func)
+	return func
+
+
+def globalPreMakeStep( func ):
+	"""
+	Decorator that creates a global pre-make step that will only be executed once. Pre-make steps run after all projects' preparation
+	steps have completed and their final chunk sets have been collected, but before any compiling starts.
+
+	Global build steps execute after all project build steps of the same type have completed.
+
+	:param func: (Implicit) The function wrapped by this decorator
+	:type func: (Implicit) function
+
+	.. note:: The function this wraps should take no arguments.
+	"""
+
+	_shared_globals.globalPreMakeSteps.add(func)
 	return func
 
 
@@ -1368,6 +1586,16 @@ def _build( ):
 	global _building
 	_building = True
 
+	for project in _shared_globals.sortedProjects:
+		for chunk in project.chunks:
+			if project.activeToolchain.Compiler().SupportsDummyObjects():
+				objs = []
+				for source in chunk:
+					obj = _utils.GetSourceObjPath(project, source)
+					if not os.access(obj, os.F_OK):
+						objs.append(obj)
+				project.activeToolchain.Compiler().MakeDummyObjects(objs)
+
 	linker_threads_blocked = _shared_globals.max_linker_threads - 1
 	for i in range( linker_threads_blocked ):
 		_shared_globals.link_semaphore.acquire(True)
@@ -1378,24 +1606,28 @@ def _build( ):
 	_shared_globals.total_compiles += _shared_globals.total_precompiles
 	_shared_globals.current_compile = 1
 
-	projects_in_flight = []
+	projects_in_flight = set()
 	projects_done = set()
 	pending_links = set()
 	pending_builds = _shared_globals.sortedProjects
 	#projects_needing_links = set()
 
 	for project in pending_builds:
-		project.activeToolchain.preMakeStep(project)
-		if project.preMakeStep:
-			log.LOG_BUILD( "Running pre-make step for {} ({} {}/{})".format( project.outputName, project.targetName, project.outputArchitecture, project.activeToolchainName ) )
-			project.preMakeStep(project)
+		for plugin in project.plugins:
+			_utils.CheckRunBuildStep(project, plugin.preMakeStep, "plugin pre-make")
+			_shared_globals.globalPreMakeSteps.add(plugin.globalPreMakeStep)
 
-	for project in _shared_globals.sortedProjects:
-		log.LOG_BUILD( "Verifying libraries for {} ({} {}/{})".format( project.outputName, project.targetName, project.outputArchitecture, project.activeToolchainName ) )
-		if not project.check_libraries( ):
-			return False
-			#if _utils.needs_link(project):
-			#    projects_needing_links.add(project.key)
+		_utils.CheckRunBuildStep(project, project.activeToolchain.preMakeStep, "toolchain pre-make")
+		_shared_globals.globalPreMakeSteps |= project.activeToolchain.GetGlobalPreMakeSteps()
+		for buildStep in project.preMakeSteps:
+			_utils.CheckRunBuildStep(project, buildStep, "project pre-make")
+
+	for buildStep in _shared_globals.globalPreMakeSteps:
+		if _utils.FuncIsEmpty(buildStep):
+			continue
+
+		log.LOG_BUILD( "Running global pre-make step {}".format(_utils.GetFuncName(buildStep)))
+		buildStep()
 
 	_shared_globals.starttime = time.time( )
 
@@ -1434,8 +1666,10 @@ def _build( ):
 					if otherProj.reconciledLinkDepends:
 						for depend in otherProj.reconciledLinkDepends:
 							if depend not in projects_done:
-								okToLink = False
-								break
+								dependProj = _shared_globals.projects[depend]
+								if not dependProj.shell and not dependProj.prebuilt:
+									okToLink = False
+									break
 					if okToLink:
 						_link( otherProj )
 						LinkedSomething = True
@@ -1451,8 +1685,10 @@ def _build( ):
 				okToLink = True
 				for depend in otherProj.reconciledLinkDepends:
 					if depend not in projects_done:
-						okToLink = False
-						break
+						dependProj = _shared_globals.projects[depend]
+						if not dependProj.shell and not dependProj.prebuilt:
+							okToLink = False
+							break
 				if okToLink:
 					_link( otherProj )
 					LinkedSomething = True
@@ -1467,16 +1703,18 @@ def _build( ):
 				if depend not in projects_done:
 					pending_builds.append( project )
 					continue
-			projects_in_flight.append( project )
+			projects_in_flight.add( project )
 
 			projectSettings.currentProject = project
 
 			project.starttime = time.time( )
 
-			project.activeToolchain.preBuildStep(project)
-			if project.preBuildStep:
-				log.LOG_BUILD( "Running pre-build step for {} ({} {}/{})".format( project.outputName, project.targetName, project.outputArchitecture, project.activeToolchainName ) )
-				project.preBuildStep( project )
+			for plugin in project.plugins:
+				_utils.CheckRunBuildStep(project, plugin.preBuildStep, "plugin pre-build")
+				plugin.preBuildStep(project)
+			_utils.CheckRunBuildStep(project, project.activeToolchain.preBuildStep, "toolchain pre-build")
+			for buildStep in project.preBuildSteps:
+				_utils.CheckRunBuildStep(project, buildStep, "project pre-build")
 
 			log.LOG_BUILD( "Building {} ({} {}/{})".format( project.outputName, project.targetName, project.outputArchitecture, project.activeToolchainName ) )
 			project.state = _shared_globals.ProjectState.BUILDING
@@ -1632,10 +1870,21 @@ def _build( ):
 
 	if not projects_in_flight and not pending_links:
 		for project in _shared_globals.sortedProjects:
-			project.activeToolchain.postMakeStep(project)
-			if project.postMakeStep:
-				log.LOG_BUILD( "Running post-make step for {} ({} {}/{})".format( project.outputName, project.targetName, project.outputArchitecture, project.activeToolchainName ) )
-				project.postMakeStep(project)
+			for plugin in project.plugins:
+				_utils.CheckRunBuildStep(project, plugin.postMakeStep, "plugin post-make")
+				_shared_globals.globalPostMakeSteps.add(plugin.globalPostMakeStep)
+
+			_utils.CheckRunBuildStep(project, project.activeToolchain.postMakeStep, "toolchain post-make")
+			_shared_globals.globalPostMakeSteps |= project.activeToolchain.GetGlobalPostMakeSteps()
+			for buildStep in project.postMakeSteps:
+				_utils.CheckRunBuildStep(project, buildStep, "project post-make")
+
+		for buildStep in _shared_globals.globalPostMakeSteps:
+			if _utils.FuncIsEmpty(buildStep):
+				continue
+
+			log.LOG_BUILD( "Running global post-make step {}".format(_utils.GetFuncName(buildStep)))
+			buildStep()
 
 	compiletime = time.time( ) - _shared_globals.starttime
 	totalmin = math.floor( compiletime / 60 )
@@ -1676,10 +1925,13 @@ def _link( project, *objs ):
 def _performLink(project, objs):
 	project.linkStart = time.time()
 
-	project.activeToolchain.preLinkStep(project)
-	if project.preLinkStep:
-		log.LOG_BUILD( "Running pre-link step for {} ({} {}/{})".format( project.outputName, project.targetName, project.outputArchitecture, project.activeToolchainName  ) )
-		project.preLinkStep(project)
+	for plugin in project.plugins:
+		_utils.CheckRunBuildStep(project, plugin.preLinkStep, "plugin pre-link")
+	_utils.CheckRunBuildStep(project, project.activeToolchain.preLinkStep, "toolchain pre-link")
+	for buildStep in project.preLinkSteps:
+		_utils.CheckRunBuildStep(project, buildStep, "project pre-link")
+
+	project.ResolveFilesAndDirectories()
 
 	project.activeToolchain.SetActiveTool("linker")
 
@@ -1691,33 +1943,45 @@ def _performLink(project, objs):
 
 	if not objs:
 		for chunk in project.chunks:
+			hasChunk = False
 			if not project.unity:
-				obj = _utils.GetChunkedObjPath(project, chunk)
+				chunkObj = _utils.GetChunkedObjPath(project, chunk)
 			else:
-				obj = _utils.GetUnityChunkObjPath(project)
-			if project.useChunks and not _shared_globals.disable_chunks and os.access(obj , os.F_OK):
-				objs.append( obj )
-			else:
+				chunkObj = _utils.GetUnityChunkObjPath(project)
+			if project.useChunks and not _shared_globals.disable_chunks and os.access(chunkObj , os.F_OK):
+				objs.append( chunkObj )
+				hasChunk = True
+
+			if not hasChunk or project.activeToolchain.Compiler().SupportsObjectScraping():
+				objsToScrape = []
 				if type( chunk ) == list:
 					for source in chunk:
 						obj = _utils.GetSourceObjPath(project, source)
 						if os.access(obj , os.F_OK):
 							objs.append( obj )
-						else:
+							if source in project._finalChunkSet:
+								objsToScrape.append( obj )
+						elif not hasChunk or project.activeToolchain.Compiler().SupportsDummyObjects():
 							log.LOG_ERROR( "Could not find {} for linking. Something went wrong here.".format(obj) )
 							return _LinkStatus.Fail
 				else:
 					obj = _utils.GetSourceObjPath(project, chunk)
 					if os.access(obj , os.F_OK):
 						objs.append( obj )
-					else:
+						if source in project._finalChunkSet:
+							objsToScrape.append( obj )
+					elif not hasChunk or project.activeToolchain.Compiler().SupportsDummyObjects():
 						log.LOG_ERROR( "Could not find {} for linking. Something went wrong here.".format(obj) )
 						return _LinkStatus.Fail
+
+				if hasChunk and objsToScrape:
+					project.activeToolchain.Compiler().GetObjectScraper().RemoveSharedSymbols(objsToScrape, chunkObj)
 
 	if not objs:
 		return _LinkStatus.UpToDate
 
 	for obj in project.extraObjs:
+		log.LOG_INFO("Adding extra link object {} to link queue".format(obj))
 		if not os.access(obj, os.F_OK):
 			log.LOG_ERROR("Could not find extra object {}".format(obj))
 
@@ -1747,7 +2011,7 @@ def _performLink(project, objs):
 					project._builtSomething = True
 			for dep in project.reconciledLinkDepends:
 				depProj = _shared_globals.projects[dep]
-				if depProj.state != _shared_globals.ProjectState.UP_TO_DATE:
+				if not depProj.prebuilt and not depProj.shell and depProj.state != _shared_globals.ProjectState.UP_TO_DATE:
 					log.LOG_LINKER(
 						"Dependent project {0} has been modified since the last successful build. Relinking to new library."
 						.format( depProj.name ) )
@@ -1773,26 +2037,29 @@ def _performLink(project, objs):
 		proj = _shared_globals.projects[dep]
 		if proj.type == ProjectType.StaticLibrary and project.linkMode == StaticLinkMode.LinkIntermediateObjects:
 			for chunk in proj.chunks:
+				hasChunk = False
 				if not proj.unity:
-					obj = _utils.GetChunkedObjPath(proj, chunk)
+					chunkObj = _utils.GetChunkedObjPath(proj, chunk)
 				else:
-					obj = _utils.GetUnityChunkObjPath(proj)
-				if proj.useChunks and not _shared_globals.disable_chunks and os.access(obj , os.F_OK):
-					objs.append( obj )
-				else:
+					chunkObj = _utils.GetUnityChunkObjPath(proj)
+				if proj.useChunks and not _shared_globals.disable_chunks and os.access(chunkObj , os.F_OK):
+					objs.append( chunkObj )
+					hasChunk = True
+
+				if not hasChunk or proj.activeToolchain.Compiler().SupportsObjectScraping():
 					if type( chunk ) == list:
 						for source in chunk:
 							obj = _utils.GetSourceObjPath(proj, source)
 							if os.access(obj , os.F_OK):
 								objs.append( obj )
-							else:
+							elif not hasChunk or proj.activeToolchain.Compiler().SupportsDummyObjects():
 								log.LOG_ERROR( "Could not find {} for linking. Something went wrong here.".format(obj) )
 								return _LinkStatus.Fail
 					else:
 						obj = _utils.GetSourceObjPath(proj, chunk)
 						if os.access(obj , os.F_OK):
 							objs.append( obj )
-						else:
+						elif not hasChunk or proj.activeToolchain.Compiler().SupportsDummyObjects():
 							log.LOG_ERROR( "Could not find {} for linking. Something went wrong here.".format(obj) )
 							return _LinkStatus.Fail
 			objs += proj.extraObjs
@@ -1804,26 +2071,41 @@ def _performLink(project, objs):
 	if platform.system() != "Windows":
 		cmd = shlex.split(cmd)
 
-	fd = subprocess.Popen( cmd, stdout = subprocess.PIPE, stderr = subprocess.PIPE, cwd = project.objDir )
+	toolchainEnv = _utils.GetToolchainEnvironment( project.activeToolchain.Linker() )
+	fd = subprocess.Popen( cmd, stdout = subprocess.PIPE, stderr = subprocess.PIPE, cwd = project.objDir, env = toolchainEnv )
 
-	(output, errors) = fd.communicate( )
+	with _shared_globals.spmutex:
+		_shared_globals.subprocesses[output] = fd
+
+	(out, errors) = fd.communicate( )
+
+	with _shared_globals.spmutex:
+		del _shared_globals.subprocesses[output]
+		if _shared_globals.exiting:
+			return
 
 	ret = fd.returncode
 	sys.stdout.flush( )
 	sys.stderr.flush( )
 
 	if sys.version_info >= (3, 0):
-		output = output.decode("utf-8")
+		out = out.decode("utf-8")
 		errors = errors.decode("utf-8")
-	sys.stdout.write( output )
+
+	out = out.replace("\r", "")
+	errors = errors.replace("\r", "")
+
+	sys.stdout.write( out )
 	sys.stderr.write( errors )
+	sys.stdout.flush( )
+	sys.stderr.flush( )
 
 	with project.mutex:
 		ansi_escape = re.compile(r'\x1b[^m]*m')
 		stripped_errors = re.sub(ansi_escape, '', errors)
-		project.linkOutput = output
+		project.linkOutput = out
 		project.linkErrors = stripped_errors
-		errorlist = project.activeToolchain.Compiler()._parseOutput(output)
+		errorlist = project.activeToolchain.Compiler()._parseOutput(out)
 		errorlist2 = project.activeToolchain.Compiler()._parseOutput(stripped_errors)
 		if errorlist is None:
 			errorlist = errorlist2
@@ -1841,6 +2123,10 @@ def _performLink(project, objs):
 			project.errors += errorcount
 			project.warnings += warningcount
 			project.parsedLinkErrors = errorlist
+
+			with _shared_globals.sgmutex:
+				_shared_globals.warningcount += warningcount
+				_shared_globals.errorcount += errorcount
 
 	if ret != 0:
 		log.LOG_ERROR( "Linking failed." )
@@ -1877,18 +2163,12 @@ class _LinkThread(threading.Thread):
 				_shared_globals.build_success = False
 				project.state = _shared_globals.ProjectState.LINK_FAILED
 			elif ret == _LinkStatus.Success:
+				for plugin in project.plugins:
+					_utils.CheckRunBuildStep(project, plugin.postBuildStep, "plugin post-build")
+				_utils.CheckRunBuildStep(project, project.activeToolchain.postBuildStep, "toolchain post-build")
 
-				try:
-					project.activeToolchain.postBuildStep(project)
-				except Exception:
-					traceback.print_exc()
-
-				if project.postBuildStep:
-					log.LOG_BUILD( "Running post-build step for {} ({} {}/{})".format( project.outputName, project.targetName, project.outputArchitecture, project.activeToolchainName ) )
-					try:
-						project.postBuildStep( project )
-					except Exception:
-						traceback.print_exc()
+				for buildStep in project.postBuildSteps:
+					_utils.CheckRunBuildStep(project, buildStep, "project post-build")
 				project.state = _shared_globals.ProjectState.FINISHED
 			elif ret == _LinkStatus.UpToDate:
 				project.state = _shared_globals.ProjectState.UP_TO_DATE
@@ -2025,28 +2305,32 @@ def _clean( silent = False ):
 def _installHeaders( ):
 	log.LOG_INSTALL("Installing headers...")
 
+	installed_headers = set()
 	for project in _shared_globals.sortedProjects:
+
 		os.chdir( project.workingDirectory )
 		#install headers
 		subdir = project.headerInstallSubdir
 		if not subdir:
 			subdir = _utils.GetBaseName( project.outputName )
 		if project.installHeaders:
-			install_dir = os.path.join( _shared_globals.install_incdir, subdir )
+			incdir = _utils.ResolveProjectMacros(_shared_globals.install_incdir, project)
+			install_dir = os.path.join( incdir, subdir )
 			if not os.access(install_dir , os.F_OK):
 				os.makedirs( install_dir )
 			headers = []
 			cHeaders = []
 			project.get_files( headers = headers, cHeaders = cHeaders )
-			for header in headers:
+			for header in (headers + cHeaders):
 				this_header_dir = os.path.dirname( os.path.join( install_dir, os.path.relpath( header, project.workingDirectory ) ) )
+				this_header = os.path.join( this_header_dir, header )
+				if this_header in installed_headers:
+					continue
+				installed_headers.add(this_header)
 				if not os.access(this_header_dir , os.F_OK):
 					os.makedirs( this_header_dir )
 				log.LOG_INSTALL( "Installing {0} to {1}...".format( header, this_header_dir ) )
 				shutil.copy( header, this_header_dir )
-			for header in cHeaders:
-				log.LOG_INSTALL( "Installing {0} to {1}...".format( header, install_dir ) )
-				shutil.copy( header, install_dir )
 			install_something = True
 
 def _installOutput( ):
@@ -2060,7 +2344,7 @@ def _installOutput( ):
 		if project.installOutput:
 			#install output file
 			if os.access(output , os.F_OK):
-				outputDir = _shared_globals.install_libdir
+				outputDir = _utils.ResolveProjectMacros(_shared_globals.install_libdir, project)
 				if not os.access(outputDir , os.F_OK):
 					os.makedirs( outputDir )
 				log.LOG_INSTALL( "Installing {0} to {1}...".format( output, outputDir ) )
@@ -2089,6 +2373,12 @@ def _make( ):
 	Performs both the build and link steps of the process.
 	Aborts if the build fails.
 	"""
+
+	for project in _shared_globals.sortedProjects:
+		log.LOG_BUILD( "Verifying libraries for {} ({} {}/{})".format( project.outputName, project.targetName, project.outputArchitecture, project.activeToolchainName ) )
+		if not project.check_libraries( ):
+			Exit( 1 )
+
 	if not _build( ):
 		_shared_globals.build_success = False
 		log.LOG_ERROR( "Build failed." )
@@ -2133,14 +2423,19 @@ def SetupDebugTarget( ):
 
 	AddDefines("_DEBUG")
 
+
 	if not projectSettings.currentProject._outputDir_set:
-		projectSettings.currentProject.outputDir = "{project.activeToolchainName}-{project.outputArchitecture}-{project.targetName}"
+		s = _utils.FixupRelativePath( "{project.activeToolchainName}-{project.outputArchitecture}-{project.targetName}" )
+		s = _utils.PathWorkingDirPair( s )
+		projectSettings.currentProject.outputDirTemp = s
+
 	if not projectSettings.currentProject._objDir_set:
-		projectSettings.currentProject.objDir = os.path.join(projectSettings.currentProject.outputDir, "obj")
-	if not projectSettings.currentProject.toolchains["msvc"].Compiler().debug_runtime_set:
-		projectSettings.currentProject.toolchains["msvc"].Compiler().debug_runtime = True
-	if not projectSettings.currentProject.toolchains["msvc"].Linker().debug_runtime_set:
-		projectSettings.currentProject.toolchains["msvc"].Linker().debug_runtime = True
+		s = _utils.FixupRelativePath( os.path.join( projectSettings.currentProject.outputDirTemp.path, "obj") )
+		s = _utils.PathWorkingDirPair( s )
+		projectSettings.currentProject.objDirTemp = s
+
+	if not projectSettings.currentProject.toolchains["msvc"].shared.debug_runtime_set:
+		projectSettings.currentProject.toolchains["msvc"].shared.debug_runtime = True
 
 
 def SetupReleaseTarget( ):
@@ -2154,24 +2449,41 @@ def SetupReleaseTarget( ):
 	AddDefines("NDEBUG")
 
 	if not projectSettings.currentProject._outputDir_set:
-		projectSettings.currentProject.outputDir = "{project.activeToolchainName}-{project.outputArchitecture}-{project.targetName}"
+		s = _utils.FixupRelativePath( "{project.activeToolchainName}-{project.outputArchitecture}-{project.targetName}" )
+		s = _utils.PathWorkingDirPair( s )
+		projectSettings.currentProject.outputDirTemp = s
+
 	if not projectSettings.currentProject._objDir_set:
-		projectSettings.currentProject.objDir = os.path.join(projectSettings.currentProject.outputDir, "obj")
-	if not projectSettings.currentProject.toolchains["msvc"].Compiler().debug_runtime_set:
-		projectSettings.currentProject.toolchains["msvc"].Compiler().debug_runtime = False
-	if not projectSettings.currentProject.toolchains["msvc"].Linker().debug_runtime_set:
-		projectSettings.currentProject.toolchains["msvc"].Linker().debug_runtime = False
+		s = _utils.FixupRelativePath( os.path.join(projectSettings.currentProject.outputDirTemp.path, "obj") )
+		s = _utils.PathWorkingDirPair( s )
+		projectSettings.currentProject.objDirTemp = s
+
+	if not projectSettings.currentProject.toolchains["msvc"].shared.debug_runtime_set:
+		projectSettings.currentProject.toolchains["msvc"].shared.debug_runtime = False
 
 
 def _setupdefaults( ):
-	RegisterToolchain( "gcc", toolchain_gcc.compiler_gcc, toolchain_gcc.linker_gcc )
-	RegisterToolchain( "msvc", toolchain_msvc.compiler_msvc, toolchain_msvc.linker_msvc )
-	RegisterToolchain( "android", toolchain_android.AndroidCompiler, toolchain_android.AndroidLinker )
+	if platform.system() == "Darwin":
+		gccCompiler, gccLinker = toolchain_gcc_darwin.GccCompilerDarwin, toolchain_gcc_darwin.GccLinkerDarwin
+	else:
+		gccCompiler, gccLinker = toolchain_gcc.GccCompiler, toolchain_gcc.GccLinker
+
+	RegisterToolchain( "gcc", gccCompiler, gccLinker )
+	RegisterToolchain( "msvc", toolchain_msvc.MsvcCompiler, toolchain_msvc.MsvcLinker )
+	RegisterToolchain( "android", toolchain_android.AndroidCompiler, toolchain_android.AndroidLinker, apkBuilder = toolchain_android.APKBuilder )
 	RegisterToolchain( "ios", toolchain_ios.iOSCompiler, toolchain_ios.iOSLinker )
 
+	try:
+		# Attempt to register the PS4 toolchain.
+		RegisterToolchain( "ps4", toolchain_ps4.Ps4Compiler, toolchain_ps4.Ps4Linker )
+	except:
+		pass
+
 	RegisterProjectGenerator( "qtcreator", project_generator_qtcreator.project_generator_qtcreator )
-	RegisterProjectGenerator( "slickedit", project_generator_slickedit.project_generator_slickedit )
-	RegisterProjectGenerator( "visualstudio", project_generator_visual_studio.project_generator_visual_studio )
+	RegisterProjectGenerator( "visualstudio", project_generator_visual_studio_v2.project_generator_visual_studio )
+
+	#TODO: SlickEdit project generation is disabled until we get it fixed up.
+	#RegisterProjectGenerator( "slickedit", project_generator_slickedit.project_generator_slickedit )
 
 	if platform.system( ) == "Windows":
 		SetActiveToolchain( "msvc" )
@@ -2185,38 +2497,63 @@ _guiModule = None
 
 sysExit = sys.exit
 
-def Done( code = 0 ):
+def Done( code = 0, killGui = True ):
 	"""
 	Exit the build process early
 
 	:param code: Exit code to exit with
 	:type code: int
+
+	:param killGui: Whether to immediately kill the GUI or wait for the user to close it, if it's active
+	:type killGui: bool
 	"""
-	Exit( code )
+	Exit( code, killGui )
 
 
-def Exit( code = 0 ):
+def Exit( code = 0, killGui = True ):
 	"""
 	Exit the build process early
 
 	:param code: Exit code to exit with
 	:type code: int
+
+	:param killGui: Whether to immediately kill the GUI or wait for the user to close it, if it's active
+	:type killGui: bool
 	"""
-	#global _guiModule
-	#if _guiModule:
-	#	_guiModule.stop()
+	_shared_globals.exiting = True
+
+	global _building
+	_building = False
 
 	if not imp.lock_held():
 		imp.acquire_lock()
 
-	sysExit( code )
+	with _shared_globals.spmutex:
+		for output, fd in _shared_globals.subprocesses.items():
+			log.LOG_BUILD("Killing process {} creating file '{}'".format(fd.pid, os.path.basename(output)))
+			try:
+				fd.kill()
+			except OSError:
+				pass
+			if os.path.exists(output):
+				log.LOG_BUILD("Removing incomplete/partially-created file '{}'".format(fd.pid, os.path.basename(output)))
+				os.remove(output)
+
+	global _guiModule
+	if _guiModule:
+		if killGui:
+			log.LOG_BUILD("Killing GUI")
+			_guiModule.stop()
+		_guiModule.join()
+
+	#Die hard, we don't need python to clean up and we want to make sure this exits.
+	#sys.exit just throws an exception that can be caught. No catching allowed.
+	os._exit( code )
 
 
 ARG_NOT_SET = type( "ArgNotSetType", (), { } )( )
 
 _options = []
-
-helpMode = False
 
 
 def GetOption( option ):
@@ -2233,7 +2570,7 @@ def GetOption( option ):
 	Handle csbuild.ARG_NOT_SET to prevent code from being unintentionally run with --help.
 	"""
 	global args
-	if not helpMode:
+	if _runMode != RunMode.Help:
 		newparser = argparse.ArgumentParser( )
 		global _options
 		for opt in _options:
@@ -2267,7 +2604,7 @@ def GetArgs( ):
 	:rtype: argparse.Namespace
 	"""
 	global args
-	if not helpMode:
+	if _runMode != RunMode.Help:
 		newparser = argparse.ArgumentParser( )
 		global _options
 		for opt in _options:
@@ -2302,6 +2639,16 @@ def GetTargetList():
 	return _shared_globals.target_list
 
 
+def GetRunMode():
+	"""
+	Get the mode csbuild is current running under.
+
+	:return: The run mode.
+	:rtype: int
+	"""
+	return _runMode
+
+
 class _dummy( object ):
 	def __setattr__( self, key, value ):
 		pass
@@ -2310,11 +2657,8 @@ class _dummy( object ):
 
 
 def _execfile( file, glob, loc ):
-	if sys.version_info >= (3, 0):
-		with open( file, "r" ) as f:
-			exec (f.read( ), glob, loc)
-	else:
-		execfile( file, glob, loc )
+	with open( file, "r" ) as f:
+		exec(compile(f.read( ), file, "exec"), glob, loc)
 
 
 mainFile = ""
@@ -2323,6 +2667,10 @@ mainFileDir = ""
 def _run( ):
 
 	_setupdefaults( )
+
+	#Initialized here to avoid a circular dependency
+	_shared_globals.globalPreMakeSteps = _utils.OrderedSet()
+	_shared_globals.globalPostMakeSteps = _utils.OrderedSet()
 
 	global args
 	args = _dummy( )
@@ -2339,8 +2687,8 @@ def _run( ):
 			mainFileDir = os.path.abspath( os.getcwd( ) )
 		scriptFiles.append(os.path.join(mainFileDir, mainFile))
 		if "-h" in sys.argv or "--help" in sys.argv:
-			global helpMode
-			helpMode = True
+			global _runMode
+			_runMode = RunMode.Help
 			_execfile( mainFile, _shared_globals.makefile_dict, _shared_globals.makefile_dict )
 			_shared_globals.sortedProjects = _utils.SortProjects( _shared_globals.tempprojects )
 
@@ -2527,6 +2875,7 @@ def _run( ):
 		action = "store_true" )
 	parser.add_argument( '--dg', '--dependency-graph', help="Generate dependency graph", action="store_true")
 	parser.add_argument( '--with-libs', help="Include linked libraries in dependency graph", action="store_true" )
+	parser.add_argument( "-d", "--define", help = "Add defines to each project being built.", action = "append")
 
 	group = parser.add_argument_group( "Solution generation", "Commands to generate a solution" )
 	group.add_argument( '--generate-solution', help = "Generate a solution file for use with the given IDE.",
@@ -2588,13 +2937,18 @@ def _run( ):
 		print("\nMaintainer: {} - {}".format( __maintainer__, __email__ ))
 		return
 
+	# Add any defines that were passed in from the command line.
+	if args.define:
+		for define in args.define:
+			AddDefines(define)
+
 	_shared_globals.CleanBuild = args.clean
 	_shared_globals.do_install = args.install or args.install_headers or args.install_output
 	_shared_globals.quiet = args.quiet
 	_shared_globals.show_commands = args.show_commands
 	_shared_globals.rebuild = args.rebuild or args.profile
 	if args.gui and _shared_globals.CleanBuild:
-		log.LOG_INFO("The GUI is currently disabled when performing a clean.");
+		log.LOG_INFO("The GUI is currently disabled when performing a clean.")
 		args.gui = False
 	if args.profile and not args.gui:
 		log.LOG_WARN("Profile mode has no effect without --gui. Disabling --profile.")
@@ -2619,8 +2973,15 @@ def _run( ):
 	if args.incdir:
 		_shared_globals.install_incdir = args.incdir
 
-	_shared_globals.install_libdir = os.path.abspath(_shared_globals.install_libdir.format(prefix=_shared_globals.install_prefix))
-	_shared_globals.install_incdir = os.path.abspath(_shared_globals.install_incdir.format(prefix=_shared_globals.install_prefix))
+	#This allows a first pass to pick up prefix, while keeping project macros for a later pass.
+	class DummyProj(object):
+		def __getattr__(self, name):
+			return "{{project.{}}}".format(name)
+
+	proj = DummyProj()
+
+	_shared_globals.install_libdir = os.path.abspath(_shared_globals.install_libdir.format(prefix=_shared_globals.install_prefix, project=proj))
+	_shared_globals.install_incdir = os.path.abspath(_shared_globals.install_incdir.format(prefix=_shared_globals.install_prefix, project=proj))
 
 	if args.jobs:
 		_shared_globals.max_threads = args.jobs
@@ -2637,6 +2998,7 @@ def _run( ):
 	_shared_globals.stopOnError = args.stop_on_error
 
 	if args.generate_solution is not None:
+		_runMode = RunMode.GenerateSolution
 		args.at = True
 		args.aa = True
 		#args.ao = True
@@ -2650,6 +3012,25 @@ def _run( ):
 	_execfile( mainFile, _shared_globals.makefile_dict, _shared_globals.makefile_dict )
 
 	parser.parse_args(args.remainder)
+
+	validArchList = set()
+
+	if args.ao:
+		_shared_globals.selectedToolchains = set( ) # Reset the selected toolchains.
+		for chain in _shared_globals.alltoolchains:
+			validArchList |= set(_shared_globals.alltoolchains[chain.lower()]().GetValidArchitectures())
+	elif args.toolchain:
+		_shared_globals.selectedToolchains = set( ) # Reset the selected toolchains.
+		for chain in args.toolchain:
+			if chain.lower() not in _shared_globals.alltoolchains:
+				log.LOG_ERROR( "Unknown toolchain: {}".format( chain ) )
+				return
+			validArchList |= set(_shared_globals.alltoolchains[chain.lower()]().GetValidArchitectures())
+	else:
+		if platform.system( ) == "Windows":
+			validArchList |= set(_shared_globals.alltoolchains["msvc"]().GetValidArchitectures())
+		else:
+			validArchList |= set(_shared_globals.alltoolchains["gcc"]().GetValidArchitectures())
 
 	def BuildWithToolchain( chain ):
 
@@ -2693,33 +3074,6 @@ def _run( ):
 						func()
 
 					newproject.fileOverrideSettings[file] = projCopy
-
-				if newproject.targetName not in newproject.targets:
-					log.LOG_INFO( "Project {} has no rules specified for target {}. Skipping.".format( newproject.name,
-						newproject.targetName ) )
-					return
-
-				projectSettings.currentProject = newproject
-
-				SetOutputArchitecture(architecture)
-
-				for targetFunc in newproject.targets[newproject.targetName]:
-					targetFunc( )
-
-				if newproject.outputArchitecture in newproject.archFuncs:
-					for archFunc in newproject.archFuncs[newproject.outputArchitecture]:
-						archFunc()
-
-				for file in newproject.fileOverrides:
-					projCopy = newproject.copy()
-					projectSettings.currentProject = projCopy
-
-					for func in newproject.fileOverrides[file]:
-						func()
-
-					newproject.fileOverrideSettings[file] = projCopy
-
-				projectSettings.currentProject = newproject
 
 				alteredLinkDepends = []
 				alteredLinkDependsIntermediate = []
@@ -2816,7 +3170,6 @@ def _run( ):
 
 				project.activeToolchain = project.toolchains[project.activeToolchainName]
 
-				validArchList = set(project.activeToolchain.GetValidArchitectures())
 				cmdLineGlobalArchList = args.architecture
 				cmdLineToolchainArchList = args.__dict__[_shared_globals.allToolchainArchStrings[project.activeToolchainName][0].replace("-", "_")]
 				cmdLineArchList = set()
@@ -2824,18 +3177,21 @@ def _run( ):
 					cmdLineArchList.update(cmdLineGlobalArchList)
 				if cmdLineToolchainArchList:
 					cmdLineArchList.update(cmdLineToolchainArchList)
-				if project.supportedArchitectures:
-					validArchList &= project.supportedArchitectures
-				if not validArchList:
-					log.LOG_ERROR("Project {} does not support any architectures supported by toolchain {}".format(project.name, project.activeToolchainName))
 				if cmdLineArchList:
 					for arch in cmdLineArchList:
 						if arch not in validArchList:
 							log.LOG_ERROR("Toolchain {} does not support architecture {}".format(project.activeToolchainName, arch))
 							Exit(1)
-						BuildWithArchitecture(project, arch)
+						architectures = _utils.OrderedSet(project.activeToolchain.GetValidArchitectures())
+						if project.supportedArchitectures:
+							architectures &= project.supportedArchitectures
+						if arch in architectures:
+							BuildWithArchitecture(project, arch)
 				elif args.aa:
-					for arch in validArchList:
+					architectures = _utils.OrderedSet(project.activeToolchain.GetValidArchitectures())
+					if project.supportedArchitectures:
+						architectures &= project.supportedArchitectures
+					for arch in architectures:
 						BuildWithArchitecture(project, arch)
 				else:
 					BuildWithArchitecture(project, project.activeToolchain.Compiler().GetDefaultArchitecture())
@@ -2874,9 +3230,40 @@ def _run( ):
 	os.chdir( mainFileDir )
 
 	if project_build_list:
-		for proj in _shared_globals.projects.keys( ):
-			if proj.rsplit( "@", 1 )[0] in project_build_list:
+		inputProjectSet = set( project_build_list )
+		existingProjectSet = set( _shared_globals.tempprojects )
+		validProjectSet = set()
+		foundExistingProjectSet = set()
+		foundValidProjectSet = set()
+
+		for proj in _shared_globals.projects.keys():
+			projName = proj.rsplit( "@", 1 )[0]
+			validProjectSet.add( projName ) # Fill in the set of valid projects for the current build.
+			if projName in inputProjectSet:
 				_shared_globals.project_build_list.add( proj )
+
+		# Search for projects that are either not valid or non-existent.
+		for projName in inputProjectSet:
+			if projName in existingProjectSet:
+				foundExistingProjectSet.add( projName )
+			if projName in validProjectSet:
+				foundValidProjectSet.add( projName )
+
+		# Create a list of the projects that don't exist and a list of projects that are invalid for the current build.
+		nonExistentProjectList = sorted( inputProjectSet.difference( foundExistingProjectSet ) )
+		invalidProjectList = sorted( inputProjectSet.difference( nonExistentProjectList ).difference( foundValidProjectSet ) )
+		forceExit = False
+
+		if nonExistentProjectList:
+			log.LOG_ERROR( "The following projects do not exist: {}".format( ", ".join( nonExistentProjectList ) ) )
+			forceExit = True
+
+		if invalidProjectList:
+			log.LOG_ERROR( "The following projects cannot be built with the selected configuration: {}".format( ", ".join( invalidProjectList ) ) )
+			forceExit = True
+
+		if forceExit:
+			Exit( 1 )
 	else:
 		_shared_globals.project_build_list = set(_shared_globals.projects.keys())
 
@@ -2957,7 +3344,8 @@ def _run( ):
 			else:
 				add_intermediates(proj.linkDependsIntermediate)
 
-		project.finalizeSettings2()
+		if not args.dg:
+			project.finalizeSettings2()
 
 	already_errored_link = { }
 	already_errored_source = { }
@@ -3023,7 +3411,8 @@ def _run( ):
 	_shared_globals.sortedProjects = _utils.SortProjects( _shared_globals.projects )
 
 	if args.dg:
-		builder = 'digraph G {\n\tlayout="neato";\n\toverlap="false";\n\tsplines="spline"\n'
+		builder = StringIO()
+		builder.write('digraph G {\n\tlayout="neato";\n\toverlap="false";\n\tsplines="spline"\n')
 		colors = [
 			"#ff0000", "#cc5200", "#b2742d", "#858c23", "#20802d",
 			"#00ffcc", "#39c3e6", "#205380", "#003380", "#38008c",
@@ -3040,29 +3429,49 @@ def _run( ):
 			idx += 1
 			if idx == len(colors):
 				idx = 0
-			builder += '\t{0} [shape="{1}" color="{2}" style="filled" fillcolor="{2}30"];\n'.format(project.name, "box3d" if project.type == ProjectType.Application else "oval", color)
+			builder.write('\t{0} [shape="{1}" color="{2}" style="filled" fillcolor="{2}30"];\n'.format(project.name, "box3d" if project.type == ProjectType.Application else "oval", color))
 			for dep in project.linkDepends:
 				otherProj = _shared_globals.projects[dep]
-				builder += '\t{} -> {} [color="{}"];\n'.format(project.name, otherProj.name, color)
+				builder.write('\t{} -> {} [color="{}"];\n'.format(project.name, otherProj.name, color))
 			for dep in project.linkDependsIntermediate:
 				otherProj = _shared_globals.projects[dep]
-				builder += '\t{} -> {} [color="{}B0" style="dashed" arrowhead="onormal"];\n'.format(project.name, otherProj.name, color)
+				builder.write('\t{} -> {} [color="{}B0" style="dashed" arrowhead="onormal"];\n'.format(project.name, otherProj.name, color))
 			for dep in project.linkDependsFinal:
 				otherProj = _shared_globals.projects[dep]
-				builder += '\t{} -> {} [color="{}B0" style="dashed" arrowhead="onormal"];\n'.format(project.name, otherProj.name, color)
+				builder.write('\t{} -> {} [color="{}B0" style="dashed" arrowhead="onormal"];\n'.format(project.name, otherProj.name, color))
 
 			if args.with_libs:
 				project.activeToolchain = project.toolchains[project.activeToolchainName]
 				project.activeToolchain.SetActiveTool("linker")
-				for lib in project.libraries:
-					lib = lib.replace("-", "_")
-					if lib not in libs_drawn:
-						builder += '\t{} [shape="diamond" color="#303030" style="filled" fillcolor="#D0D0D080"];\n'.format(lib)
-						libs_drawn.add(lib)
-					builder += '\t{} -> {} [color="{}" style="dotted" arrowhead="onormal"];\n'.format(project.name, lib, color)
-		builder += "}\n"
+				def drawLibs(libraries, style):
+					for lib in libraries:
+						lib = lib.replace("-", "_")
+						if lib not in libs_drawn:
+							builder.write('\t{} [shape="diamond" color="#303030" style="filled" fillcolor="#D0D0D080"];\n'.format(lib))
+							libs_drawn.add(lib)
+						builder.write('\t{} -> {} [color="{}" style="{}" arrowhead="onormal"];\n'.format(project.name, lib, color, style))
+
+				drawLibs(project.libraries, "solid")
+				if "libraries" in project._intermediateScopeSettings:
+					drawLibs(project._intermediateScopeSettings["libraries"], "dashed")
+				if "libraries" in project._finalScopeSettings:
+					drawLibs(project._finalScopeSettings["libraries"], "dashed")
+
+				tc = object.__getattribute__(project, "finalToolchains")[object.__getattribute__(project, "activeToolchainName")]
+				tc.SetActiveTool("linker")
+
+				if "libraries" in tc.activeTool._settingsOverrides:
+					drawLibs(tc.activeTool._settingsOverrides["libraries"], "dashed")
+
+				tc = object.__getattribute__(project, "intermediateToolchains")[object.__getattribute__(project, "activeToolchainName")]
+				tc.SetActiveTool("linker")
+
+				if "libraries" in tc.activeTool._settingsOverrides:
+					drawLibs(tc.activeTool._settingsOverrides["libraries"], "dashed")
+
+		builder.write("}\n")
 		with open("depends.gv", "w") as f:
-			f.write(builder)
+			f.write(builder.getvalue())
 		log.LOG_BUILD("Wrote depends.gv")
 		try:
 			from graphviz import Digraph
@@ -3070,7 +3479,7 @@ def _run( ):
 			log.LOG_WARN("graphviz library not found. You can open depends.gv with graphviz or a similar dot viewer to view the graph, or install graphviz with pip install graphviz.")
 		else:
 			graph = Digraph(comment="CSBuild Dependency Graph", format="png", engine="dot", filename="depends")
-			Digraph.source=property(lambda self: builder)
+			Digraph.source=property(lambda self: builder.getvalue())
 			graph.render("depends.gv", view=True)
 			log.LOG_BUILD("Wrote depends.png")
 		return
@@ -3091,8 +3500,15 @@ def _run( ):
 	#		except:
 	#			del _shared_globals.allheaders[header]
 
+
 	for proj in _shared_globals.sortedProjects:
-		proj.prepareBuild( )
+		if proj.prebuilt == False and (proj.shell == False or args.generate_solution):
+			proj.prepareBuild( )
+		else:
+			proj.minimalPrepareBuild()
+
+	# Remove projects that don't actually build.
+	_shared_globals.sortedProjects = [ proj for proj in _shared_globals.sortedProjects if proj.prebuilt == False and (proj.shell == False or args.generate_solution) ]
 
 	#with open(headerCacheFile, "wb") as f:
 	#	pickle.dump(_shared_globals.allheaders, f, 2)
@@ -3151,9 +3567,9 @@ def _run( ):
 			log.LOG_ERROR( error )
 
 	if not _shared_globals.build_success:
-		Exit( 1 )
+		Exit( 1, False )
 	else:
-		Exit( 0 )
+		Exit( 0, False )
 
 #Regular sys.exit can't be called because we HAVE to reacquore the import lock at exit.
 #We stored sys.exit earlier, now we overwrite it to call our wrapper.
