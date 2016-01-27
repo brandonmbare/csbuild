@@ -12,33 +12,48 @@ else:
 import csbuild
 from . import log
 
-# try:
-# 	from PyQt5 import QtCore, QtGui, QtWidgets
-# 	QMainWindow = QtWidgets.QMainWindow
-# 	QApplication = QtWidgets.QApplication
-# 	QtGui.QWidget = QtWidgets.QWidget
-# 	QtGui.QHBoxLayout = QtWidgets.QHBoxLayout
-# 	QtGui.QVBoxLayout = QtWidgets.QVBoxLayout
-# 	QtGui.QSplitter = QtWidgets.QSplitter
-# 	QtGui.QLabel = QtWidgets.QLabel
-# 	QtGui.QProgressBar = QtWidgets.QProgressBar
-# 	QtGui.QPushButton = QtWidgets.QPushButton
-# 	QtGui.QTreeWidget = QtWidgets.QTreeWidget
-# 	QtGui.QTreeWidgetItem = QtWidgets.QTreeWidgetItem
-# 	QtGui.QSpacerItem = QtWidgets.QSpacerItem
-# 	QtGui.QSizePolicy = QtWidgets.QSizePolicy
-# 	QtGui.QTextEdit = QtWidgets.QTextEdit
-# 	QtGui.QTabWidget = QtWidgets.QTabWidget
-# 	log.LOG_INFO("Using Qt5")
-# except:
 try:
-	from PyQt4 import QtCore, QtGui
-	QMainWindow = QtGui.QMainWindow
-	QApplication = QtGui.QApplication
-	log.LOG_INFO("Using Qt4")
+	from PyQt5 import QtCore, QtGui, QtWidgets
+	QMainWindow = QtWidgets.QMainWindow
+	QApplication = QtWidgets.QApplication
+	QtGui.QAbstractItemView = QtWidgets.QAbstractItemView
+	QtGui.QAction = QtWidgets.QAction
+	QtGui.QApplication = QtWidgets.QApplication
+	QtGui.QHBoxLayout = QtWidgets.QHBoxLayout
+	QtGui.QHeaderView = QtWidgets.QHeaderView
+	QtGui.QLabel = QtWidgets.QLabel
+	QtGui.QLineEdit = QtWidgets.QLineEdit
+	QtGui.QMainWindow = QtWidgets.QMainWindow
+	QtGui.QMenu = QtWidgets.QMenu
+	QtGui.QMessageBox = QtWidgets.QMessageBox
+	QtGui.QPlainTextEdit = QtWidgets.QPlainTextEdit
+	QtGui.QProgressBar = QtWidgets.QProgressBar
+	QtGui.QPushButton = QtWidgets.QPushButton
+	QtGui.QSpacerItem = QtWidgets.QSpacerItem
+	QtGui.QSizePolicy = QtWidgets.QSizePolicy
+	QtGui.QSlider = QtWidgets.QSlider
+	QtGui.QSplitter = QtWidgets.QSplitter
+	QtGui.QStatusBar = QtWidgets.QStatusBar
+	QtGui.QStyledItemDelegate = QtWidgets.QStyledItemDelegate
+	QtGui.QTextEdit = QtWidgets.QTextEdit
+	QtGui.QTreeWidget = QtWidgets.QTreeWidget
+	QtGui.QTreeWidgetItem = QtWidgets.QTreeWidgetItem
+	QtGui.QTabWidget = QtWidgets.QTabWidget
+	QtGui.QToolTip = QtWidgets.QToolTip
+	QtGui.QVBoxLayout = QtWidgets.QVBoxLayout
+	QtGui.QWidget = QtWidgets.QWidget
+	log.LOG_INFO("Using Qt5")
+	USING_PYQT5 = True
 except:
-	log.LOG_ERROR("PyQt4 must be installed on your system to load the CSBuild GUI")
-	csbuild.Exit( 1 )
+	try:
+		from PyQt4 import QtCore, QtGui
+		QMainWindow = QtGui.QMainWindow
+		QApplication = QtGui.QApplication
+		log.LOG_INFO("Using Qt4")
+		USING_PYQT5 = False
+	except:
+		log.LOG_ERROR("Either PyQt4 or PyQt5 must be installed on your system to load the CSBuild GUI")
+		csbuild.Exit( 1 )
 
 import os
 import threading
@@ -1222,7 +1237,10 @@ class MainWindow( QMainWindow ):
 		self.timelineWidget.header().setDefaultSectionSize(30)
 		self.timelineWidget.header().setStretchLastSection(False)
 
-		self.timelineWidget.header().setResizeMode(QtGui.QHeaderView.Fixed)
+		if USING_PYQT5:
+			self.timelineWidget.header().setSectionResizeMode(QtWidgets.QHeaderView.Fixed)
+		else:
+			self.timelineWidget.header().setResizeMode(QtGui.QHeaderView.Fixed)
 
 		self.timelineWidget.itemExpanded.connect(self.TimelineItemExpended)
 		self.timelineWidget.itemCollapsed.connect(self.TimelineItemExpended)
@@ -1354,6 +1372,9 @@ class MainWindow( QMainWindow ):
 
 		self.tick = 0
 
+		self.selectedItem = None
+
+
 	def buildTreeContextMenu(self, point):
 		if not _shared_globals.profile:
 			return
@@ -1367,9 +1388,10 @@ class MainWindow( QMainWindow ):
 			return
 		if parent.parent():
 			return
+		self.selectedItem = item
 		menu = QtGui.QMenu(self)
 		action = QtGui.QAction("View profile data", self)
-		action.triggered.connect(functools.partial(self.buildTreeViewProfile, item))
+		action.triggered.connect(self.buildTreeViewProfile)
 		menu.addAction(action)
 		menu.popup(self.m_buildTree.viewport().mapToGlobal(point))
 
@@ -1386,9 +1408,10 @@ class MainWindow( QMainWindow ):
 			return
 		if parent.parent():
 			return
+		self.selectedItem = item
 		menu = QtGui.QMenu(self)
 		action = QtGui.QAction("View profile data", self)
-		action.triggered.connect(functools.partial(self.timelineViewProfile, item))
+		action.triggered.connect(self.timelineViewProfile)
 		menu.addAction(action)
 		menu.popup(self.timelineWidget.viewport().mapToGlobal(point))
 
@@ -1427,7 +1450,11 @@ class MainWindow( QMainWindow ):
 		window.show()
 
 
-	def buildTreeViewProfile(self, item, checked):
+	def buildTreeViewProfile(self):
+		if not self.selectedItem:
+			return
+
+		item = self.selectedItem
 		filename = os.path.normcase(str(item.toolTip(3)))
 
 		project = self.itemToProject[str(item.parent().text(0))]
@@ -1435,7 +1462,11 @@ class MainWindow( QMainWindow ):
 		self.launchProfileView(project, filename)
 
 
-	def timelineViewProfile(self, item, checked):
+	def timelineViewProfile(self):
+		if not self.selectedItem:
+			return
+
+		item = self.selectedItem
 		filename = os.path.normcase(str(item.toolTip(0)))
 
 		idx = self.timelineWidget.indexOfTopLevelItem(self.parent())
@@ -2551,6 +2582,10 @@ class MainWindow( QMainWindow ):
 			self.timer.stop()
 
 	def closeEvent(self, event):
+		if self.exitRequested:
+			QMainWindow.closeEvent(self, event)
+			return
+
 		if not self.readyToClose:
 			answer = QtGui.QMessageBox.question(
 				self,
@@ -2562,7 +2597,7 @@ class MainWindow( QMainWindow ):
 			if answer == QtGui.QMessageBox.Yes:
 				QMainWindow.closeEvent(self, event)
 				self.timer.stop()
-				os.kill(os.getpid(), signal.SIGINT)
+				csbuild.Exit(0)
 			else:
 				event.ignore()
 		else:
@@ -2614,6 +2649,7 @@ class GuiThread( threading.Thread ):
 		"""Initialize the object. Also handles above-mentioned bug with dummy threads."""
 		threading.Thread.__init__( self )
 		self.app = None
+		self.window = None
 		#Prevent certain versions of python from choking on dummy threads.
 		if not hasattr( threading.Thread, "_Thread__block" ):
 			threading.Thread._Thread__block = _shared_globals.dummy_block( )
@@ -2624,6 +2660,7 @@ class GuiThread( threading.Thread ):
 		global lock
 		lock.release()
 		window = MainWindow()
+		self.window = window
 
 		window.m_buildTree.setSortingEnabled(False)
 		row = 0
@@ -2878,7 +2915,6 @@ class GuiThread( threading.Thread ):
 		window.m_buildTree.setSortingEnabled(True)
 
 		window.show()
-		self.window = window
 		self.app.exec_()
 
 	def stop(self):
@@ -2896,6 +2932,10 @@ def run():
 
 def stop():
 	global _thread
-	if _thread:
+	if _thread and threading.current_thread() != _thread:
 		_thread.stop()
+
+def join():
+	global _thread
+	if _thread and threading.current_thread() != _thread:
 		_thread.join()

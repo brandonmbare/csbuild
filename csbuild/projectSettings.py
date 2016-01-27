@@ -385,6 +385,9 @@ class projectSettings( object ):
 	:ivar frameworkDirsTemp: Directories to search for Apple frameworks.
 	:type frameworkDirsTemp: list[:class:`_utils.PathWorkingDir`]
 
+	:ivar autoDiscoverSourceFiles: Automatically discover source files from the working directory.
+	:type autoDiscoverSourceFiles: bool
+
 	.. note:: Toolchains can define additional variables that will show up on this class's
 		instance variable list when that toolchain is active. See toolchain documentation for
 		more details on what additional instance variables are available.
@@ -422,24 +425,26 @@ class projectSettings( object ):
 		self.linkDepends = []
 		self.linkDependsIntermediate = []
 		self.linkDependsFinal = []
-		self.reconciledLinkDepends = set()
-		self.flattenedDepends = set()
+		self.reconciledLinkDepends = _utils.OrderedSet()
+		self.flattenedDepends = _utils.OrderedSet()
 		self.srcDepends = []
 		self.srcDependsIntermediate = []
 		self.srcDependsFinal = []
 		self.func = None
+		self.prebuilt = False
+		self.shell = False
 
-		self.libraries = set()
-		self.staticLibraries = set()
-		self.sharedLibraries = set()
-		self.frameworks = set()
+		self.libraries = _utils.OrderedSet()
+		self.staticLibraries = _utils.OrderedSet()
+		self.sharedLibraries = _utils.OrderedSet()
+		self.frameworks = _utils.OrderedSet()
 		self.includeDirs = []
 		self.libraryDirs = []
-		self.frameworkDirs = set()
+		self.frameworkDirs = _utils.OrderedSet()
 
-		self.storyboardFiles = set()
-		self.interfaceFiles = set()
-		self.assetCatalogs = set()
+		self.storyboardFiles = _utils.OrderedSet()
+		self.interfaceFiles = _utils.OrderedSet()
+		self.assetCatalogs = _utils.OrderedSet()
 
 		self.optLevel = csbuild.OptimizationLevel.Disabled
 		self.debugLevel = csbuild.DebugLevel.Disabled
@@ -555,13 +560,13 @@ class projectSettings( object ):
 
 		self.mutex = threading.Lock( )
 
-		self.postBuildSteps = set()
-		self.preBuildSteps = set()
-		self.prePrepareBuildSteps = set()
-		self.postPrepareBuildSteps = set()
-		self.preLinkSteps = set()
-		self.preMakeSteps = set()
-		self.postMakeSteps = set()
+		self.postBuildSteps = _utils.OrderedSet()
+		self.preBuildSteps = _utils.OrderedSet()
+		self.prePrepareBuildSteps = _utils.OrderedSet()
+		self.postPrepareBuildSteps = _utils.OrderedSet()
+		self.preLinkSteps = _utils.OrderedSet()
+		self.preMakeSteps = _utils.OrderedSet()
+		self.postMakeSteps = _utils.OrderedSet()
 
 		self.parentGroup = currentGroup
 
@@ -597,7 +602,7 @@ class projectSettings( object ):
 			self.cppExtensions.add(".mm")
 
 		self.chunkMutexes = {}
-		self.chunkExcludes = set()
+		self.chunkExcludes = _utils.OrderedSet()
 
 		self.fileOverrides = {}
 		self.fileOverrideSettings = {}
@@ -606,8 +611,8 @@ class projectSettings( object ):
 		self.ccpcOverrideCmds = {}
 		self.cxxpcOverrideCmds = {}
 
-		self.supportedArchitectures = set()
-		self.supportedToolchains = set()
+		self.supportedArchitectures = _utils.OrderedSet()
+		self.supportedToolchains = _utils.OrderedSet()
 
 		self.linkMode = csbuild.StaticLinkMode.LinkLibs
 		self.linkModeSet = False
@@ -617,7 +622,9 @@ class projectSettings( object ):
 		self.userData = projectSettings.UserData()
 		self.plistFile = None
 
-		self.plugins = set()
+		self.plugins = _utils.OrderedSet()
+
+		self.autoDiscoverSourceFiles = True
 
 		self._intermediateScopeSettings = {}
 		self._finalScopeSettings = {}
@@ -650,6 +657,7 @@ class projectSettings( object ):
 		self.linkOutput = ""
 		self.linkErrors = ""
 		self.parsedLinkErrors = None
+
 
 	def prepareBuild( self ):
 		wd = os.getcwd( )
@@ -739,6 +747,44 @@ class projectSettings( object ):
 		os.chdir( wd )
 
 
+	def minimalPrepareBuild( self ):
+
+		self.activeToolchain.SetActiveTool("linker")
+
+		global currentProject
+		currentProject = self
+
+		pluginClasses = self.plugins
+		self.plugins = []
+		for pluginClass in pluginClasses:
+			self.plugins.append(pluginClass())
+
+		for plugin in self.plugins:
+			_utils.CheckRunBuildStep(self, plugin.prePrepareBuildStep, "plugin pre-PrepareBuild")
+		_utils.CheckRunBuildStep(self, self.activeToolchain.prePrepareBuildStep, "toolchain pre-PrepareBuild")
+		for buildStep in self.prePrepareBuildSteps:
+			_utils.CheckRunBuildStep(self, buildStep, "project pre-PrepareBuild")
+
+		# Run the initial pass to resolve file and directory paths.
+		self.ResolveFilesAndDirectories()
+
+		self.activeToolchain.SetActiveTool("linker")
+		if self.ext is None:
+			self.ext = self.activeToolchain.Linker().GetDefaultOutputExtension( self.type )
+
+		self.outputName += self.ext
+		self.activeToolchain.SetActiveTool("compiler")
+
+		for plugin in self.plugins:
+			_utils.CheckRunBuildStep(self, plugin.postPrepareBuildStep, "plugin post-PrepareBuild")
+		_utils.CheckRunBuildStep(self, self.activeToolchain.postPrepareBuildStep, "toolchain post-PrepareBuild")
+		for buildStep in self.postPrepareBuildSteps:
+			_utils.CheckRunBuildStep(self, buildStep, "project post-PrepareBuild")
+
+		# Make sure the paths are up-to-date in case the previous build step added/changed any of them.
+		self.ResolveFilesAndDirectories()
+
+
 	def ResolveFilesAndDirectories( self ):
 		# Nothing to resolve if no files or directories have been added since the last resolve.
 		if not self.tempsDirty:
@@ -772,9 +818,13 @@ class projectSettings( object ):
 		for dep in self.reconciledLinkDepends:
 			proj = _shared_globals.projects[dep]
 			proj.activeToolchain.SetActiveTool("linker")
-			if proj.type == csbuild.ProjectType.StaticLibrary and self.linkMode == csbuild.StaticLinkMode.LinkIntermediateObjects:
+			if ( proj.type == csbuild.ProjectType.StaticLibrary and
+					self.linkMode == csbuild.StaticLinkMode.LinkIntermediateObjects and
+					not proj.prebuilt ):
+				projName = proj.outputName.split( "." )[0]
+				if projName in self.libraries:
+					self.libraries.remove( projName )
 				continue
-			self.libraries.add(proj.outputName.split(".")[0])
 			if proj.outputDir:
 				# This project has already been prepared, use its output directory as is.
 				depOutDir = proj.outputDir
@@ -809,17 +859,40 @@ class projectSettings( object ):
 		self.excludeDirs.extend(apply_macro( self.excludeDirsTemp ))
 		self.extraFiles.extend(apply_macro( self.extraFilesTemp ))
 		self.extraDirs.extend(apply_macro( self.extraDirsTemp ))
-		self.extraObjs.update(set( apply_macro( list( self.extraObjsTemp ) ) ))
+		self.extraObjs.update(_utils.OrderedSet( apply_macro( list( self.extraObjsTemp ) ) ))
 		self.excludeFiles.extend(apply_macro(self.excludeFilesTemp ))
 		self.precompile.extend(apply_macro( self.precompileTemp ))
 		self.precompileAsC.extend(apply_macro( self.precompileAsCTemp ))
 		self.precompileExcludeFiles.extend(apply_macro( self.precompileExcludeFilesTemp ))
-		self.frameworkDirs.update(set(apply_macro( self.frameworkDirsTemp )))
+		self.frameworkDirs.update(_utils.OrderedSet(apply_macro( self.frameworkDirsTemp )))
 
 		self.headerInstallSubdir = _utils.ResolveProjectMacros(self.headerInstallSubdir, self)
 
 		self.excludeDirs.append( self.csbuildDir )
 
+		realExtraObjs = set()
+		realExtraFiles = set()
+		realExtraDirs = set()
+		realExcludeFiles = set()
+		realExcludeDirs = set()
+
+		# Glob file and directory paths.
+		for arg in self.extraObjs:
+			realExtraObjs |= set( glob.glob( arg ) )
+		for arg in self.extraFiles:
+			realExtraFiles |= set( glob.glob( arg ) )
+		for arg in self.extraDirs:
+			realExtraDirs |= set( glob.glob( arg ) )
+		for arg in self.excludeFiles:
+			realExcludeFiles |= set( glob.glob( arg ) )
+		for arg in self.excludeDirs:
+			realExcludeDirs |= set( glob.glob( arg ) )
+
+		self.extraObjs = _utils.OrderedSet( realExtraObjs )
+		self.extraFiles = sorted( realExtraFiles )
+		self.extraDirs = sorted( realExtraDirs )
+		self.excludeFiles = sorted( realExcludeFiles )
+		self.excludeDirs = sorted( realExcludeDirs )
 
 	def RunFileDiscovery( self ):
 		#Have to chdir in case this gets called from a build step.
@@ -839,6 +912,16 @@ class projectSettings( object ):
 				log.LOG_INFO("Appending extra files {}".format(self.extraFiles))
 				self.allsources += self.extraFiles
 			self.allheaders = self.cppHeaders + self.cHeaders
+
+			# Determine if this project has any C++ files.
+			if self.cppHeaders:
+				self.hasCppFiles = True
+			else:
+				for sourceFile in self.allsources:
+					_, ext = os.path.splitext(sourceFile)
+					if ext in self.cppExtensions:
+						self.hasCppFiles = True
+						break
 
 			if not self.allsources:
 				os.chdir(wd)
@@ -924,11 +1007,11 @@ class projectSettings( object ):
 			setattr(self, key, getattr(self, key) | value)
 		if scope & csbuild.ScopeDef.Intermediate:
 			if key not in self._intermediateScopeSettings:
-				self._intermediateScopeSettings[key] = set()
+				self._intermediateScopeSettings[key] = _utils.OrderedSet()
 			self._intermediateScopeSettings[key] |= value
 		if scope & csbuild.ScopeDef.Final:
 			if key not in self._finalScopeSettings:
-				self._finalScopeSettings[key] = set()
+				self._finalScopeSettings[key] = _utils.OrderedSet()
 			self._finalScopeSettings[key] |= value
 
 	def AddToSet(self, key, value):
@@ -937,11 +1020,11 @@ class projectSettings( object ):
 			getattr(self, key).add(value)
 		if scope & csbuild.ScopeDef.Intermediate:
 			if key not in self._intermediateScopeSettings:
-				self._intermediateScopeSettings[key] = set()
+				self._intermediateScopeSettings[key] = _utils.OrderedSet()
 			self._intermediateScopeSettings[key].add(value)
 		if scope & csbuild.ScopeDef.Final:
 			if key not in self._finalScopeSettings:
-				self._finalScopeSettings[key] = set()
+				self._finalScopeSettings[key] = _utils.OrderedSet()
 			self._finalScopeSettings[key].add(value)
 
 
@@ -991,8 +1074,17 @@ class projectSettings( object ):
 			object.__setattr__(self, name, value)
 
 	@staticmethod
-	def _combineObjects(baseObj, newObj):
+	def _combineObjects(baseObj, newObj, name):
 		if newObj is None:
+			return
+
+		# Libraries are a special case.
+		# Any time any project references a library, that library should be moved later in the list.
+		# Referenced libraries have to be linked after all the libraries that reference them.
+		if name == "libraries":
+			baseObj["obj"] = _utils.OrderedSet(baseObj["obj"])
+			baseObj["obj"] -= newObj
+			baseObj["obj"] |= newObj
 			return
 
 		if isinstance( newObj, dict ):
@@ -1001,8 +1093,8 @@ class projectSettings( object ):
 		elif isinstance( newObj, list ):
 			baseObj["obj"] = list(baseObj["obj"])
 			baseObj["obj"] += newObj
-		elif isinstance( newObj, set ):
-			baseObj["obj"] = set(baseObj["obj"])
+		elif isinstance( newObj, _utils.OrderedSet ):
+			baseObj["obj"] = _utils.OrderedSet(baseObj["obj"])
 			baseObj["obj"] |= newObj
 		elif isinstance( newObj, csbuild.projectSettings.projectSettings.UserData ):
 			baseObj["obj"] = baseObj["obj"].copy()
@@ -1016,7 +1108,7 @@ class projectSettings( object ):
 		if toolchain:
 			if toolchain.activeTool and name in toolchain.activeTool._settingsOverrides:
 				obj = toolchain.activeTool._settingsOverrides[name]
-				projectSettings._combineObjects(baseObj, obj)
+				projectSettings._combineObjects(baseObj, obj, name)
 
 
 	def finalizeSettings(self):
@@ -1041,6 +1133,7 @@ class projectSettings( object ):
 
 				self._finalizedSettings[tool][name] = base["obj"]
 
+
 		self.activeToolchain.SetActiveTool("linker")
 		if sys.version_info >= (3,0):
 			self.GetAttr = types.MethodType(projectSettings.GetAttrNext, self)
@@ -1049,6 +1142,8 @@ class projectSettings( object ):
 			self.GetAttr = types.MethodType(projectSettings.GetAttrNext, self, projectSettings)
 			self.SetAttr = types.MethodType(projectSettings.SetAttrNext, self, projectSettings)
 
+		#Insert our own output at the front of our final scope libraries list.
+		self._finalScopeSettings["libraries"] = _utils.OrderedSet( { self.outputName } ) | _utils.OrderedSet(self._finalScopeSettings.get("libraries"))
 
 	def finalizeSettings2(self):
 		"""
@@ -1070,7 +1165,7 @@ class projectSettings( object ):
 						settings = object.__getattribute__(dependProj, "_finalScopeSettings")
 						if name in settings:
 							obj = settings[name]
-							projectSettings._combineObjects(base, obj)
+							projectSettings._combineObjects(base, obj, name)
 						toolchain = object.__getattribute__(dependProj, "finalToolchains")[object.__getattribute__(self, "activeToolchainName")]
 						toolchain.SetActiveTool(tool)
 						projectSettings._processToolchain(base, toolchain, name)
@@ -1078,7 +1173,7 @@ class projectSettings( object ):
 						settings = object.__getattribute__(dependProj, "_intermediateScopeSettings")
 						if name in settings:
 							obj = settings[name]
-							projectSettings._combineObjects(base, obj)
+							projectSettings._combineObjects(base, obj, name)
 						toolchain = object.__getattribute__(dependProj, "intermediateToolchains")[object.__getattribute__(self, "activeToolchainName")]
 						toolchain.SetActiveTool(tool)
 						projectSettings._processToolchain(base, toolchain, name)
@@ -1107,22 +1202,24 @@ class projectSettings( object ):
 			"linkDepends": list( self.linkDepends ),
 			"linkDependsIntermediate": list( self.linkDependsIntermediate ),
 			"linkDependsFinal": list( self.linkDependsFinal ),
-			"reconciledLinkDepends" : set( self.reconciledLinkDepends ),
-			"flattenedDepends" : set(self.flattenedDepends),
+			"reconciledLinkDepends" : _utils.OrderedSet( self.reconciledLinkDepends ),
+			"flattenedDepends" : _utils.OrderedSet(self.flattenedDepends),
 			"srcDepends": list( self.srcDepends ),
 			"srcDependsIntermediate": list( self.srcDependsIntermediate ),
 			"srcDependsFinal": list( self.srcDependsFinal ),
 			"func": self.func,
-			"libraries": set( self.libraries ),
-			"staticLibraries": set( self.staticLibraries ),
-			"sharedLibraries": set( self.sharedLibraries ),
-			"frameworks": set( self.frameworks ),
+			"prebuilt" : self.prebuilt,
+			"shell" : self.shell,
+			"libraries": _utils.OrderedSet( self.libraries ),
+			"staticLibraries": _utils.OrderedSet( self.staticLibraries ),
+			"sharedLibraries": _utils.OrderedSet( self.sharedLibraries ),
+			"frameworks": _utils.OrderedSet( self.frameworks ),
 			"includeDirs": list( self.includeDirs ),
 			"libraryDirs": list( self.libraryDirs ),
-			"frameworkDirs": set( self.frameworkDirs ),
-			"storyboardFiles": set( self.storyboardFiles ),
-			"interfaceFiles": set( self.interfaceFiles ),
-			"assetCatalogs": set( self.assetCatalogs ),
+			"frameworkDirs": _utils.OrderedSet( self.frameworkDirs ),
+			"storyboardFiles": _utils.OrderedSet( self.storyboardFiles ),
+			"interfaceFiles": _utils.OrderedSet( self.interfaceFiles ),
+			"assetCatalogs": _utils.OrderedSet( self.assetCatalogs ),
 			"optLevel": self.optLevel,
 			"debugLevel": self.debugLevel,
 			"defines": list( self.defines ),
@@ -1209,17 +1306,17 @@ class projectSettings( object ):
 			"scriptPath": self.scriptPath,
 			"scriptFile": self.scriptFile,
 			"mutex": threading.Lock( ),
-			"preBuildSteps" : set(self.preBuildSteps),
-			"postBuildSteps" : set(self.postBuildSteps),
-			"prePrepareBuildSteps" : set(self.prePrepareBuildSteps),
-			"postPrepareBuildSteps" : set(self.postPrepareBuildSteps),
-			"preLinkSteps" : set(self.preLinkSteps),
-			"preMakeSteps" : set(self.preMakeSteps),
-			"postMakeSteps" : set(self.postMakeSteps),
+			"preBuildSteps" : _utils.OrderedSet(self.preBuildSteps),
+			"postBuildSteps" : _utils.OrderedSet(self.postBuildSteps),
+			"prePrepareBuildSteps" : _utils.OrderedSet(self.prePrepareBuildSteps),
+			"postPrepareBuildSteps" : _utils.OrderedSet(self.postPrepareBuildSteps),
+			"preLinkSteps" : _utils.OrderedSet(self.preLinkSteps),
+			"preMakeSteps" : _utils.OrderedSet(self.preMakeSteps),
+			"postMakeSteps" : _utils.OrderedSet(self.postMakeSteps),
 			"parentGroup" : self.parentGroup,
 			"extraFiles": list(self.extraFiles),
 			"extraDirs": list(self.extraDirs),
-			"extraObjs": set(self.extraObjs),
+			"extraObjs": _utils.OrderedSet(self.extraObjs),
 			"linkMode" : self.linkMode,
 			"linkModeSet" : self.linkModeSet,
 			"splitChunks" : dict(self.splitChunks),
@@ -1262,23 +1359,24 @@ class projectSettings( object ):
 			"excludeDirsTemp" : list(self.excludeDirsTemp),
 			"excludeFilesTemp" : list(self.excludeFilesTemp),
 			"frameworkDirsTemp" : list(self.frameworkDirsTemp),
-			"cExtensions" : set(self.cExtensions),
-			"cppExtensions" : set(self.cppExtensions),
-			"asmExtensions" : set(self.asmExtensions),
-			"cHeaderExtensions" : set(self.cHeaderExtensions),
-			"cppHeaderExtensions" : set(self.cppHeaderExtensions),
-			"ambiguousHeaderExtensions" : set(self.ambiguousHeaderExtensions),
+			"cExtensions" : _utils.OrderedSet(self.cExtensions),
+			"cppExtensions" : _utils.OrderedSet(self.cppExtensions),
+			"asmExtensions" : _utils.OrderedSet(self.asmExtensions),
+			"cHeaderExtensions" : _utils.OrderedSet(self.cHeaderExtensions),
+			"cppHeaderExtensions" : _utils.OrderedSet(self.cppHeaderExtensions),
+			"ambiguousHeaderExtensions" : _utils.OrderedSet(self.ambiguousHeaderExtensions),
 			"chunkMutexes" : {},
-			"chunkExcludes" : set(self.chunkExcludes),
+			"chunkExcludes" : _utils.OrderedSet(self.chunkExcludes),
 			"times" : self.times,
 			"summedTimes" : self.summedTimes,
-			"supportedArchitectures" : set(self.supportedArchitectures),
-			"supportedToolchains" : set(self.supportedToolchains),
+			"supportedArchitectures" : _utils.OrderedSet(self.supportedArchitectures),
+			"supportedToolchains" : _utils.OrderedSet(self.supportedToolchains),
 			"linkCommand" : self.linkCommand,
 			"compileCommands" : dict(self.compileCommands),
 			"userData" : self.userData.copy(),
 			"plistFile" : copy.deepcopy( self.plistFile ) if isinstance( self.plistFile, plugin_plist_generator.PListGenerator ) else self.plistFile,
-			"plugins" : set(self.plugins),
+			"plugins" : _utils.OrderedSet(self.plugins),
+			"autoDiscoverSourceFiles" : self.autoDiscoverSourceFiles,
 		}
 
 		for name in self.targets:
@@ -1288,7 +1386,7 @@ class projectSettings( object ):
 			ret.archFuncs.update( { arch : list( self.archFuncs[arch] ) } )
 
 		for srcFile in self.chunkMutexes:
-			ret.chunkMutexes.update( { srcFile : set( self.chunkMutexes[srcFile] ) } )
+			ret.chunkMutexes.update( { srcFile : _utils.OrderedSet( self.chunkMutexes[srcFile] ) } )
 
 		for file in self.fileOverrides:
 			ret.fileOverrides.update( { file : list( self.fileOverrides[file] ) } )
@@ -1300,8 +1398,8 @@ class projectSettings( object ):
 			val = self._intermediateScopeSettings[key]
 			if isinstance(val, list):
 				ret._intermediateScopeSettings[key] = list(val)
-			elif isinstance(val, set):
-				ret._intermediateScopeSettings[key] = set(val)
+			elif isinstance(val, _utils.OrderedSet):
+				ret._intermediateScopeSettings[key] = _utils.OrderedSet(val)
 			elif isinstance(val, dict):
 				ret._intermediateScopeSettings[key] = dict(val)
 			else:
@@ -1311,8 +1409,8 @@ class projectSettings( object ):
 			val = self._finalScopeSettings[key]
 			if isinstance(val, list):
 				ret._finalScopeSettings[key] = list(val)
-			elif isinstance(val, set):
-				ret._finalScopeSettings[key] = set(val)
+			elif isinstance(val, _utils.OrderedSet):
+				ret._finalScopeSettings[key] = _utils.OrderedSet(val)
 			elif isinstance(val, dict):
 				ret._finalScopeSettings[key] = dict(val)
 			else:
@@ -1328,15 +1426,9 @@ class projectSettings( object ):
 		ignore files of the relevant types.
 		"""
 
-		excludeFiles = set( )
-		excludeDirs = set( )
+		excludeFiles = set( self.excludeFiles )
+		excludeDirs = set( self.excludeDirs )
 		ambiguousHeaders = set()
-
-		for exclude in self.excludeFiles:
-			excludeFiles |= set( glob.glob( exclude ) )
-
-		for exclude in self.excludeDirs:
-			excludeDirs |= set( glob.glob( exclude ) )
 
 		for sourceDir in [ '.' ] + self.extraDirs:
 			for root, dirnames, filenames in os.walk( sourceDir ):
@@ -1356,16 +1448,15 @@ class projectSettings( object ):
 						break
 				if bFound:
 					if not absroot.startswith( self.csbuildDir ):
-						log.LOG_INFO( "Skipping dir {0}".format( root ) )
+						log.LOG_INFO( "Skipping directory {0}".format( root ) )
 					continue
 				log.LOG_INFO( "Looking in directory {0}".format( root ) )
-				if sources is not None:
+				if sources is not None and not ( sourceDir == "." and not self.autoDiscoverSourceFiles ):
 					for extension in self.cppExtensions:
 						for filename in fnmatch.filter( filenames, '*'+extension ):
 							path = os.path.join( absroot, filename )
 							if path not in excludeFiles:
 								sources.append( os.path.abspath( path ) )
-								self.hasCppFiles = True
 					for extension in self.cExtensions:
 						for filename in fnmatch.filter( filenames, '*'+extension ):
 							path = os.path.join( absroot, filename )
@@ -1380,7 +1471,6 @@ class projectSettings( object ):
 							path = os.path.join( absroot, filename )
 							if path not in excludeFiles:
 								headers.append( os.path.abspath( path ) )
-								self.hasCppFiles = True
 				if cHeaders is not None:
 					for extension in self.cHeaderExtensions:
 						for filename in fnmatch.filter( filenames, '*'+extension ):
@@ -1736,10 +1826,10 @@ class projectSettings( object ):
 			libraries_ok = True
 			for library in libraries:
 				bFound = False
+				log.LOG_INFO(str(self.reconciledLinkDepends))
 				for depend in self.reconciledLinkDepends:
-					if _shared_globals.projects[depend].outputName.startswith(library) or \
-							_shared_globals.projects[depend].outputName.startswith(
-									"lib{}.".format( library ) ):
+					splitname = os.path.splitext(_shared_globals.projects[depend].outputName)[0]
+					if splitname == library or splitname == "lib{}".format( library ):
 						bFound = True
 						break
 				if bFound:
@@ -1779,7 +1869,7 @@ class projectSettings( object ):
 
 		#TODO: Remove this once the source file extension management has been reworked.
 		# Objective-C/C++ files should not be chunked since they won't play nice with C++.
-		if extension == ".m" or extension == ".mm":
+		if newFileExtension == ".m" or newFileExtension == ".mm":
 			return False
 
 		if(

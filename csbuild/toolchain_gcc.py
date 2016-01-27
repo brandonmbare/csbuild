@@ -28,10 +28,12 @@ import subprocess
 import re
 import sys
 import platform
+
+import csbuild
 from . import _shared_globals
 from . import toolchain
-import csbuild
 from . import log
+from . import _utils
 from .scrapers import ELF
 
 class gccBase( object ):
@@ -228,7 +230,7 @@ class GccCompiler( gccBase, toolchain.compilerBase ):
 		toolchain.compilerBase.__init__( self, shared )
 		gccBase.__init__( self )
 
-		self.warnFlags = set()
+		self.warnFlags = _utils.OrderedSet()
 		self.cppStandard = ""
 		self.cStandard = ""
 
@@ -239,7 +241,7 @@ class GccCompiler( gccBase, toolchain.compilerBase ):
 	def copy( self, shared ):
 		ret = toolchain.compilerBase.copy( self, shared )
 		gccBase._copyTo( self, ret )
-		ret.warnFlags = set( self.warnFlags )
+		ret.warnFlags = _utils.OrderedSet( self.warnFlags )
 		ret.cppStandard = self.cppStandard
 		ret.cStandard = self.cStandard
 		return ret
@@ -277,7 +279,7 @@ class GccCompiler( gccBase, toolchain.compilerBase ):
 		"""Returns a string containing all of the passed include directories, formatted to be passed to gcc/g++."""
 		ret = ""
 		for inc in includeDirs:
-			ret += "-I{} ".format( os.path.abspath( inc ) )
+			ret += '-I"{}" '.format( os.path.abspath( inc ) )
 		ret += "-I/usr/include -I/usr/local/include "
 		return ret
 
@@ -296,7 +298,7 @@ class GccCompiler( gccBase, toolchain.compilerBase ):
 	def _getBaseCommand( self, compiler, project, isCpp ):
 		exitcodes = ""
 		if "clang" not in compiler:
-			exitcodes = "-pass-exit-codes"
+			exitcodes = "-pass-exit-codes "
 		else:
 			self.shared.isClang = True
 
@@ -323,17 +325,24 @@ class GccCompiler( gccBase, toolchain.compilerBase ):
 			picFlag,
 			"-pg " if project.profile else "",
 			"-std={} ".format( standard ) if standard != "" else "",
-			self._getStandardLibraryArg( project ),
+			self._getStandardLibraryArg( project ) if isCpp else "",
 			self._getVisibilityArgs( project ),
 			" ".join( project.cxxCompilerFlags ) if isCpp else " ".join( project.ccCompilerFlags )
 		)
 
 
+	def _setupForProject( self, project ):
+		# Does nothing by default.
+		pass
+
+
 	def GetBaseCxxCommand( self, project ):
+		self._setupForProject( project )
 		return self._getBaseCommand( project.cxx, project, True )
 
 
 	def GetBaseCcCommand( self, project ):
+		self._setupForProject( project )
 		return self._getBaseCommand( project.cc, project, False )
 
 
@@ -348,10 +357,12 @@ class GccCompiler( gccBase, toolchain.compilerBase ):
 
 
 	def GetBaseCxxPrecompileCommand( self, project ):
+		self._setupForProject( project )
 		return self.GetBaseCxxCommand( project )
 
 
 	def GetBaseCcPrecompileCommand( self, project ):
+		self._setupForProject( project )
 		return self.GetBaseCcCommand( project )
 
 
@@ -393,12 +404,12 @@ class GccCompiler( gccBase, toolchain.compilerBase ):
 		:param args: List of flags
 		:type args: an arbitrary number of strings
 		"""
-		self.warnFlags |= set( args )
+		self.warnFlags |= _utils.OrderedSet( args )
 
 
 	def ClearWarnFlags( self ):
 		"""Clears the list of warning flags"""
-		self.warnFlags = set()
+		self.warnFlags = _utils.OrderedSet()
 
 
 	def SetCppStandard( self, s ):
@@ -422,11 +433,11 @@ class GccCompiler( gccBase, toolchain.compilerBase ):
 
 
 	def SupportsObjectScraping(self):
-		return True
+		return False
 
 
 	def GetObjectScraper(self):
-		return ELF.ELFScraper()
+		return None #ELF.ELFScraper()
 
 
 class GccLinker( gccBase, toolchain.linkerBase ):
@@ -499,7 +510,7 @@ class GccLinker( gccBase, toolchain.linkerBase ):
 		"""Returns a string containing all of the passed libraries, formatted to be passed to gcc/g++."""
 		ret = ""
 		for lib in libraries:
-			ret += "-static {}".format( self._getLibraryArg(lib) )
+			ret += " {}".format( self._getLibraryArg(lib) )
 		return ret
 
 
@@ -507,7 +518,7 @@ class GccLinker( gccBase, toolchain.linkerBase ):
 		"""Returns a string containing all of the passed libraries, formatted to be passed to gcc/g++."""
 		ret = ""
 		for lib in libraries:
-			ret += "-shared {}".format( self._getLibraryArg(lib) )
+			ret += " {}".format( self._getLibraryArg(lib) )
 		return ret
 
 
@@ -515,13 +526,13 @@ class GccLinker( gccBase, toolchain.linkerBase ):
 		"""Returns a string containing all of the passed library dirs, formatted to be passed to gcc/g++."""
 		ret = ""
 		for lib in libDirs:
-			ret += "-L{} ".format( lib )
+			ret += '-L{} '.format( lib )
 		ret += "-L/usr/lib -L/usr/local/lib "
 		if self._include_lib64:
 			ret += "-L/usr/lib64 -L/usr/local/lib64 "
 		if forLinker:
 			for lib in libDirs:
-				ret += "-Wl,-R{} ".format( os.path.abspath( lib ) )
+				ret += '-Wl,-R"{}" '.format( os.path.abspath( lib ) )
 			ret += "-Wl,-R/usr/lib -Wl,-R/usr/local/lib "
 			if self._include_lib64:
 				ret += "-Wl,-R/usr/lib64 -Wl,-R/usr/local/lib64 "
@@ -546,7 +557,11 @@ class GccLinker( gccBase, toolchain.linkerBase ):
 		self._setupForProject( project )
 		linkFile = os.path.join(self._project_settings.csbuildDir, "{}.cmd".format(self._project_settings.name))
 
-		data = " ".join( objList )
+		objListData = ""
+		for objFile in objList:
+			objListData += '"{}" '.format( objFile )
+
+		data = objListData
 		if sys.version_info >= (3, 0):
 			data = data.encode("utf-8")
 
@@ -560,7 +575,7 @@ class GccLinker( gccBase, toolchain.linkerBase ):
 		os.close(fd)
 
 		if project.type == csbuild.ProjectType.StaticLibrary:
-			return "\"{}\" rcs {} {}".format( self._ar, outputFile, " ".join( objList ) )
+			return "\"{}\" rcs \"{}\" {}".format( self._ar, outputFile, objListData )
 		else:
 			if project.hasCppFiles:
 				cmd = project.cxx
@@ -569,14 +584,14 @@ class GccLinker( gccBase, toolchain.linkerBase ):
 
 			archArg = self._getArchFlag( project )
 
-			return "\"{}\" {}{}{}{}-o{} {} {} {} {}{}{} {} {}-g{} -O{} {} {} ".format(
+			return '"{}" {}{}{}{}-o"{}" {} {} {} {}{}{} {} {}-g{} -O{} {} {} '.format(
 				cmd,
 				archArg,
 				self._getObjcAbiVersionArg(),
-				self._getStandardLibraryArg( project ),
+				self._getStandardLibraryArg( project ) if project.hasCppFiles else "",
 				"-pg " if project.profile else "",
 				outputFile,
-				"@{}".format(linkFile),
+				'@"{}"'.format(linkFile),
 				"-static-libgcc -static-libstdc++ " if project.useStaticRuntime else "",
 				"{}".format(self._getStartGroupFlags()) if not self.strictOrdering else "",
 				self._getLibraries( project.libraries ),
@@ -600,10 +615,10 @@ class GccLinker( gccBase, toolchain.linkerBase ):
 				print("{} -o /dev/null --verbose {} {} -l{}".format(
 					self._ld,
 					self._getLibraryDirs( libraryDirs, False ),
-					"-static" if force_static else "-shared" if force_shared else "",
+					"-Bstatic" if force_static else "-Bdynamic" if force_shared else "",
 					library ))
 			cmd = [self._ld, "-o", "/dev/null", "--verbose",
-				   "-static" if force_static else "-shared" if force_shared else "", "-l{}".format( library )]
+				   "-Bstatic" if force_static else "-Bdynamic" if force_shared else "", "-l{}".format( library )]
 			cmd += shlex.split( self._getLibraryDirs( libraryDirs, False ), posix=(platform.system() != "Windows") )
 			out = subprocess.check_output( cmd, stderr = subprocess.STDOUT )
 		except subprocess.CalledProcessError as e:
@@ -630,10 +645,10 @@ class GccLinker( gccBase, toolchain.linkerBase ):
 						print("{} -o /dev/null --verbose {} {} -l:{}".format(
 							self._ld,
 							self._getLibraryDirs( libraryDirs, False ),
-							"-static" if force_static else "-shared" if force_shared else "",
+							"-Bstatic" if force_static else "-Bdynamic" if force_shared else "",
 							library ))
 					cmd = [self._ld, "-o", "/dev/null", "--verbose",
-						   "-static" if force_static else "-shared" if force_shared else "", "-l{}".format( library )]
+						   "-Bstatic" if force_static else "-Bdynamic" if force_shared else "", "-l{}".format( library )]
 					cmd += shlex.split( self._getLibraryDirs( libraryDirs, False ), posix=(platform.system() != "Windows") )
 					out = subprocess.check_output( cmd, stderr = subprocess.STDOUT )
 				except subprocess.CalledProcessError as e:
