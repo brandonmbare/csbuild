@@ -451,7 +451,7 @@ class projectSettings( object ):
 		self.defines = []
 		self.undefines = []
 		self.useHiddenVisibility = False
-		self.stdLib = "libstdc++"
+		self.stdLib = ""
 		self.cxx = ""
 		self.cc = ""
 		self.hasCppFiles = False

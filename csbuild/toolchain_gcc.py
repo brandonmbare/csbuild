@@ -56,7 +56,7 @@ class gccBase( object ):
 
 
 	def _getStandardLibraryArg( self, project ):
-		return "-stdlib={} ".format( project.stdLib )
+		return "-stdlib={} ".format( project.stdLib ) if project.stdLib else ""
 
 
 	def _getArchFlag( self, project ):
@@ -247,8 +247,11 @@ class GccCompiler( gccBase, toolchain.compilerBase ):
 		return ret
 
 
-	def _getObjcAbiVersionArg( self ):
-		return "-fobjc-abi-version={} ".format( self.shared._objcAbiVersion ) if self.shared._objcAbiVersion else ""
+	def _getObjcAbiVersionArg( self, filename ):
+		if self.shared._objcAbiVersion and ( filename.endswith(".m") or filename.endswith(".mm") ):
+			return "-fobjc-abi-version={} ".format( self.shared._objcAbiVersion )
+		else:
+			return ""
 
 
 	def _getVisibilityArgs( self, project ):
@@ -314,11 +317,10 @@ class GccCompiler( gccBase, toolchain.compilerBase ):
 
 		archArg = self._getArchFlag( project )
 
-		return "\"{}\" {}{}{} -Winvalid-pch -c {}{} -O{} {}{}{}{}{} {} ".format(
+		return "\"{}\" {}{} -Winvalid-pch -c {}{} -O{} {}{}{}{}{} {} ".format(
 			compiler,
 			archArg,
 			exitcodes,
-			self._getObjcAbiVersionArg(),
 			self._getDefines( project.defines, project.undefines ),
 			"-g" if project.debugLevel != csbuild.DebugLevel.Disabled else "",
 			self._getOptFlag(project.optLevel),
@@ -350,10 +352,15 @@ class GccCompiler( gccBase, toolchain.compilerBase ):
 		inc = ""
 		if forceIncludeFile:
 			inc = "-include {0}".format( forceIncludeFile )
-		return "{} {}{}{} -o\"{}\" \"{}\"".format( baseCmd,
+		return "{} {}{}{}{} -o\"{}\" \"{}\"".format(
+			baseCmd,
 			self._getWarnings( self.warnFlags, project.noWarnings ),
-			self._getIncludeDirs( project.includeDirs ), inc, outObj,
-			inFile )
+			self._getIncludeDirs( project.includeDirs ),
+			self._getObjcAbiVersionArg( inFile ),
+			inc,
+			outObj,
+			inFile
+		)
 
 
 	def GetBaseCxxPrecompileCommand( self, project ):
