@@ -242,6 +242,7 @@ class project_generator_visual_studio( project_generator.project_generator ):
 		self._fullIncludePathList = set() # Should be a set starting out so duplicates are eliminated.
 		self._projectUuidList = set()
 		self._orderedProjectList = []
+		self._regenBatchFilePath = "{}".format( os.path.join( self.rootpath, "regenerate_solution.bat" ) )
 
 		log.LOG_BUILD( "Generating solution for Visual Studio {}.".format( FILE_FORMAT_VERSION_INFO[self._msvcVersion][0] ) )
 
@@ -279,6 +280,7 @@ class project_generator_visual_studio( project_generator.project_generator ):
 
 	def WriteProjectFiles( self ):
 		self._collectProjects()
+		self._writeRegenerateBatchFile()
 		self._writeSolutionFile()
 		self._writeVcxprojFiles()
 		self._writeVcxprojFiltersFiles()
@@ -445,6 +447,43 @@ class project_generator_visual_studio( project_generator.project_generator ):
 			self._fullIncludePathList.update( projectData.fullIncludePathList )
 
 		self._fullIncludePathList = sorted( self._fullIncludePathList )
+
+
+	def _writeRegenerateBatchFile( self ):
+
+		def writeLineToFile( fileHandle, stringToWrite ):
+			fileHandle.write( "{}\n".format( stringToWrite ) )
+
+		tempRootPath = tempfile.mkdtemp()
+		tempBatchFilePath = "{}".format( os.path.join( tempRootPath, "regenerate_solution.bat" ) )
+
+		pythonExePath = os.path.normcase( sys.executable )
+		mainMakefile = self._constructRelPath( os.path.join( os.getcwd(), csbuild.mainFile ), self.rootpath )
+		cmdLine = _utils.GetCommandLineString()
+
+		# Write the batch file to a temporary location.
+		with open( tempBatchFilePath, "w" ) as fileHandle:
+			writeLineToFile( fileHandle, "@echo off" )
+			writeLineToFile( fileHandle, "SETLOCAL" )
+			writeLineToFile( fileHandle, "PUSHD %~dp0" )
+			writeLineToFile( fileHandle, '"{}" "{}" {}'.format( pythonExePath, mainMakefile, cmdLine ) )
+			writeLineToFile( fileHandle, "POPD" )
+
+		# Load the temporary file and attempt to save it to its final location.
+		with open( tempBatchFilePath, "rb" ) as fileHandle:
+			fileData = fileHandle.read()
+			cachedFile = CachedFileData( self._regenBatchFilePath, fileData, False )
+			cachedFile.SaveFile()
+
+		# Remove the temporary file.
+		if os.access( tempBatchFilePath, os.F_OK ):
+			os.remove( tempBatchFilePath )
+			try:
+				# Attempt to remove the temp directory.  This will only fail if the directory already existed with files in it.
+				# In that case, just catch the exception and move on.
+				os.rmdir( tempRootPath )
+			except:
+				pass
 
 
 	def _writeSolutionFile( self ):
@@ -686,9 +725,7 @@ class project_generator_visual_studio( project_generator.project_generator ):
 								rebuildCommandNode.text = '"{}" "{}" --rebuild --target={} --toolchain={} --architecture={}{} {}'.format( pythonExePath, mainMakefile, properConfigName, toolchainName, archName, projectArg, self._extraBuildArgs )
 								includePathNode.text = ";".join( self._fullIncludePathList )
 							else:
-								argList = _utils.GetCommandLineArgumentList()
-
-								buildCommandNode.text = '"{}" "{}" {}'.format( pythonExePath, mainMakefile, " ".join( argList ) )
+								buildCommandNode.text = '"{}"'.format( self._regenBatchFilePath )
 								rebuildCommandNode.text = buildCommandNode.text
 								cleanCommandNode.text = buildCommandNode.text
 

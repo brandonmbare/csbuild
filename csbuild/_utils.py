@@ -1112,18 +1112,5 @@ def GetToolchainEnvironment( tool ):
 	return envCopy
 
 
-def GetCommandLineArgumentList():
-	argList = []
-
-	# The Windows command line likes to remove any quotes around arguments, so we need to re-add them.
-	for arg in sys.argv[1:]:
-		if "=" in arg:
-			argPair = arg.split( "=", 1 )
-			if " " in argPair[1]:
-				argPair[1] = '"{}"'.format( argPair[1] )
-				arg = "=".join( argPair )
-		elif " " in arg:
-			arg = '"{}"'.format( arg )
-		argList.append( arg )
-
-	return argList
+def GetCommandLineString():
+	return subprocess.list2cmdline(sys.argv[1:])
