@@ -2525,7 +2525,6 @@ class MainWindow( QMainWindow ):
 
 		self.m_filesCompletedLabel.setText("0/0 files compiled")
 		self.m_timeLeftLabel.setText("Est. Time Left: 0:00")
-		self._setOutputButtonText(True)
 		self._setOutputButtonTextWithUpArrows()
 
 	def _setOutputButtonTextWithUpArrows(self):
