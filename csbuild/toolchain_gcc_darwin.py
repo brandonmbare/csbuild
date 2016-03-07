@@ -151,7 +151,7 @@ class GccCompilerDarwin( GccDarwinBase, toolchain_gcc.GccCompiler ):
 
 
 	def _getIncludeDirs( self, includeDirs ):
-		"""Returns a string containing all of the passed include directories, formatted to be passed to gcc/g++."""
+		"""Returns a string containing all of the passed include directories, formatted to be passed to clang."""
 		ret = ""
 		for inc in includeDirs:
 			ret += "-I{} ".format( os.path.abspath( inc ) )
@@ -161,12 +161,21 @@ class GccCompilerDarwin( GccDarwinBase, toolchain_gcc.GccCompiler ):
 		return ret
 
 
+	def _getFrameworkDirs( self, frameworkDirs ):
+		"""Returns a string containing all of the passed framework directories, formatted to be passed to clang."""
+		ret = ""
+		for path in frameworkDirs:
+			ret += "-F{}".format( os.path.abspath( path ) )
+		return ret
+
+
 	def _getBaseCommand( self, compiler, project, isCpp ):
 		ret = toolchain_gcc.GccCompiler._getBaseCommand( self, compiler, project, isCpp )
-		ret = "{}{}{} -fobjc-arc ".format(
+		ret = "{}{}{} -fobjc-arc {} ".format(
 			ret,
 			self._getSysRoot(),
 			self._getNoCommonFlag( project ),
+			self._getFrameworkDirs( project.frameworkDirs ),
 		)
 		return ret
 
