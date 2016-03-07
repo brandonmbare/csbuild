@@ -101,17 +101,17 @@ class OrderedSet(object):
 		self.map.update( [ ( x, None ) for x in iterable ] )
 
 	def intersection_update(self, iterable):
-		for key in self.map.keys():
+		for key in list(self.map.keys()):
 			if key not in iterable:
 				del self.map[key]
 
 	def difference_update(self, iterable):
-		for key in iterable:
+		for key in list(iterable):
 			if key in self.map:
 				del self.map[key]
 
 	def symmetric_difference_update(self, iterable):
-		for key in iterable:
+		for key in list(iterable):
 			if key in self.map:
 				del self.map[key]
 			else:
