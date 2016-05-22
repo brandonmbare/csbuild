@@ -1486,10 +1486,10 @@ class MainWindow( QMainWindow ):
 			self.m_errorTree.setColumnWidth( 2, 200 )
 			self.m_errorTree.setColumnWidth( 3, 50 )
 			self.m_errorTree.setColumnWidth( 4, 50 )
-			self.m_pushButton.setText(u"▾ Output ▾")
+			self._setOutputButtonTextWithDownArrows()
 		else:
 			self.m_splitter.setSizes( [ 1, 0 ] )
-			self.m_pushButton.setText(u"▴ Output ▴")
+			self._setOutputButtonTextWithUpArrows()
 
 	def OpenFileForEdit(self, item, column):
 		file = str(item.toolTip(2))
@@ -1542,7 +1542,7 @@ class MainWindow( QMainWindow ):
 				self.m_ignoreButton = True
 				self.m_pushButton.setChecked(False)
 				self.m_ignoreButton = False
-			self.m_pushButton.setText(u"▴ Output ▴")
+			self._setOutputButtonTextWithUpArrows()
 		else:
 			if not self.m_pushButton.isChecked():
 				self.m_ignoreButton = True
@@ -1553,7 +1553,7 @@ class MainWindow( QMainWindow ):
 			self.m_errorTree.setColumnWidth( 2, 200 )
 			self.m_errorTree.setColumnWidth( 3, 50 )
 			self.m_errorTree.setColumnWidth( 4, 50 )
-			self.m_pushButton.setText(u"▾ Output ▾")
+			self._setOutputButtonTextWithDownArrows()
 
 
 	def SelectionChanged(self, current, previous):
@@ -2525,7 +2525,19 @@ class MainWindow( QMainWindow ):
 
 		self.m_filesCompletedLabel.setText("0/0 files compiled")
 		self.m_timeLeftLabel.setText("Est. Time Left: 0:00")
-		self.m_pushButton.setText(u"▴ Output ▴")
+		self._setOutputButtonTextWithUpArrows()
+
+	def _setOutputButtonTextWithUpArrows(self):
+		outputButtonText = "▴ Output ▴"
+		if sys.version_info < (3,0):
+			outputButtonText = outputButtonText.decode("utf-8")
+		self.m_pushButton.setText(outputButtonText)
+
+	def _setOutputButtonTextWithDownArrows(self):
+		outputButtonText = "▾ Output ▾"
+		if sys.version_info < (3,0):
+			outputButtonText = outputButtonText.decode("utf-8")
+		self.m_pushButton.setText(outputButtonText)
 
 	def onTick(self):
 		self.UpdateProjects()
