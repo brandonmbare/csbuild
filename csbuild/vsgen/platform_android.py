@@ -104,3 +104,8 @@ class PlatformTegraAndroid( PlatformBase ):
 
 			overrideApkPathNode.text = os.path.join( os.path.abspath( outputDir ), outputName )
 			debuggerFlavorNode.text = "AndroidDebugger"
+
+
+	def WriteExtraPropertyGroupBuildNodes( self, propertyGroupNode, vsConfigName, projectData ):
+		# Nothing extra to write for Tegra.
+		pass

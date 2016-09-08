@@ -118,6 +118,7 @@ from . import plugin
 
 try:
 	from .proprietary import toolchain_ps4
+	from .proprietary import toolchain_wiiu
 except:
 	pass
 
@@ -2476,6 +2477,7 @@ def _setupdefaults( ):
 	try:
 		# Attempt to register the PS4 toolchain.
 		RegisterToolchain( "ps4", toolchain_ps4.Ps4Compiler, toolchain_ps4.Ps4Linker )
+		RegisterToolchain( "wiiu", toolchain_wiiu.WiiUCompiler, toolchain_wiiu.WiiULinker )
 	except:
 		pass
 

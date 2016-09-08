@@ -118,6 +118,11 @@ class PlatformWindowsX86( PlatformBase ):
 		_writeUserDebugPropertyGroup( self.GetVisualStudioName(), parentXmlNode, vsConfigName, projectData )
 
 
+	def WriteExtraPropertyGroupBuildNodes( self, propertyGroupNode, project ):
+		# Nothing extra to write for Win32.
+		pass
+
+
 
 class PlatformWindowsX64( PlatformBase ):
 	def __init__( self ):
@@ -135,7 +140,7 @@ class PlatformWindowsX64( PlatformBase ):
 
 
 	def WriteTopLevelInfo( self, parentXmlNode ):
-		# Nothing to do for x64.
+		# Nothing to do for Win64.
 		pass
 
 
@@ -151,5 +156,10 @@ class PlatformWindowsX64( PlatformBase ):
 		_writeImportProperties( self.GetVisualStudioName(), parentXmlNode, vsConfigName, isNative )
 
 
-	def WriteUserDebugPropertyGroup(self, parentXmlNode, vsConfigName, projectData ):
+	def WriteUserDebugPropertyGroup( self, parentXmlNode, vsConfigName, projectData ):
 		_writeUserDebugPropertyGroup( self.GetVisualStudioName(), parentXmlNode, vsConfigName, projectData )
+
+
+	def WriteExtraPropertyGroupBuildNodes( self, propertyGroupNode, vsConfigName, projectData ):
+		# Nothing extra to write for Win64.
+		pass

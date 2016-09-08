@@ -20,6 +20,8 @@
 
 """Contains the interface for all vsgen platforms."""
 
+from abc import abstractmethod
+
 
 class PlatformBase( object ):
 	def __init__( self ):
@@ -215,6 +217,7 @@ class PlatformBase( object ):
 		return self._projectSettingsMap.get( mapKey, None )
 
 
+	@abstractmethod
 	def WriteTopLevelInfo( self, parentXmlNode ):
 		"""
 		Write any top-level information about this platform at the start of the project.
@@ -225,6 +228,7 @@ class PlatformBase( object ):
 		pass
 
 
+	@abstractmethod
 	def WriteProjectConfiguration( self, parentXmlNode, vsConfigName ):
 		"""
 		Write the project configuration nodes for this platform.
@@ -238,6 +242,7 @@ class PlatformBase( object ):
 		pass
 
 
+	@abstractmethod
 	def WritePropertyGroup( self, parentXmlNode, vsConfigName, vsPlatformToolsetName, isNative ):
 		"""
 		Write the project's property group nodes for this platform.
@@ -257,6 +262,7 @@ class PlatformBase( object ):
 		pass
 
 
+	@abstractmethod
 	def WriteImportProperties( self, parentXmlNode, vsConfigName, isNative ):
 		"""
 		Write any special import properties for this platform.
@@ -273,6 +279,7 @@ class PlatformBase( object ):
 		pass
 
 
+	@abstractmethod
 	def WriteUserDebugPropertyGroup( self, parentXmlNode, vsConfigName, projectData ):
 		"""
 		Write the property group nodes specifying the user debug settings.
@@ -284,6 +291,23 @@ class PlatformBase( object ):
 		:type vsConfigName: str
 
 		:param projectData: Project data.
-		:type projectData: class `csbuild.project_generator_visual_studio_v2.Project`
+		:type projectData: class`csbuild.project_generator_visual_studio_v2.Project`
+		"""
+		pass
+
+
+	@abstractmethod
+	def WriteExtraPropertyGroupBuildNodes( self, propertyGroupNode, vsConfigName, projectData ):
+		"""
+		Write extra property group nodes related to platform build properties.
+
+		:param propertyGroupNode: Parent property group XML node.
+		:type propertyGroupNode: class`xml.etree.ElementTree.SubElement`
+
+		:param vsConfigName: Visual Studio configuration name.
+		:type vsConfigName: str
+
+		:param projectData: Project data.
+		:type projectData: class`csbuild.project_generator_visual_studio_v2.Project`
 		"""
 		pass

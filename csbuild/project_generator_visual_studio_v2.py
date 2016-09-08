@@ -44,6 +44,11 @@ try:
 except:
 	pass
 
+try:
+	from .proprietary.vsgen.platform_wiiu import PlatformWiiU
+except:
+	pass
+
 # Dictionary of MSVC version numbers to tuples of items needed for the file format.
 #   Tuple[0] = Friendly version name for logging output.
 #   Tuple[1] = File format version (e.g., "Microsoft Visual Studio Solution File, Format Version XX").
@@ -68,6 +73,11 @@ class PlatformManager:
 
 		try:
 			self._makePlatformAvailable( PlatformPs4 )
+		except:
+			pass
+
+		try:
+			self._makePlatformAvailable( PlatformWiiU )
 		except:
 			pass
 
@@ -221,6 +231,11 @@ class project_generator_visual_studio( project_generator.project_generator ):
 				platformList.add( PlatformPs4.GetVisualStudioName() )
 			except:
 				pass
+		if "wiiu" in _shared_globals.selectedToolchains:
+			try:
+				platformList.add( PlatformWiiU.GetVisualStudioName() )
+			except:
+				pass
 
 		# If no valid platforms were found, add a default.
 		if not platformList:
@@ -313,7 +328,7 @@ class project_generator_visual_studio( project_generator.project_generator ):
 							toolchainArchName = "{}-{}".format( toolchainName, archName )
 							generatorPlatform = platformManager.GetPlatformFromToolchainName( toolchainArchName )
 
-							# Only configuration-specific project data if the current toolchain is associated with a registered platform.
+							# Only add configuration-specific project data if the current toolchain is associated with a registered platform.
 							if generatorPlatform:
 								generatorPlatform.AddOutputName( configName, projectName, settings.outputName )
 								generatorPlatform.AddOutputDirectory( configName, projectName, settings.outputDir )
@@ -758,6 +773,8 @@ class project_generator_visual_studio( project_generator.project_generator ):
 								# Gotta put this stuff somewhere for the Build All project.
 								outDirNode.text = projectData.name + "_log"
 								intDirNode.text = "$(OutDir)"
+
+						generatorPlatform.WriteExtraPropertyGroupBuildNodes( propertyGroupNode, configName, projectData )
 
 				comment = MakeComment( rootNode, "Final target import; must always be last!" )
 

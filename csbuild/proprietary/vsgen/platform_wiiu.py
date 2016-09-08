@@ -18,35 +18,36 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-"""Contains the vsgen platform for PS4."""
+"""Contains the vsgen platform for WiiU."""
 
 import os
 import csbuild
 import xml.etree.ElementTree as ET
 
+from ...proprietary import toolchain_wiiu
 from ...vsgen.platform_base import PlatformBase
 
 
 _addNode = ET.SubElement
 
 
-class PlatformPs4( PlatformBase ):
+class PlatformWiiU( PlatformBase ):
 	def __init__( self ):
 		PlatformBase.__init__( self )
 
 
 	@staticmethod
 	def GetToolchainName():
-		return "ps4-x64"
+		return "wiiu-ppc"
 
 
 	@staticmethod
 	def GetVisualStudioName():
-		return "ORBIS"
+		return "Cafe"
 
 
 	def WriteTopLevelInfo( self, parentXmlNode ):
-		# Nothing special to do for PS4.
+		# Nothing special to do for WiiU.
 		pass
 
 
@@ -69,6 +70,14 @@ class PlatformPs4( PlatformBase ):
 		propertyGroupNode = _addNode( parentXmlNode, "PropertyGroup" )
 		propertyGroupNode.set( "Label", "Configuration")
 		propertyGroupNode.set( "Condition", "'$(Configuration)|$(Platform)'=='{}|{}'".format( vsConfigName, platformName ) )
+
+		wiiuGlobalData = toolchain_wiiu.GlobalData.Instance
+
+		ghsRootNode = _addNode( propertyGroupNode, "GHS_ROOT" )
+		cafeRootNode = _addNode( propertyGroupNode, "CAFE_ROOT" )
+
+		ghsRootNode.text = wiiuGlobalData.ghsRoot
+		cafeRootNode.text = wiiuGlobalData.cafeRoot
 
 		if isNative:
 			#TODO: Add properties for native projects.
@@ -97,7 +106,17 @@ class PlatformPs4( PlatformBase ):
 		propertyGroupNode = _addNode( parentXmlNode, "PropertyGroup" )
 		propertyGroupNode.set( "Condition", "'$(Configuration)|$(Platform)'=='{}|{}'".format( vsConfigName, platformName ) )
 
+		useDebugOsNode = _addNode( propertyGroupNode, "CafeDebuggerUsedDebugOS" )
+		workingDirNode = _addNode( propertyGroupNode, "CafeDebuggerWorkingDirectory" )
+		debuggerFlavorNode = _addNode( propertyGroupNode, "DebuggerFlavor" )
+
+		projectSettings = self.GetProjectSettings( vsConfigName, projectData.name )
+
+		useDebugOsNode.text = "true" if projectSettings.optLevel == csbuild.OptimizationLevel.Disabled else "false"
+		workingDirNode.text = "$(OutDir)"
+		debuggerFlavorNode.text = "CafeDebugger"
+
 
 	def WriteExtraPropertyGroupBuildNodes( self, propertyGroupNode, vsConfigName, projectData ):
-		# Nothing extra to write for PS4.
+		#TODO: Add nodes for disc emulation paths.
 		pass
