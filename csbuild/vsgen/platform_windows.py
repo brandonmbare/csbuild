@@ -118,7 +118,7 @@ class PlatformWindowsX86( PlatformBase ):
 		_writeUserDebugPropertyGroup( self.GetVisualStudioName(), parentXmlNode, vsConfigName, projectData )
 
 
-	def WriteExtraPropertyGroupBuildNodes( self, propertyGroupNode, project ):
+	def WriteExtraPropertyGroupBuildNodes( self, propertyGroupNode, project, projectData ):
 		# Nothing extra to write for Win32.
 		pass
 
