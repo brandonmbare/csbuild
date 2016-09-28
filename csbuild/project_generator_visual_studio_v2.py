@@ -379,7 +379,7 @@ class project_generator_visual_studio( project_generator.project_generator ):
 
 			# Next, iterate through each subgroup and handle each one recursively.
 			for subGroupName, subGroup in projectGroup.subgroups.items():
-				groupPath = os.path.join( projectOutputPath, subGroupName )
+				groupPath = os.path.join( projectOutputPath, subGroupName.replace(" ", "_") )
 
 				groupPathFinal = os.path.join( self.rootpath, groupPath )
 
@@ -760,7 +760,7 @@ class project_generator_visual_studio( project_generator.project_generator ):
 								outputNode = AddNode( propertyGroupNode, "NMakeOutput" )
 
 								if not outDir:
-									outDir = "./out"
+									outDir = "out"
 								if not intDir:
 									intDir = "int"
 								if not outputName:
@@ -771,7 +771,7 @@ class project_generator_visual_studio( project_generator.project_generator ):
 								outputNode.text = self._constructRelPath( os.path.join( outDir, outputName ), projectData.outputPath )
 							else:
 								# Gotta put this stuff somewhere for the Build All project.
-								outDirNode.text = projectData.name + "_log"
+								outDirNode.text = os.path.join(".project_logs", projectData.name)
 								intDirNode.text = "$(OutDir)"
 
 						generatorPlatform.WriteExtraPropertyGroupBuildNodes( propertyGroupNode, configName, projectData )
