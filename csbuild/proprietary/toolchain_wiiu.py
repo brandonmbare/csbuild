@@ -39,11 +39,6 @@ class GlobalData(object):
 		self.ghsRoot = os.environ.get("GHS_ROOT", "")
 		self.cafeRoot = os.environ.get("CAFE_ROOT", "")
 
-		missingEnvVar = 'Environment variable "{}" is not set!'
-
-		assert self.ghsRoot, missingEnvVar.format("GHS_ROOT")
-		assert self.cafeRoot, missingEnvVar.format("CAFE_ROOT")
-
 
 class WiiUBase(object):
 	def __init__(self):
@@ -82,6 +77,13 @@ class WiiUCompiler(WiiUBase, toolchain.compilerBase):
 		ret.cxxCompilerPath = self.cxxCompilerPath
 
 		return ret
+
+	
+	def _setupForProject(self, project):
+		missingEnvVar = 'Environment variable "{}" is not set!'
+
+		assert self._globalData.ghsRoot, missingEnvVar.format("GHS_ROOT")
+		assert self._globalData.cafeRoot, missingEnvVar.format("CAFE_ROOT")
 
 
 	def _getIncludePathList(self, project):
