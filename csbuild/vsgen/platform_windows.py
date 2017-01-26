@@ -40,7 +40,7 @@ def _writeProjectConfiguration( platformName, parentXmlNode, vsConfigName ):
 	platformNode.text = platformName
 
 
-def _writePropertyGroup( platformName, parentXmlNode, vsConfigName, vsPlatformToolsetName, isNative ):
+def _writeConfigPropertyGroup( platformName, parentXmlNode, vsConfigName, vsPlatformToolsetName, isNative ):
 	propertyGroupNode = _addNode( parentXmlNode, "PropertyGroup" )
 	propertyGroupNode.set( "Label", "Configuration")
 	propertyGroupNode.set( "Condition", "'$(Configuration)|$(Platform)'=='{}|{}'".format( vsConfigName, platformName ) )
@@ -71,15 +71,15 @@ def _writeImportProperties( platformName, parentXmlNode, vsConfigName, isNative 
 
 
 def _writeUserDebugPropertyGroup( platformName, parentXmlNode, vsConfigName, projectData ):
-		propertyGroupNode = _addNode( parentXmlNode, "PropertyGroup" )
-		workingDirNode = _addNode( propertyGroupNode, "LocalDebuggerWorkingDirectory" )
-		debuggerTypeNode = _addNode( propertyGroupNode, "LocalDebuggerDebuggerType" )
-		debuggerFlavorNode = _addNode( propertyGroupNode, "DebuggerFlavor" )
+	propertyGroupNode = _addNode( parentXmlNode, "PropertyGroup" )
+	workingDirNode = _addNode( propertyGroupNode, "LocalDebuggerWorkingDirectory" )
+	debuggerTypeNode = _addNode( propertyGroupNode, "LocalDebuggerDebuggerType" )
+	debuggerFlavorNode = _addNode( propertyGroupNode, "DebuggerFlavor" )
 
-		propertyGroupNode.set( "Condition", "'$(Configuration)|$(Platform)'=='{}|{}'".format( vsConfigName, platformName ) )
-		workingDirNode.text = "$(OutDir)"
-		debuggerTypeNode.text = "NativeOnly"
-		debuggerFlavorNode.text = "WindowsLocalDebugger"
+	propertyGroupNode.set( "Condition", "'$(Configuration)|$(Platform)'=='{}|{}'".format( vsConfigName, platformName ) )
+	workingDirNode.text = "$(OutDir)"
+	debuggerTypeNode.text = "NativeOnly"
+	debuggerFlavorNode.text = "WindowsLocalDebugger"
 
 
 class PlatformWindowsX86( PlatformBase ):
@@ -97,7 +97,12 @@ class PlatformWindowsX86( PlatformBase ):
 		return "Win32"
 
 
-	def WriteTopLevelInfo( self, parentXmlNode ):
+	def WriteGlobalHeader( self, parentXmlNode ):
+		# Nothing to do for Win32.
+		pass
+
+
+	def WriteGlobalHeader( self, parentXmlNode ):
 		# Nothing to do for Win32.
 		pass
 
@@ -106,8 +111,8 @@ class PlatformWindowsX86( PlatformBase ):
 		_writeProjectConfiguration( self.GetVisualStudioName(), parentXmlNode, vsConfigName )
 
 
-	def WritePropertyGroup( self, parentXmlNode, vsConfigName, vsPlatformToolsetName, isNative ):
-		_writePropertyGroup( self.GetVisualStudioName(), parentXmlNode, vsConfigName, vsPlatformToolsetName, isNative )
+	def WriteConfigPropertyGroup( self, parentXmlNode, vsConfigName, vsPlatformToolsetName, isNative ):
+		_writeConfigPropertyGroup( self.GetVisualStudioName(), parentXmlNode, vsConfigName, vsPlatformToolsetName, isNative )
 
 
 	def WriteImportProperties( self, parentXmlNode, vsConfigName, isNative ):
@@ -118,7 +123,12 @@ class PlatformWindowsX86( PlatformBase ):
 		_writeUserDebugPropertyGroup( self.GetVisualStudioName(), parentXmlNode, vsConfigName, projectData )
 
 
-	def WriteExtraPropertyGroupBuildNodes( self, propertyGroupNode, project, projectData ):
+	def WriteExtraPropertyGroupBuildNodes( self, parentXmlNode, project, projectData ):
+		# Nothing extra to write for Win32.
+		pass
+
+
+	def WriteGlobalImportTargetNodes( self, parentXmlNode, isNative ):
 		# Nothing extra to write for Win32.
 		pass
 
@@ -139,7 +149,12 @@ class PlatformWindowsX64( PlatformBase ):
 		return "x64"
 
 
-	def WriteTopLevelInfo( self, parentXmlNode ):
+	def WriteGlobalHeader( self, parentXmlNode ):
+		# Nothing to do for Win64.
+		pass
+
+
+	def WriteGlobalFooter( self, parentXmlNode ):
 		# Nothing to do for Win64.
 		pass
 
@@ -148,8 +163,8 @@ class PlatformWindowsX64( PlatformBase ):
 		_writeProjectConfiguration( self.GetVisualStudioName(), parentXmlNode, vsConfigName )
 
 
-	def WritePropertyGroup( self, parentXmlNode, vsConfigName, vsPlatformToolsetName, isNative ):
-		_writePropertyGroup( self.GetVisualStudioName(), parentXmlNode, vsConfigName, vsPlatformToolsetName, isNative )
+	def WriteConfigPropertyGroup( self, parentXmlNode, vsConfigName, vsPlatformToolsetName, isNative ):
+		_writeConfigPropertyGroup( self.GetVisualStudioName(), parentXmlNode, vsConfigName, vsPlatformToolsetName, isNative )
 
 
 	def WriteImportProperties( self, parentXmlNode, vsConfigName, isNative ):
@@ -160,6 +175,11 @@ class PlatformWindowsX64( PlatformBase ):
 		_writeUserDebugPropertyGroup( self.GetVisualStudioName(), parentXmlNode, vsConfigName, projectData )
 
 
-	def WriteExtraPropertyGroupBuildNodes( self, propertyGroupNode, vsConfigName, projectData ):
+	def WriteExtraPropertyGroupBuildNodes( self, parentXmlNode, vsConfigName, projectData ):
+		# Nothing extra to write for Win64.
+		pass
+
+
+	def WriteGlobalImportTargets( self, parentXmlNode, isNative ):
 		# Nothing extra to write for Win64.
 		pass

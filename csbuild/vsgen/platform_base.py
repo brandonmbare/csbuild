@@ -218,11 +218,22 @@ class PlatformBase( object ):
 
 
 	@abstractmethod
-	def WriteTopLevelInfo( self, parentXmlNode ):
+	def WriteGlobalHeader( self, parentXmlNode ):
 		"""
 		Write any top-level information about this platform at the start of the project.
 
 		:param parentXmlNode: Parent XML node.
+		:type parentXmlNode: class`xml.etree.ElementTree.SubElement`
+		"""
+		pass
+
+
+	@abstractmethod
+	def WriteGlobalFooter( self, parentXmlNode ):
+		"""
+		Write any final data nodes needed by the project.
+
+		:param parentXmlNode: Parent project XML node.
 		:type parentXmlNode: class`xml.etree.ElementTree.SubElement`
 		"""
 		pass
@@ -243,9 +254,9 @@ class PlatformBase( object ):
 
 
 	@abstractmethod
-	def WritePropertyGroup( self, parentXmlNode, vsConfigName, vsPlatformToolsetName, isNative ):
+	def WriteConfigPropertyGroup( self, parentXmlNode, vsConfigName, vsPlatformToolsetName, isNative ):
 		"""
-		Write the project's property group nodes for this platform.
+		Write the property group nodes for the project's configuration and platform.
 
 		:param parentXmlNode: Parent XML node.
 		:type parentXmlNode: class`xml.etree.ElementTree.SubElement`
@@ -297,17 +308,31 @@ class PlatformBase( object ):
 
 
 	@abstractmethod
-	def WriteExtraPropertyGroupBuildNodes( self, propertyGroupNode, vsConfigName, projectData ):
+	def WriteExtraPropertyGroupBuildNodes( self, parentXmlNode, vsConfigName, projectData ):
 		"""
 		Write extra property group nodes related to platform build properties.
 
-		:param propertyGroupNode: Parent property group XML node.
-		:type propertyGroupNode: class`xml.etree.ElementTree.SubElement`
+		:param parentXmlNode: Parent property group XML node.
+		:type parentXmlNode: class`xml.etree.ElementTree.SubElement`
 
 		:param vsConfigName: Visual Studio configuration name.
 		:type vsConfigName: str
 
 		:param projectData: Project data.
 		:type projectData: class`csbuild.project_generator_visual_studio_v2.Project`
+		"""
+		pass
+
+
+	@abstractmethod
+	def WriteGlobalImportTargets( self, parentXmlNode, isNative ):
+		"""
+		Write global import target needed for the project.
+
+		:param parentXmlNode: Parent project XML node.
+		:type parentXmlNode: class`xml.etree.ElementTree.SubElement`
+
+		:param isNative: Is this a native project?
+		:type isNative: bool
 		"""
 		pass

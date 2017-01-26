@@ -46,8 +46,13 @@ class PlatformWiiU( PlatformBase ):
 		return "Cafe"
 
 
-	def WriteTopLevelInfo( self, parentXmlNode ):
+	def WriteGlobalHeader( self, parentXmlNode ):
 		# Nothing special to do for WiiU.
+		pass
+
+
+	def WriteGlobalFooter( self, parentXmlNode ):
+		# Nothing to do for WiiU.
 		pass
 
 
@@ -64,7 +69,7 @@ class PlatformWiiU( PlatformBase ):
 		platformNode.text = platformName
 
 
-	def WritePropertyGroup( self, parentXmlNode, vsConfigName, vsPlatformToolsetName, isNative ):
+	def WriteConfigPropertyGroup( self, parentXmlNode, vsConfigName, vsPlatformToolsetName, isNative ):
 		platformName = self.GetVisualStudioName()
 
 		propertyGroupNode = _addNode( parentXmlNode, "PropertyGroup" )
@@ -117,6 +122,11 @@ class PlatformWiiU( PlatformBase ):
 		debuggerFlavorNode.text = "CafeDebugger"
 
 
-	def WriteExtraPropertyGroupBuildNodes( self, propertyGroupNode, vsConfigName, projectData ):
+	def WriteExtraPropertyGroupBuildNodes( self, parentXmlNode, vsConfigName, projectData ):
 		#TODO: Add nodes for disc emulation paths.
+		pass
+
+
+	def WriteGlobalImportTargets( self, parentXmlNode, isNative ):
+		# Nothing extra to write for WiiU.
 		pass

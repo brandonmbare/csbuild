@@ -627,12 +627,12 @@ class project_generator_visual_studio( project_generator.project_generator ):
 				rootNode.set( "ToolsVersion", "4.0" )
 				rootNode.set( "xmlns", "http://schemas.microsoft.com/developer/msbuild/2003" )
 
-				comment = MakeComment( rootNode, "Top-level platform information" )
+				comment = MakeComment( rootNode, "Project header" )
 
 				# Write any top-level information a generator platform may require.
 				for platformName in registeredPlatformList:
 					generatorPlatform = platformManager.GetRegisteredPlatformFromVisualStudioName( platformName )
-					generatorPlatform.WriteTopLevelInfo( rootNode )
+					generatorPlatform.WriteGlobalHeader( rootNode )
 
 				comment = MakeComment( rootNode, "Project configurations" )
 
@@ -694,7 +694,7 @@ class project_generator_visual_studio( project_generator.project_generator ):
 				for configName in self._configList:
 					for platformName in registeredPlatformList:
 						generatorPlatform = platformManager.GetRegisteredPlatformFromVisualStudioName( platformName )
-						generatorPlatform.WritePropertyGroup( rootNode, configName, platformToolsetName, self._createNativeProject )
+						generatorPlatform.WriteConfigPropertyGroup( rootNode, configName, platformToolsetName, self._createNativeProject )
 
 				importNode = AddNode(rootNode, "Import")
 				importNode.set("Project", r"$(VCTargetsPath)\Microsoft.Cpp.props")
@@ -776,10 +776,25 @@ class project_generator_visual_studio( project_generator.project_generator ):
 
 						generatorPlatform.WriteExtraPropertyGroupBuildNodes( propertyGroupNode, configName, projectData )
 
+				comment = MakeComment( rootNode, "Import targets" )
+
+				# Write the global import targets.
+				# MUST be before the "Microsoft.Cpp.targets" import!
+				for platformName in registeredPlatformList:
+					generatorPlatform = platformManager.GetRegisteredPlatformFromVisualStudioName( platformName )
+					generatorPlatform.WriteGlobalImportTargets( rootNode, self._createNativeProject )
+
 				comment = MakeComment( rootNode, "Final target import; must always be last!" )
 
 				importNode = AddNode( rootNode, "Import" )
 				importNode.set( "Project", r"$(VCTargetsPath)\Microsoft.Cpp.targets" )
+
+				comment = MakeComment( rootNode, "Project footer" )
+
+				# Write any trailing information needed by the project.
+				for platformName in registeredPlatformList:
+					generatorPlatform = platformManager.GetRegisteredPlatformFromVisualStudioName( platformName )
+					generatorPlatform.WriteGlobalFooter( rootNode )
 
 				self._saveXmlFile( rootNode, os.path.join( projectData.outputPath, "{}.vcxproj".format( projectData.name ) ) , False )
 

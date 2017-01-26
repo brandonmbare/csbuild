@@ -45,25 +45,44 @@ class PlatformPs4( PlatformBase ):
 		return "ORBIS"
 
 
-	def WriteTopLevelInfo( self, parentXmlNode ):
-		# Nothing special to do for PS4.
+	def WriteGlobalHeader( self, parentXmlNode ):
+		# Nothing to do for PS4.
 		pass
+
+
+	def WriteGlobalFooter( self, parentXmlNode ):
+		# Extension settings
+		importGroupNode = _addNode( parentXmlNode, "ImportGroup" )
+
+		importGroupNode.set( "Label", "ExtensionSettings" )
+
+		_addNode( importGroupNode, "Import" ).set( "Project", r"$(VCTargetsPath)\BuildCustomizations\OrbisWavePsslc.props" )
+		_addNode( importGroupNode, "Import" ).set( "Project", r"$(VCTargetsPath)\BuildCustomizations\SCU.props" )
+
+
+		# Extension targets
+		importGroupNode = _addNode( parentXmlNode, "ImportGroup" )
+
+		importGroupNode.set( "Label", "ExtensionTargets" )
+
+		_addNode( importGroupNode, "Import" ).set( "Project", r"$(VCTargetsPath)\BuildCustomizations\OrbisWavePsslc.targets" )
+		_addNode( importGroupNode, "Import" ).set( "Project", r"$(VCTargetsPath)\BuildCustomizations\SCU.targets" )
 
 
 	def WriteProjectConfiguration( self, parentXmlNode, vsConfigName ):
 		platformName = self.GetVisualStudioName()
 		includeString = "{}|{}".format( vsConfigName, platformName )
 
-		projectConfigNode = _addNode(parentXmlNode, "ProjectConfiguration")
-		configNode = _addNode(projectConfigNode, "Configuration")
-		platformNode = _addNode(projectConfigNode, "Platform")
+		projectConfigNode = _addNode( parentXmlNode, "ProjectConfiguration" )
+		configNode = _addNode( projectConfigNode, "Configuration" )
+		platformNode = _addNode( projectConfigNode, "Platform" )
 
 		projectConfigNode.set( "Include", includeString )
 		configNode.text = vsConfigName
 		platformNode.text = platformName
 
 
-	def WritePropertyGroup( self, parentXmlNode, vsConfigName, vsPlatformToolsetName, isNative ):
+	def WriteConfigPropertyGroup( self, parentXmlNode, vsConfigName, vsPlatformToolsetName, isNative ):
 		platformName = self.GetVisualStudioName()
 
 		propertyGroupNode = _addNode( parentXmlNode, "PropertyGroup" )
@@ -95,9 +114,25 @@ class PlatformPs4( PlatformBase ):
 		platformName = self.GetVisualStudioName()
 
 		propertyGroupNode = _addNode( parentXmlNode, "PropertyGroup" )
+
 		propertyGroupNode.set( "Condition", "'$(Configuration)|$(Platform)'=='{}|{}'".format( vsConfigName, platformName ) )
 
+		_addNode( propertyGroupNode, "LocalDebuggerWorkingDirectory" ).text = "$(OutDir)"
+		_addNode( propertyGroupNode, "DebuggerFlavor" ).text = "ORBISDebugger"
 
-	def WriteExtraPropertyGroupBuildNodes( self, propertyGroupNode, vsConfigName, projectData ):
-		# Nothing extra to write for PS4.
+
+	def WriteExtraPropertyGroupBuildNodes( self, parentXmlNode, vsConfigName, projectData ):
+		# Nothing to do for PS4.
 		pass
+
+
+	def WriteGlobalImportTargets( self, parentXmlNode, isNative ):
+		if isNative:
+			#TODO: Add properties for native projects.
+			pass
+		else:
+			importNode = _addNode( parentXmlNode, "Import" )
+
+			importNode.set( "Condition", r"'$(ConfigurationType)' == 'Makefile' and Exists('$(VCTargetsPath)\Platforms\$(Platform)\SCE.Makefile.$(Platform).targets')" )
+			importNode.set( "Project", r"$(VCTargetsPath)\Platforms\$(Platform)\SCE.Makefile.$(Platform).targets" )
+
