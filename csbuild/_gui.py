@@ -2528,13 +2528,13 @@ class MainWindow( QMainWindow ):
 		self._setOutputButtonTextWithUpArrows()
 
 	def _setOutputButtonTextWithUpArrows(self):
-		outputButtonText = "▴ Output ▴"
+		outputButtonText = "â–´ Output â–´"
 		if sys.version_info < (3,0):
 			outputButtonText = outputButtonText.decode("utf-8")
 		self.m_pushButton.setText(outputButtonText)
 
 	def _setOutputButtonTextWithDownArrows(self):
-		outputButtonText = "▾ Output ▾"
+		outputButtonText = "â–¾ Output â–¾"
 		if sys.version_info < (3,0):
 			outputButtonText = outputButtonText.decode("utf-8")
 		self.m_pushButton.setText(outputButtonText)
