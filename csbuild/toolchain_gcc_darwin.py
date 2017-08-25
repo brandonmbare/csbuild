@@ -155,9 +155,6 @@ class GccCompilerDarwin( GccDarwinBase, toolchain_gcc.GccCompiler ):
 		ret = ""
 		for inc in includeDirs:
 			ret += "-I{} ".format( os.path.abspath( inc ) )
-		ret += "-I{}/usr/include ".format( DEFAULT_XCODE_TOOLCHAIN_DIR )
-		ret += "-I/usr/local/include "
-		ret += "-I/usr/include "
 		return ret
 
 

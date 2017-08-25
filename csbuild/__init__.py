@@ -118,6 +118,7 @@ from . import plugin
 
 try:
 	from .proprietary import toolchain_ps4
+	from .proprietary import toolchain_wiiu
 except:
 	pass
 
@@ -2476,6 +2477,7 @@ def _setupdefaults( ):
 	try:
 		# Attempt to register the PS4 toolchain.
 		RegisterToolchain( "ps4", toolchain_ps4.Ps4Compiler, toolchain_ps4.Ps4Linker )
+		RegisterToolchain( "wiiu", toolchain_wiiu.WiiUCompiler, toolchain_wiiu.WiiULinker )
 	except:
 		pass
 
@@ -2657,8 +2659,18 @@ class _dummy( object ):
 
 
 def _execfile( file, glob, loc ):
+	# Save the current value of __file__ and set it to the input file path.
+	oldFileVar = glob.get("__file__", None)
+	glob["__file__"] = file
+	
 	with open( file, "r" ) as f:
 		exec(compile(f.read( ), file, "exec"), glob, loc)
+		
+	# Restore the state of the __file__ variable.
+	if oldFileVar is None:
+		glob["__file__"] = oldFileVar
+	else:
+		del glob["__file__"]
 
 
 mainFile = ""
