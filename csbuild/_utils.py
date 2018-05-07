@@ -31,6 +31,7 @@ import glob
 import traceback
 import platform
 import collections
+import contextlib
 if sys.version_info >= (3,0):
 	import io
 	StringIO = io.StringIO
@@ -1114,3 +1115,24 @@ def GetToolchainEnvironment( tool ):
 
 def GetCommandLineString():
 	return subprocess.list2cmdline(sys.argv[1:])
+
+
+@contextlib.contextmanager
+def ChangeDirectory(newCwd):
+	"""
+	Use this function as a context manager to safely handle changing directories without having to manually
+	change back to the original directory.  This is safe to use in try/catch blocks.
+
+	:param newCwd: Path of the new directory to move into.
+	:type newCwd: str
+	"""
+	assert os.access(newCwd, os.F_OK), "Cannot change to a non-existent directory"
+
+	oldCwd = os.getcwd()
+
+	os.chdir(newCwd)
+
+	try:
+		yield
+	finally:
+		os.chdir(oldCwd)
