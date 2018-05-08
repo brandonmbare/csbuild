@@ -374,7 +374,24 @@ class ThreadedBuild( threading.Thread ):
 			if platform.system() != "Windows":
 				cmd = shlex.split(cmd)
 
-			fd = subprocess.Popen( cmd, stdout = subprocess.PIPE, stderr = subprocess.PIPE, cwd = self.project.workingDirectory, env = toolchainEnv )
+			maxNumRetries = 10
+			retryCount = 0
+
+			while retryCount < maxNumRetries:
+				try:
+					fd = subprocess.Popen( cmd, stdout = subprocess.PIPE, stderr = subprocess.PIPE, cwd = self.project.workingDirectory, env = toolchainEnv )
+				except PermissionError:
+					# Sleep for a second before trying again.
+					time.sleep(1)
+					retryCount += 1
+				except:
+					# Other exceptions will raise normally.
+					raise
+				else:
+					# Successfully launched the process.
+					break
+
+			assert retryCount < maxNumRetries, "Failed to launch process due to PermissionError"
 
 			with _shared_globals.spmutex:
 				_shared_globals.subprocesses[self.obj] = fd
