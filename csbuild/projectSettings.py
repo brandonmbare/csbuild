@@ -790,6 +790,8 @@ class projectSettings( object ):
 		if not self.tempsDirty:
 			return
 
+		isShellOrPrebuilt = self.shell or self.prebuilt
+
 		def resolvePath( _tempPath, _proj ):
 			return os.path.normpath( os.path.join( _tempPath.workingDir, _utils.ResolveProjectMacros( _tempPath.path, _proj ) ) )
 
@@ -804,7 +806,7 @@ class projectSettings( object ):
 			self.outputDir = os.path.join(self.workingDirectory, "obj")
 
 		# Create the executable/library output directory if it doesn't exist.
-		if not os.access(self.outputDir, os.F_OK):
+		if not isShellOrPrebuilt and not os.access(self.outputDir, os.F_OK):
 			os.makedirs(self.outputDir)
 
 		alteredLibraryDirs = []
@@ -837,7 +839,7 @@ class projectSettings( object ):
 		self.activeToolchain.SetActiveTool( "compiler" )
 		self.csbuildDir = os.path.join( self.objDir, ".csbuild" )
 
-		if not os.access(self.csbuildDir , os.F_OK):
+		if not isShellOrPrebuilt and not os.access(self.csbuildDir , os.F_OK):
 			os.makedirs( self.csbuildDir )
 
 		alteredIncludeDirs = []
@@ -1142,8 +1144,9 @@ class projectSettings( object ):
 			self.GetAttr = types.MethodType(projectSettings.GetAttrNext, self, projectSettings)
 			self.SetAttr = types.MethodType(projectSettings.SetAttrNext, self, projectSettings)
 
-		#Insert our own output at the front of our final scope libraries list.
-		self._finalScopeSettings["libraries"] = _utils.OrderedSet( { self.outputName } ) | _utils.OrderedSet(self._finalScopeSettings.get("libraries"))
+		if not self.shell:
+			# Insert our own output at the front of our final scope libraries list.
+			self._finalScopeSettings["libraries"] = _utils.OrderedSet( { self.outputName } ) | _utils.OrderedSet(self._finalScopeSettings.get("libraries"))
 
 	def finalizeSettings2(self):
 		"""

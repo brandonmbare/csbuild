@@ -1042,7 +1042,14 @@ def CheckRunBuildStep(project, step, name):
 			wd = os.getcwd( )
 			os.chdir( project.scriptPath )
 
-			log.LOG_BUILD( "Running {} step {} for {} ({} {}/{})".format( name, GetFuncName(step), project.outputName, project.targetName, project.outputArchitecture, project.activeToolchainName ) )
+			projectName = project.outputName.split(".")[0]
+
+			if project.shell:
+				projectName = 'shell project "{}"'.format(project.name)
+			elif project.prebuilt:
+				projectName = 'prebuilt project "{}"'.format(project.name)
+
+			log.LOG_BUILD( "Running {} step {} for {} ({} {}/{})".format( name, GetFuncName(step), projectName, project.targetName, project.outputArchitecture, project.activeToolchainName ) )
 			try:
 				step(project)
 			except Exception:
