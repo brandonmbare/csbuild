@@ -1,4 +1,9 @@
-##CSB
+# IMPORTANT
+This project has been deprecated.  It will be retained as an archived project for historical reasons.  Please see https://github.com/SleepingCatGames/csbuild2 for the latest version of csbuild currently in developement.
+
+---
+
+## CSB
 
 CSBuild is a C/C++-oriented cross-platform build and project generation system written in Python. CSBuild attempts to address a number of issues with existing build systems, including performance, maintainability, and usability. CSBuild focuses on providing an easy, understandable, readable syntax for defining a build structure, and then providing your builds to you in the shortest possible amount of time.
 
